@@ -575,10 +575,22 @@ def passi_abbinamento(mac: str) -> list[tuple[str, float]]:
     L'abbinamento vero e proprio (``pair``) **non serve**: la cassa si e' collegata con ``Paired: no``
     e ``Bonded: no``. Si prova lo stesso, perche' certe casse lo vogliono, ma se fallisce non e' un
     guaio: quello che conta e' ``trust`` (cosi' il nodo la ricollega da solo) e ``connect``.
+
+    I tempi sono **massimi**, non attese: dall'8/11 ogni passo va avanti appena la sua cosa e'
+    successa. Prima erano fissi e si sommavano sempre — 52 secondi anche quando tutto riusciva al
+    primo colpo. Marco, provando: *«la cassa ha emesso il suono tipico suo per dire che si e'
+    collegata ma l'applicazione ha atteso un timeout di quasi 30 secondi»*. Quel suono e' il
+    ``connect`` riuscito: il copione aveva ancora 13 secondi di attesa davanti, per niente.
     """
-    return [("power on", 1), ("agent NoInputNoOutput", 1), ("default-agent", 1), ("pairable on", 1),
-            ("scan on", 16), (f"pair {mac}", 16), (f"trust {mac}", 3), (f"connect {mac}", 12),
-            ("quit", 1)]
+    return [("power on", 1, ""), ("agent NoInputNoOutput", 1, ""), ("default-agent", 1, ""),
+            ("pairable on", 1, ""),
+            # fin qui sono comandi che rispondono subito: il massimo e' gia' piccolo e non c'e'
+            # niente di utile da aspettare.
+            ("scan on", 16, rf"Device\s+{re.escape(mac)}"),   # la cassa si e' fatta vedere
+            (f"pair {mac}", 16, r"(Pairing successful|Failed to pair|AlreadyExists)"),
+            (f"trust {mac}", 3, r"(trust succeeded|Changing .* trust succeeded)"),
+            (f"connect {mac}", 12, r"(Connection successful|Failed to connect)"),
+            ("quit", 1, "")]
 
 
 def motivo_da_sessione(testo: str) -> str:
@@ -592,11 +604,13 @@ def motivo_da_sessione(testo: str) -> str:
     return motivi[-1] if motivi else ""
 
 
-def _sessione_bluetoothctl(passi: list[tuple[str, float]]) -> str:
-    """Una sola sessione di bluetoothctl: i comandi entrano dallo stdin, con le attese fra l'uno e l'altro.
+def _sessione_bluetoothctl(passi: list[tuple[str, float, str]]) -> str:
+    """Una sola sessione di bluetoothctl: i comandi entrano dallo stdin, uno quando l'altro ha finito.
 
     L'uscita va in un file e non in una pipe: durante la ricerca bluetoothctl scrive moltissimo, e una
-    pipe piena bloccherebbe tutto a meta' abbinamento.
+    pipe piena bloccherebbe tutto a meta' abbinamento. Quel file serve anche a sapere **quando** un
+    passo e' finito: si rilegge mentre si aspetta, e appena compare la riga che dice com'e' andata si
+    passa al comando dopo. Il tempo scritto accanto al passo e' un massimo, non un'attesa.
     """
     with tempfile.NamedTemporaryFile("w+", prefix="mirto-bt-", suffix=".log") as registro:
         try:
@@ -605,10 +619,10 @@ def _sessione_bluetoothctl(passi: list[tuple[str, float]]) -> str:
         except FileNotFoundError:
             return "bluetoothctl: comando non trovato"
         try:
-            for comando, attesa in passi:
+            for comando, massimo, segno in passi:
                 proc.stdin.write(comando + "\n")
                 proc.stdin.flush()
-                time.sleep(attesa)
+                _aspetta_il_segno(registro, segno, massimo)
             proc.stdin.close()
         except (BrokenPipeError, OSError):
             pass
@@ -618,6 +632,29 @@ def _sessione_bluetoothctl(passi: list[tuple[str, float]]) -> str:
             proc.kill()
         registro.seek(0)
         return registro.read()
+
+
+def _aspetta_il_segno(registro, segno: str, massimo: float) -> None:
+    """Aspetta che nel registro compaia ``segno``, al massimo ``massimo`` secondi.
+
+    Senza ``segno`` aspetta e basta: sono i comandi che rispondono subito, dove non c'e' niente da
+    sorvegliare. Si guarda ogni due decimi di secondo — bluetoothctl scrive molto e rileggere un file
+    piccolo e' niente — e si esce appena la riga c'e'.
+    """
+    if not segno:
+        time.sleep(massimo)
+        return
+    atteso = re.compile(segno, re.I)
+    fine = time.monotonic() + massimo
+    while time.monotonic() < fine:
+        time.sleep(0.2)
+        dove = registro.tell()
+        try:
+            registro.seek(0)
+            if atteso.search(registro.read()):
+                return
+        finally:
+            registro.seek(dove)
 
 
 def vista_nella_ricerca(registro: str, mac: str) -> bool:

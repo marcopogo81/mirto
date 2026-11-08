@@ -148,7 +148,8 @@ class AudioDialog(QDialog):
         # Un «Annulla» qui sarebbe peggio di non averlo: prometterebbe di disfare cose che il nodo ha
         # gia' fatto — una cassa abbinata, un servizio riavviato — e non puo' mantenerlo.
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.button(QDialogButtonBox.StandardButton.Close).setText(_("Chiudi"))
+        self.chiudi_btn = buttons.button(QDialogButtonBox.StandardButton.Close)
+        self.chiudi_btn.setText(_("Chiudi"))
         buttons.rejected.connect(self.accept)
         lay.addWidget(buttons)
 
@@ -505,6 +506,13 @@ class AudioDialog(QDialog):
                           dove=str((self.scelta_uscita.currentData() or {}).get("etichetta") or "")), True)
         self._aggiorna_dispositivi()
 
+    def closeEvent(self, evento) -> None:        # noqa: N802  (è Qt a chiamarsi così)
+        """Chiudere con la X mentre il nodo lavora: no, per lo stesso motivo del pulsante spento."""
+        if self.attesa:
+            evento.ignore()
+            return
+        super().closeEvent(evento)
+
     def _microfono_cambiato(self) -> None:
         """Accendere, spegnere o cambiare microfono arriva al nodo subito."""
         if getattr(self, "_sto_riempiendo", False):
@@ -543,6 +551,17 @@ class AudioDialog(QDialog):
     def _mostra(self) -> None:
         """Cosa si può premere, adesso. Unico posto che accende e spegne i pulsanti."""
         lavora = bool(self.attesa)
+        # Mentre il nodo lavora la finestra resta **viva** (la nota si muove, il tempo scorre) ma non
+        # si può toccare nient'altro. Marco, 8/11: *«durante questo delay l'utente potrebbe cliccare
+        # ovunque, chiudere le finestre»* — e cambiare scheda o chiudere mentre una cassa si sta
+        # abbinando lascia il nodo a metà di una cosa che nessuno guarda più.
+        # Si spegne quello che c'è, invece di aprire una finestrella sopra: un pop-up andrebbe
+        # gestito, e soprattutto avrebbe una X o un «Annulla» che non possono mantenere la promessa —
+        # l'abbinamento è già partito sul nodo e di qui non si ferma.
+        self.tabs.setEnabled(not lavora)
+        self.scelta_uscita.setEnabled(not lavora)
+        if hasattr(self, "chiudi_btn"):
+            self.chiudi_btn.setEnabled(not lavora)
         if hasattr(self, "cerca_btn"):
             # Ogni pulsante guarda **il suo** elenco: niente più un pulsante acceso o spento a
             # seconda di cosa fosse selezionato in una lista mescolata.

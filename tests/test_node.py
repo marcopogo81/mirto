@@ -2775,6 +2775,70 @@ class IlPacchettoVeroArrivaAlNodoTest(unittest.TestCase):
         self.assertTrue((d / "nuovo" / "mirto_node" / "server.py").is_file())
         self.assertTrue((d / "nuovo" / "boot-segnali.sh").is_file())
 
+    def test_a_step_goes_on_as_soon_as_its_thing_happened(self):
+        """I tempi dell'abbinamento sono massimi, non attese (8/11).
+
+        Erano fissi e si sommavano sempre: 52 secondi anche quando tutto riusciva al primo colpo.
+        Marco: «la cassa ha emesso il suono tipico suo per dire che si e' collegata ma
+        l'applicazione ha atteso un timeout di quasi 30 secondi». Quel suono e' il `connect`
+        riuscito, e il copione aveva ancora 13 secondi di attesa davanti, per niente.
+        """
+        import tempfile
+        import threading
+        import time as t_mod
+
+        from node.mirto_node.cli import _aspetta_il_segno
+
+        with tempfile.NamedTemporaryFile("w+", suffix=".log") as f:
+            def scrivi_fra_poco():
+                t_mod.sleep(0.3)
+                f.write("Connection successful\n")
+                f.flush()
+
+            threading.Thread(target=scrivi_fra_poco, daemon=True).start()
+            inizio = t_mod.monotonic()
+            _aspetta_il_segno(f, r"Connection successful", 10)
+            messo = t_mod.monotonic() - inizio
+        self.assertLess(messo, 3, f"doveva uscire appena vista la riga, ci ha messo {messo:.1f}s")
+
+    def test_without_the_sign_it_waits_the_whole_time(self):
+        """I comandi che rispondono subito non hanno niente da sorvegliare: li' si aspetta e basta."""
+        import tempfile
+        import time as t_mod
+
+        from node.mirto_node.cli import _aspetta_il_segno
+
+        with tempfile.NamedTemporaryFile("w+", suffix=".log") as f:
+            inizio = t_mod.monotonic()
+            _aspetta_il_segno(f, "", 0.4)
+            self.assertGreaterEqual(t_mod.monotonic() - inizio, 0.35)
+
+    def test_a_sign_that_never_comes_gives_up_at_the_maximum(self):
+        """Un passo che non riesce non deve tenere ferma l'operazione per sempre."""
+        import tempfile
+        import time as t_mod
+
+        from node.mirto_node.cli import _aspetta_il_segno
+
+        with tempfile.NamedTemporaryFile("w+", suffix=".log") as f:
+            f.write("tutt altro\n"); f.flush()
+            inizio = t_mod.monotonic()
+            _aspetta_il_segno(f, r"Connection successful", 0.6)
+            messo = t_mod.monotonic() - inizio
+        self.assertGreaterEqual(messo, 0.5)
+        self.assertLess(messo, 2.0, "e nemmeno molto oltre il massimo")
+
+    def test_every_step_that_can_be_waited_for_says_what_to_wait_for(self):
+        """I tre passi che costano tempo hanno un segno; gli altri no, e va bene cosi'."""
+        from node.mirto_node.cli import passi_abbinamento
+
+        passi = passi_abbinamento("90:F2:60:38:E2:3D")
+        lunghi = {c.split()[0]: segno for c, massimo, segno in passi if massimo >= 3}
+        for comando in ("scan", "pair", "trust", "connect"):
+            self.assertTrue(lunghi.get(comando),
+                            f"«{comando}» aspetta {dict((c.split()[0], m) for c, m, _s in passi)[comando]}s "
+                            "senza sapere cosa sta aspettando")
+
     def test_the_scripts_keep_the_bit_that_lets_root_run_them(self):
         """`install.sh` lo lancia root: un file arrivato senza il bit di esecuzione e' un
         aggiornamento che fallisce a meta', ed e' il genere di cosa che si scopre sul Raspberry.

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -494,7 +495,9 @@ class AbbinamentoCassaTest(unittest.TestCase):
             return types.SimpleNamespace(returncode=0, stdout=testo, stderr="")
 
         def finta_sessione(passi):
-            chiamate.append(["bluetoothctl-sessione"] + [c for c, _a in passi])
+            # Dall'8/11 ogni passo porta anche il **segno** che dice quando e' finito: i tempi sono
+            # massimi, non attese. Qui serve solo il comando.
+            chiamate.append(["bluetoothctl-sessione"] + [passo[0] for passo in passi])
             return coda_registri.pop(0) if coda_registri else ""
 
         def finto_collegata(_mac):
@@ -519,14 +522,24 @@ class AbbinamentoCassaTest(unittest.TestCase):
         """Un comando per volta non funziona: fra l'uno e l'altro la cassa non esiste più."""
         from mirto_node import cli
 
-        passi = [c for c, _attesa in cli.passi_abbinamento(self.MAC)]
+        passi = [passo[0] for passo in cli.passi_abbinamento(self.MAC)]
         self.assertEqual(passi[:5], ["power on", "agent NoInputNoOutput", "default-agent",
                                      "pairable on", "scan on"])
         self.assertEqual(passi[5:], [f"pair {self.MAC}", f"trust {self.MAC}", f"connect {self.MAC}",
                                      "quit"], "prima si cerca, poi si collega")
-        attesa_dopo_scan = dict(cli.passi_abbinamento(self.MAC))["scan on"]
-        self.assertGreaterEqual(attesa_dopo_scan, 12,
+        # Dall'8/11 il numero accanto al passo è un **massimo**, non un'attesa: deve restare largo
+        # (alla cassa servono una ventina di secondi per farsi vedere) ma accanto deve esserci il
+        # segno da sorvegliare, altrimenti quel massimo torna a essere un'attesa e si paga sempre.
+        scan = next(p for p in cli.passi_abbinamento(self.MAC) if p[0] == "scan on")
+        self.assertGreaterEqual(scan[1], 12,
                                 "alla cassa servono una ventina di secondi per farsi vedere")
+        self.assertTrue(scan[2], "senza segno da aspettare il massimo diventa un'attesa fissa")
+        riga = f"[NEW] Device {self.MAC.lower()} Cassa del salotto"
+        self.assertTrue(re.search(scan[2], riga, re.I),
+                        "il segno non riconosce la riga con cui bluetoothctl annuncia la cassa")
+        lunghi = [p for p in cli.passi_abbinamento(self.MAC) if p[1] > 3]
+        self.assertTrue(all(p[2] for p in lunghi),
+                        f"passi lunghi senza segno: {[p[0] for p in lunghi if not p[2]]}")
 
     def test_a_speaker_that_connects_without_pairing_counts_as_done(self):
         """La JBL si è collegata con «Paired: no»: il successo è il collegamento, non l'abbinamento."""
