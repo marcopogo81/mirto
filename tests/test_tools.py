@@ -159,19 +159,39 @@ class DcoTest(unittest.TestCase):
         for parola in ("Contributor License Agreement", "CLA"):
             self.assertNotIn(parola, testo, "il CLA è stato scartato: non deve rientrare dalla finestra")
 
+    # Le fusioni che **fabbrica una macchina**: GitHub quando si unisce una pull request, git
+    # quando unisce due rami. Nessuno le scrive, quindi nessuno può certificarle, e `rebase
+    # --signoff` — il rimedio che l'errore suggerisce — le riscriverebbe. Si riconoscono dal
+    # soggetto e non dal numero di genitori, per il motivo spiegato nella prova qui sotto.
+    # Il modello è stretto apposta: una commit umana che comincia per «Merge» (per esempio
+    # «Merge due elenchi in uno») resta controllata come tutte le altre.
+    FUSIONE_AUTOMATICA = re.compile(
+        r"^Merge (pull request #\d+ |branch ['\"]|remote-tracking branch ['\"])")
+
     def test_the_history_is_already_signed(self):
         """La regola vale anche per chi la scrive: gli ultimi commit sono firmati.
 
-        `--no-merges`, e non è un dettaglio: una commit di fusione non la scrive nessuno, quindi non
-        c'è nessuno che possa certificarla. Su una pull request GitHub ne fabbrica una sua — «Merge
-        <testa> into <base>» — e **quella** è la commit che il lavoro si ritrova sotto il naso. Senza
-        questa riga la prova diventava rossa su *qualunque* pull request, di chiunque: l'8/11 l'ha
-        fatta rossa dependabot su tutti e sei i sistemi, e sarebbe toccato identico al primo
-        contributore arrivato da fuori — accolto da una prova rossa che parla della nostra
+        Le fusioni si saltano, e non è un dettaglio: una commit di fusione non la scrive nessuno,
+        quindi non c'è nessuno che possa certificarla. Su una pull request GitHub ne fabbrica una
+        sua, e **quella** è la commit che il lavoro si ritrova sotto il naso. Senza, la prova
+        diventava rossa su *qualunque* pull request, di chiunque — e sarebbe toccato identico al
+        primo contributore arrivato da fuori, accolto da una prova rossa che parla della nostra
         disciplina e che lui non poteva in nessun modo far diventare verde.
 
-        Il controllo vero (`dco.yml`) non ci cascava: legge `base..testa`, cioè le commit del ramo,
-        non la fusione finta. Rossa era solo la copia locale, che guarda `git log` da HEAD.
+        **Perché il soggetto e non `--no-merges`.** L'8/11 la prima versione usava `--no-merges`:
+        giusta sul Mac, inutile dove serviva. `tests.yml` fa un checkout **superficiale** (solo
+        `dco` e `secrets` chiedono `fetch-depth: 0`), e in un clone di profondità 1 i genitori sono
+        tagliati via: git non sa che quella commit è una fusione, quindi `--no-merges` non la
+        esclude. La fusione di dependabot ha fatto rossa `main` su sei sistemi su sette, mentre in
+        locale la prova era verde. Il soggetto invece sopravvive al taglio.
+
+        La lezione, che vale oltre questa prova: **una correzione provata solo dove possiamo
+        guardare non è una correzione provata.** Qui la differenza fra i due posti non era il
+        sistema operativo, era la profondità del clone — una cosa che non si vede leggendo il
+        codice della prova, ma solo leggendo il workflow che la esegue.
+
+        Il controllo vero (`dco.yml`) non ci è mai cascato: clona intero e legge `base..testa`,
+        cioè le commit del ramo, non la fusione finta.
         """
         import subprocess
 
@@ -181,9 +201,30 @@ class DcoTest(unittest.TestCase):
             self.skipTest("non è un repository git (sorgente scompattata)")
         messaggi = [m for m in res.stdout.split("---FINE---") if m.strip()]
         self.assertTrue(messaggi)
-        senza = [m.strip().splitlines()[0][:12] for m in messaggi
-                 if not re.search(r"^Signed-off-by: .+ <.+@.+>", m, re.M)]
+        senza = []
+        for m in messaggi:
+            righe = m.strip().splitlines()
+            soggetto = righe[1].strip() if len(righe) > 1 else ""
+            if self.FUSIONE_AUTOMATICA.match(soggetto):
+                continue
+            if not re.search(r"^Signed-off-by: .+ <.+@.+>", m, re.M):
+                senza.append(righe[0][:12])
         self.assertEqual(senza, [], f"commit senza Signed-off-by: {senza}")
+
+    def test_an_automatic_merge_is_recognised_by_its_subject(self):
+        """Il riconoscimento si prova qui, perché in CI non c'è una fusione da mostrargli.
+
+        Il soggetto del 8/11 è quello vero che ha fatto rossa `main`.
+        """
+        for soggetto in ("Merge pull request #1 from marcopogo81/dependabot/github_actions/x",
+                         "Merge branch 'main' into funzioni-rapide",
+                         'Merge remote-tracking branch "origin/main"'):
+            self.assertTrue(self.FUSIONE_AUTOMATICA.match(soggetto), soggetto)
+        for soggetto in ("Merge due elenchi in uno, perché tenerli pari a mano non funziona",
+                         "Mergiare non è una parola italiana",
+                         "Il portachiavi non sapeva che abbiamo cambiato nome"):
+            self.assertIsNone(self.FUSIONE_AUTOMATICA.match(soggetto),
+                              f"una commit scritta da una persona resta controllata: {soggetto}")
 
 
 class IlRilascioAspettaLeProveTest(unittest.TestCase):
