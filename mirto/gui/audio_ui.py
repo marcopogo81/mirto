@@ -12,12 +12,15 @@ dispositivo anche lui, solo che registra invece di suonare). In fondo, fuori dal
 sola — «le azioni suonano da» — perché finché la scelta non sta dentro l'azione il nodo deve pur
 sapere da dove suonare una sirena. Quella riga è destinata a sparire.
 
-Due velocità, e la finestra lo deve dire chiaro:
+Una velocità sola, dall'8/11: **ogni gesto arriva al nodo quando lo si fa.** Prima erano due — le
+manopole e il jack subito, il dispositivo delle azioni e il microfono con «Applica» — e quella metà
+differenza era la causa di quasi tutto quello che confondeva: si abbinava una cassa e sembrava non
+succedere niente, perché l'abbinamento partiva e la scelta di usarla no. Chi cambia qualcosa qui lo
+vede succedere; chi gira fra le schede per guardare non cambia niente.
 
-* le **manopole** (volume, guadagno, automatismi) e l'interruttore del jack si applicano **subito**:
-  sono i valori del mixer, e un volume si regola solo girandolo mentre si ascolta;
-* il **dispositivo delle azioni** e il **microfono** si applicano con «Applica», perché il nodo
-  riavvia il proprio servizio.
+Il prezzo, detto dove serve: cambiare il dispositivo delle azioni o il microfono fa **riavviare il
+servizio del nodo**, cioè mezzo minuto in cui la camera non c'è. Per questo si manda solo quello che
+è davvero diverso da com'è adesso, e la finestra lo dice prima di farlo.
 
 La ricerca e l'abbinamento di una cassa Bluetooth li fa il nodo da root e durano secondi: qui si
 chiedono, e la finestra ripassa a vedere com'è andata invece di restare bloccata. Il «ponte» è
@@ -53,7 +56,8 @@ from PySide6.QtWidgets import (
 from . import theme as T
 from .attesa import Attesa
 from .sistema import level_bar
-from ..actions.pannello_audio import (attesa_scaduta, casse_da_mostrare, chiave_manopola, chiave_uscita,
+from ..actions.pannello_audio import (attesa_scaduta, casse_ricordate, casse_trovate, chiave_manopola,
+                                      chiave_uscita,
                                       esito_arrivato, etichetta_manopola, firma_esito, giudizio_livello,
                                       livello_da_pcm, microfono_da_mandare, picco_tenuto,
                                       quale_cassa_tenere, si_puo_provare, uscita_in_uso,
@@ -86,6 +90,11 @@ class AudioDialog(QDialog):
         self.disp = self._chiedi_se_c_e("dispositivi") or {}
         self.manopole_dati = self._chiedi_se_c_e("manopole") or {}
         self.attesa = ""          # "cerca", "abbina" o "dimentica" mentre il nodo lavora
+        # Il nodo tiene l'ultima ricerca in un file, e quel file sopravvive a tutto: senza questo,
+        # aprendo la finestra si rivedeva l'elenco di giorni prima con dentro casse spente marcate
+        # «da abbinare» (8/11). Si mostrano solo le ricerche fatte **dopo** che la finestra e' aperta,
+        # cosi' l'elenco nasce vuoto, che e' la verita': nessuno ha ancora cercato.
+        self.aperta_il = time.time()
         self.in_corso = ("", "")  # (indirizzo, nome) della cassa su cui si sta lavorando
         self.firma_prima = ()     # com'era l'esito del nodo quando si è cominciato ad aspettare
         self.attesa_s, self.inizio = 0, 0.0
@@ -127,16 +136,19 @@ class AudioDialog(QDialog):
         self.nota_uscita.setStyleSheet(f"color:{T.MUTED}; font-size:11px")
         lay.addWidget(self.nota_uscita)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        ok.setText(_("Applica"))
-        ok.setStyleSheet(f"QPushButton {{ background:{T.ARMED}; color:#FFFFFF; font-weight:600; }}")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(_("Annulla"))
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        # Niente «Applica», niente «Annulla» (8/11). Ogni gesto di questa finestra arriva al nodo
+        # **subito**: il jack, le manopole e l'abbinamento lo facevano gia', l'uscita e il microfono
+        # no — e quella meta' differenza era la causa di tutto. Marco, provando: «sembrava si fosse
+        # bloccato fino all'applica», e poi: «tutte le funzionalita' sono atomiche, non aspetti
+        # applica sotto nella finestra altrimenti l'utente viene confuso».
+        # Un «Annulla» qui sarebbe peggio di non averlo: prometterebbe di disfare cose che il nodo ha
+        # gia' fatto — una cassa abbinata, un servizio riavviato — e non puo' mantenerlo.
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setText(_("Chiudi"))
+        buttons.rejected.connect(self.accept)
         lay.addWidget(buttons)
 
-        self.scelta_uscita.currentIndexChanged.connect(lambda _i: self._mostra())
+        self.scelta_uscita.currentIndexChanged.connect(lambda _i: self._uscita_cambiata())
         self.prova_btn.clicked.connect(self._prova)
         self.livello_letto.connect(self._livello_arrivato)
         self.tabs.currentChanged.connect(lambda _i: self._ascolto_forse())
@@ -203,14 +215,25 @@ class AudioDialog(QDialog):
         return w
 
     def _tab_bluetooth(self) -> QWidget:
+        """Due elenchi, non uno (8/11).
+
+        Prima stavano insieme, «ricordate» e «viste passare», distinte da una scritta in coda. Marco,
+        provando: *«l'elenco deve essere vuoto»*, e aveva ragione due volte. Sono due cose diverse —
+        una cassa che il nodo **ha**, e una che si **sta cercando** — e su ciascuna si può fare una
+        cosa sola: la prima si dimentica, la seconda si abbina. Mescolarle voleva dire due pulsanti
+        accesi a turno sulla stessa riga, e un elenco che all'apertura mostrava la ricerca di giorni
+        prima come se fosse adesso.
+        """
         w, lay = self._pagina()
-        lay.addWidget(QLabel(_('Casse Bluetooth di questo nodo:')))
+
+        lay.addWidget(QLabel(_('Casse che il nodo ricorda:')))
         self.casse = QListWidget()
-        for c in casse_da_mostrare(self.disp.get("bluetooth")):
-            coda = (_(' · collegata') if c["collegata"] else "") if c["abbinata"] else _(' · da abbinare')
-            voce = QListWidgetItem(f"{c['nome']} · {c['mac']}{coda}")
+        for c in casse_ricordate(self.disp.get("bluetooth")):
+            voce = QListWidgetItem(f"{c['nome']} · {c['mac']}" + (_(' · collegata') if c["collegata"] else ""))
             voce.setData(Qt.ItemDataRole.UserRole, c)
             self.casse.addItem(voce)
+        if not self.casse.count():
+            lay.addWidget(self._nota_piccola(_('Nessuna: il nodo non ha ancora nessuna cassa Bluetooth.')))
         tenere = quale_cassa_tenere(self.in_corso[0], getattr(self, "_mac_da_tenere", ""),
                                     str((self.disp.get("predefinito") or {}).get("bluetooth_mac") or ""),
                                     [self.casse.item(i).data(Qt.ItemDataRole.UserRole)["mac"]
@@ -221,20 +244,34 @@ class AudioDialog(QDialog):
                 break
         self.casse.currentRowChanged.connect(lambda _i: self._mostra())
         lay.addWidget(self.casse, 1)
+        self.dimentica_btn = QPushButton(_('Dimentica'))
+        self.dimentica_btn.clicked.connect(self._dimentica)
         riga = QHBoxLayout()
+        riga.addStretch(1)
+        riga.addWidget(self.dimentica_btn)
+        lay.addLayout(riga)
+
+        lay.addWidget(QLabel(_('Cerca una cassa nuova:')))
+        self.trovate = QListWidget()
+        for c in casse_trovate(self.disp.get("bluetooth"), self.aperta_il):
+            voce = QListWidgetItem(f"{c['nome']} · {c['mac']}")
+            voce.setData(Qt.ItemDataRole.UserRole, c)
+            self.trovate.addItem(voce)
+        self.trovate.currentRowChanged.connect(lambda _i: self._mostra())
+        lay.addWidget(self.trovate, 1)
         self.cerca_btn = QPushButton(_('Cerca casse…'))
         self.abbina_btn = QPushButton(_('Abbina'))
-        self.dimentica_btn = QPushButton(_('Dimentica'))
-        for b in (self.cerca_btn, self.abbina_btn, self.dimentica_btn):
-            riga.addWidget(b)
-        lay.addLayout(riga)
-        lay.addWidget(self._nota_piccola(
-            _('Il nodo ne può ricordare più di una; a suonare è una per volta. Per aggiungerne una: '
-              'accendila, mettila in abbinamento (il tasto Bluetooth finché lampeggia veloce) e premi '
-              '«Cerca casse…».')))
         self.cerca_btn.clicked.connect(self._cerca)
         self.abbina_btn.clicked.connect(self._abbina)
-        self.dimentica_btn.clicked.connect(self._dimentica)
+        riga2 = QHBoxLayout()
+        riga2.addWidget(self.cerca_btn)
+        riga2.addStretch(1)
+        riga2.addWidget(self.abbina_btn)
+        lay.addLayout(riga2)
+        lay.addWidget(self._nota_piccola(
+            _('Accendi la cassa, mettila in abbinamento (il tasto Bluetooth finché lampeggia veloce) '
+              'e premi «Cerca casse…». Abbinarla non la fa suonare: quale cassa usa il nodo si '
+              'sceglie qui sotto, e per le sirene conviene il filo.')))
         return w
 
     def _tab_usb(self) -> QWidget:
@@ -295,7 +332,9 @@ class AudioDialog(QDialog):
         lay.addWidget(self.micro_ascolto)
         lay.addWidget(self._nota_piccola(
             _('L\'audio non viene salvato sul nodo: arriva a Mirto solo mentre lo sta ascoltando.')))
-        self.scelta_micro.currentIndexChanged.connect(lambda _i: self._costruisci())
+        self.scelta_micro.currentIndexChanged.connect(lambda _i: self._microfono_cambiato())
+        self.micro_on.toggled.connect(lambda _b: self._microfono_cambiato())
+        self.micro_ascolto.toggled.connect(self._ascolto_cambiato)
         self._manopole_di(lay, self.micro_scelto())
 
         # Il misuratore. Regolare un guadagno senza vedere il livello è regolare un volume a orecchie
@@ -307,8 +346,8 @@ class AudioDialog(QDialog):
         self.giudizio = QLabel("")
         self.giudizio.setWordWrap(True)
         self.spento = self._nota_piccola(
-            _('Il livello si vede quando il nodo sta ascoltando: spunta «Usa questo microfono», premi '
-              '«Applica», e riapri questa finestra.'))
+            _('Il livello si vede quando il nodo sta ascoltando: spunta «Usa questo microfono» e '
+              'riapri questa finestra.'))
         for widget in (self.riga_livello, self.barra, self.giudizio, self.spento):
             lay.addWidget(widget)
             widget.setVisible(ascolta if widget is not self.spento else not ascolta)
@@ -359,7 +398,13 @@ class AudioDialog(QDialog):
 
     # --- stato della finestra ------------------------------------------------
     def cassa_scelta(self) -> dict:
+        """La cassa scelta fra quelle **ricordate**: quella su cui si può premere «Dimentica»."""
         voce = self.casse.currentItem() if hasattr(self, "casse") else None
+        return dict(voce.data(Qt.ItemDataRole.UserRole) or {}) if voce is not None else {}
+
+    def cassa_trovata(self) -> dict:
+        """La cassa scelta fra quelle **appena trovate**: quella da abbinare."""
+        voce = self.trovate.currentItem() if hasattr(self, "trovate") else None
         return dict(voce.data(Qt.ItemDataRole.UserRole) or {}) if voce is not None else {}
 
     def mac_scelto(self) -> str:
@@ -389,33 +434,99 @@ class AudioDialog(QDialog):
 
     def _riempi_uscite(self) -> None:
         """L'elenco dei dispositivi su cui si può suonare, tenendo scelto quello che era scelto."""
-        prima = self.scelta_uscita.currentData() if self.scelta_uscita.count() else None
-        voluta = chiave_uscita(**{k: str(prima.get(k, "")) for k in ("uscita", "scheda", "mac")}) if prima \
-            else uscita_in_uso(self.disp)
-        self.scelta_uscita.clear()
-        for u in uscite_per_le_azioni(self.disp):
-            self.scelta_uscita.addItem(str(u["etichetta"]), u)
-        for i in range(self.scelta_uscita.count()):
-            if str((self.scelta_uscita.itemData(i) or {}).get("chiave")) == voluta:
-                self.scelta_uscita.setCurrentIndex(i)
-                break
+        # Riempire la tendina **muove** l'indice, e da quando la scelta si applica da sola quel
+        # movimento sarebbe indistinguibile da una scelta di chi guarda: il nodo si riavvierebbe da
+        # solo ogni volta che la finestra si ridisegna. Qui si dice che stiamo riempiendo, non
+        # scegliendo.
+        self._sto_riempiendo = True
+        try:
+            prima = self.scelta_uscita.currentData() if self.scelta_uscita.count() else None
+            voluta = chiave_uscita(**{k: str(prima.get(k, "")) for k in ("uscita", "scheda", "mac")}) if prima \
+                else uscita_in_uso(self.disp)
+            self.scelta_uscita.clear()
+            for u in uscite_per_le_azioni(self.disp):
+                self.scelta_uscita.addItem(str(u["etichetta"]), u)
+            for i in range(self.scelta_uscita.count()):
+                if str((self.scelta_uscita.itemData(i) or {}).get("chiave")) == voluta:
+                    self.scelta_uscita.setCurrentIndex(i)
+                    break
+        finally:
+            self._sto_riempiendo = False
+        self._mostra()
+
+    def _uscita_cambiata(self) -> None:
+        """Scegliere un'uscita la manda al nodo, subito. Il nodo riavvia il suo servizio."""
+        if getattr(self, "_sto_riempiendo", False):
+            return
+        s = self.scelta_uscita_cambiata()
+        self._mostra()
+        if s is None:
+            return      # e' gia' quella: un riavvio per niente e' mezzo minuto di casa senza camera
+        self.nota.inizia(_('Sto dicendo al nodo da dove suonare: riavvia il suo servizio, '
+                           'la camera torna da sé.'), 30)
+        nuovo = self._chiedi(self.ponte.imposta, s["uscita"], s["scheda"], s["bluetooth_mac"])
+        if nuovo is None:
+            self.nota.esito(_('Il nodo non ha accettato l\'uscita.'), False)
+            self._riempi_uscite()        # torna a mostrare quella vera
+            return
+        self.uscita_prima = chiave_uscita(s["uscita"], s["scheda"], s["bluetooth_mac"])
+        self.nota.esito(_('Fatto: il nodo suona da «{dove}».',
+                          dove=str((self.scelta_uscita.currentData() or {}).get("etichetta") or "")), True)
+        self._aggiorna_dispositivi()
+
+    def _microfono_cambiato(self) -> None:
+        """Accendere, spegnere o cambiare microfono arriva al nodo subito."""
+        if getattr(self, "_sto_riempiendo", False):
+            return
+        m = self.scelta_microfono()
+        if m is None:
+            self._costruisci()   # non e' cambiato niente per il nodo: restano le manopole da rifare
+            return
+        if m["attivo"] and not m["scheda"]:
+            QMessageBox.warning(self, _('Audio del nodo'),
+                                _('Scegli quale microfono usare, oppure togli la spunta.'))
+            return
+        self.nota.inizia(_('Sto dicendo al nodo quale microfono usare: riavvia il suo servizio, '
+                           'la camera torna da sé.'), 30)
+        nuovo = self._chiedi(self.ponte.microfono, m["attivo"], m["scheda"])
+        if nuovo is None:
+            self.nota.esito(_('Il nodo non ha accettato il microfono.'), False)
+            return
+        self.micro_prima = dict((nuovo or {}).get("microfono") or self.micro_prima)
+        self.nota.esito(_('Fatto.'), True)
+        self._aggiorna_dispositivi()
+
+    def _ascolto_cambiato(self, acceso: bool) -> None:
+        """L'ascolto è una scelta di **questo computer**, non del nodo: non riavvia niente."""
+        if getattr(self, "_sto_riempiendo", False) or not hasattr(self.ponte, "ascolta"):
+            return
+        try:
+            self.ponte.ascolta(bool(acceso))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, _('Audio del nodo'),
+                                _('Non sono riuscito a salvare l\'ascolto: {exc}', exc=exc))
+            return
+        self._ascolto_prima = bool(acceso)
+        self._ascolto_forse()
 
     def _mostra(self) -> None:
         """Cosa si può premere, adesso. Unico posto che accende e spegne i pulsanti."""
         lavora = bool(self.attesa)
-        cassa = self.cassa_scelta()
         if hasattr(self, "cerca_btn"):
+            # Ogni pulsante guarda **il suo** elenco: niente più un pulsante acceso o spento a
+            # seconda di cosa fosse selezionato in una lista mescolata.
             self.cerca_btn.setEnabled(not lavora)
-            self.abbina_btn.setEnabled(not lavora and bool(cassa) and not cassa.get("abbinata"))
-            self.dimentica_btn.setEnabled(not lavora and bool(cassa.get("abbinata")))
-        # Il din-don esce da come è configurato **il nodo**, non da quello che si è appena scelto qui:
-        # con un dispositivo non ancora applicato, premerlo non farebbe succedere niente.
-        # La stessa regola di prima, con la stessa funzione: il din-don esce da com'è configurato il
-        # nodo, non da quello che si è appena scelto qui. Riscriverla qui dentro vorrebbe dire due
-        # copie della stessa regola, e una delle due prima o poi resta indietro.
+            self.abbina_btn.setEnabled(not lavora and bool(self.cassa_trovata().get("mac")))
+            self.dimentica_btn.setEnabled(not lavora and bool(self.cassa_scelta().get("mac")))
+        # Il din-don esce da com'è configurato **il nodo**. Da quando la scelta si applica da sola le
+        # due cose coincidono quasi sempre, ma non sempre: un'uscita scelta che il nodo ha rifiutato,
+        # o una cassa che si è scollegata, restano casi in cui premere non farebbe succedere niente.
+        # La regola sta in `si_puo_provare` e non qui: due copie, e una resta indietro.
         provabile = self.scelta_uscita.count() > 0 and si_puo_provare(self.stato, self.scelta())
         self.prova_btn.setEnabled(provabile and not lavora)
-        self.prova_btn.setToolTip("" if provabile else _('Prima applica la scelta sul nodo.'))
+        self.prova_btn.setToolTip("" if provabile else
+                                  _('Il nodo non sta ancora suonando da qui: scegli un\'uscita che '
+                                    'abbia davvero un dispositivo collegato.'))
 
     # --- cose che chiedono al nodo ------------------------------------------
     def _chiedi(self, fn, *args, muto: bool = False):
@@ -521,7 +632,7 @@ class AudioDialog(QDialog):
         self._aspetta("cerca", risposta, _('Sto cercando: tieni la cassa accesa e in abbinamento.'), 20)
 
     def _abbina(self) -> None:
-        cassa = self.cassa_scelta()
+        cassa = self.cassa_trovata()
         if not cassa.get("mac"):
             return
         # Il nome si prende adesso: l'elenco può cambiare mentre il nodo lavora, e il risultato deve
@@ -593,29 +704,13 @@ class AudioDialog(QDialog):
             self.nota.esito(_('«{nome}» non si è abbinata: {messaggio}', nome=nome,
                               messaggio=messaggio), False)
         else:
-            # Abbinare non vuol dire usare: l'abbinamento è di sistema, mentre *quale* cassa il nodo
-            # usa sta in `node.toml` e ci arriva con «Applica». Fino all'8/11 qui si diceva «ora puoi
-            # fare il suono di prova», che era falso — la prova sarebbe uscita dal jack — e la
-            # finestra sembrava non aver fatto niente finché non si premeva Applica.
-            # Chi ha appena abbinato una cassa l'ha abbinata per usarla: la si sceglie qui, e resta
-            # da premere Applica, che è l'unico passo che cambia davvero il nodo.
-            scelta = self._scegli_cassa(mac_in_corso)
-            self.nota.esito(
-                _('«{nome}» è abbinata, e l\'ho scelta qui sotto: premi Applica perché il nodo la '
-                  'usi.', nome=nome) if scelta else
-                _('«{nome}» è abbinata. Scegli «Bluetooth» qui sotto e premi Applica perché il nodo '
-                  'la usi.', nome=nome), True)
-
-    def _scegli_cassa(self, mac: str) -> bool:
-        """Mette la cassa appena abbinata nella tendina dell'uscita. Dice se c'è riuscita."""
-        if not mac:
-            return False
-        for i in range(self.scelta_uscita.count()):
-            dati = self.scelta_uscita.itemData(i) or {}
-            if str(dati.get("uscita")) == "bluetooth" and str(dati.get("mac", "")).upper() == mac.upper():
-                self.scelta_uscita.setCurrentIndex(i)
-                return True
-        return False
+            # Abbinare non vuol dire usare, e dall'8/11 non lo fa nemmeno di nascosto: l'abbinamento
+            # è un fatto di sistema, *quale* cassa suona è una scelta a parte. Marco: «la cassa
+            # principale deve prediligere connessioni sicure come jack/usb» — quindi una cassa appena
+            # abbinata non diventa l'uscita del nodo da sola. Il messaggio dice cos'è successo e dove
+            # si sceglie, senza fare il passo al posto di chi guarda.
+            self.nota.esito(_('«{nome}» è abbinata. Il nodo la ricorda: per farla suonare, sceglila '
+                              'come uscita qui sotto.', nome=nome), True)
 
     def _aggiorna_dispositivi(self) -> None:
         """Ricarica i dispositivi dal nodo e rifà le tab: l'elenco delle casse è appena cambiato."""
@@ -629,45 +724,19 @@ class AudioDialog(QDialog):
 
 
 def audio_dialog(parent, ponte, nome: str) -> dict | None:
-    """Chiede le scelte e le manda al nodo. Restituisce lo stato nuovo, o None.
+    """Apre la finestra. Non manda piu' niente alla chiusura: l'ha gia' mandato tutto lei.
 
-    Le manopole e il jack sono già stati applicati mentre la finestra era aperta: qui restano le due
-    cose che fanno riavviare il servizio del nodo — il dispositivo delle azioni e il microfono — e si
-    mandano **solo se sono cambiate**, perché un riavvio per niente è mezzo minuto senza camera.
+    Fino all'8/11 qui dentro c'era meta' del pannello: l'uscita delle azioni, il microfono e
+    l'ascolto si raccoglievano nella finestra e partivano al momento di «Applica». Era il motivo per
+    cui abbinare una cassa sembrava non fare niente — l'abbinamento partiva subito, la scelta di
+    usarla no — e per cui chi girava fra le schede per guardare si ritrovava il nodo cambiato alla
+    fine. Adesso ogni gesto arriva al nodo quando lo si fa, e qui resta solo l'ultimo stato
+    conosciuto, per chi ha aperto la finestra e vuole sapere com'e' il nodo adesso.
     """
     try:
         dlg = AudioDialog(nome, ponte, parent)
     except Exception as exc:  # noqa: BLE001
         QMessageBox.warning(parent, _('Audio del nodo'), _('Il nodo non risponde: {exc}', exc=exc))
         return None
-    if dlg.exec() != QDialog.DialogCode.Accepted:
-        return None
-    uscita = dlg.scelta_uscita_cambiata()
-    micro = dlg.scelta_microfono()
-    # L'ascolto è una scelta di **questo computer**, non del nodo: non fa riavviare niente e si
-    # applica subito, anche quando nient'altro è cambiato.
-    if hasattr(ponte, "ascolta") and dlg.micro_ascolto.isChecked() != dlg._ascolto_prima:
-        try:
-            ponte.ascolta(dlg.micro_ascolto.isChecked())
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(parent, _('Audio del nodo'),
-                                _('Non sono riuscito a salvare l\'ascolto: {exc}', exc=exc))
-    if micro and micro["attivo"] and not micro["scheda"]:
-        QMessageBox.warning(parent, _('Audio del nodo'),
-                            _('Scegli quale microfono usare, oppure togli la spunta all\'ascolto.'))
-        return None
-    if uscita is None and micro is None:
-        return dlg.disp or {"esito_richiesta": "ok"}
-    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-    try:
-        esito = None
-        if uscita is not None:
-            esito = ponte.imposta(uscita["uscita"], uscita["scheda"], uscita["bluetooth_mac"])
-        if micro is not None:
-            esito = ponte.microfono(micro["attivo"], micro["scheda"]) or esito
-        return esito
-    except Exception as exc:  # noqa: BLE001
-        QMessageBox.warning(parent, _('Audio del nodo'), _('Il nodo non ha accettato la richiesta: {exc}', exc=exc))
-        return None
-    finally:
-        QApplication.restoreOverrideCursor()
+    dlg.exec()
+    return dlg.disp or dlg.stato or None

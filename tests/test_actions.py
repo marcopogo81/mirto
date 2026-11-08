@@ -1079,20 +1079,48 @@ class TabDeiDispositiviTest(unittest.TestCase):
                                             {"mac": "11:22:33:44:55:66", "nome": "Cassa nuova", "abbinata": False}]}},
     }
 
-    def test_a_speaker_in_both_lists_appears_once(self):
-        """Vederla due volte farebbe premere «Abbina» su una cassa che è già a posto."""
-        from mirto.actions.pannello_audio import casse_da_mostrare
+    def test_the_two_lists_are_two_lists(self):
+        """Dall'8/11 le ricordate e le trovate non stanno piu' insieme: due elenchi, due azioni."""
+        from mirto.actions.pannello_audio import casse_ricordate, casse_trovate
 
-        casse = casse_da_mostrare(self.DISP["bluetooth"])
-        self.assertEqual([c["mac"] for c in casse], ["AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"])
-        self.assertEqual([c["abbinata"] for c in casse], [True, False], "le ricordate prima")
-        self.assertTrue(casse[0]["collegata"])
+        bt = dict(self.DISP["bluetooth"])
+        bt["trovate"] = {"quando": 1000, **bt["trovate"]}
+        ricordate = casse_ricordate(bt)
+        self.assertEqual([c["mac"] for c in ricordate], ["AA:BB:CC:DD:EE:FF"])
+        self.assertTrue(ricordate[0]["collegata"])
+        trovate = casse_trovate(bt, da_quando=999)
+        self.assertEqual([c["mac"] for c in trovate], ["11:22:33:44:55:66"],
+                         "una cassa gia' ricordata non si ripropone da abbinare")
 
-    def test_the_outputs_follow_the_order_of_the_tabs(self):
+    def test_a_search_older_than_the_window_is_not_shown(self):
+        """L'elenco nasce vuoto: il file del nodo tiene l'ultima ricerca, anche di giorni fa.
+
+        E' il difetto dell'8/11: aprendo il programma si vedeva la propria cassa «da abbinare»
+        mentre non era in abbinamento, e premendo «Cerca» per qualche secondo non cambiava niente —
+        si stava guardando il file vecchio.
+        """
+        from mirto.actions.pannello_audio import casse_trovate
+
+        bt = dict(self.DISP["bluetooth"])
+        bt["trovate"] = {"quando": 1000, **bt["trovate"]}
+        self.assertEqual(casse_trovate(bt, da_quando=1001), [], "ricerca piu' vecchia della finestra")
+        self.assertEqual(casse_trovate(bt, da_quando=1000), [{"mac": "11:22:33:44:55:66",
+                                                              "nome": "Cassa nuova",
+                                                              "abbinata": False, "collegata": False}])
+        self.assertEqual(casse_trovate({"casse": []}, da_quando=0), [], "nessuna ricerca: niente")
+
+    def test_the_wire_comes_before_the_radio(self):
+        """Marco, 8/11: «la cassa principale deve prediligere connessioni sicure come jack/usb».
+
+        Non e' un gusto: una cassa Bluetooth si scollega da sola, perde l'abbinamento quando qualcuno
+        la rimette in abbinamento, e il 21/10 ha tenuto fermo un nodo per cinque ore. L'uscita di una
+        sirena e' l'ultimo posto dove mettere la cosa che cade piu' spesso.
+        """
         from mirto.actions.pannello_audio import uscite_per_le_azioni
 
         chiavi = [u["chiave"] for u in uscite_per_le_azioni(self.DISP)]
-        self.assertEqual(chiavi, ["jack:Headphones", "bluetooth:AA:BB:CC:DD:EE:FF", "usb:UACDemoV10"])
+        self.assertEqual(chiavi, ["jack:Headphones", "usb:UACDemoV10", "bluetooth:AA:BB:CC:DD:EE:FF"])
+        self.assertLess(chiavi.index("usb:UACDemoV10"), chiavi.index("bluetooth:AA:BB:CC:DD:EE:FF"))
 
     def test_a_speaker_not_yet_paired_is_not_an_output(self):
         from mirto.actions.pannello_audio import uscite_per_le_azioni

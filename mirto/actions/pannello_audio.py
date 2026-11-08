@@ -167,18 +167,14 @@ def microfono_da_mandare(prima: dict | None, attivo: bool, scheda: str) -> dict 
     return {"attivo": bool(attivo), "scheda": str(scheda or "")}
 
 
-def casse_da_mostrare(bluetooth: dict | None) -> list[dict]:
-    """Le casse della tab Bluetooth: prima quelle che il nodo **ricorda**, poi quelle appena viste.
+def casse_ricordate(bluetooth: dict | None) -> list[dict]:
+    """Le casse che il nodo **ricorda**: quelle abbinate, su cui si può già suonare.
 
-    Le ricordate le tiene BlueZ, non noi, e sono quelle su cui si può già suonare; quelle trovate
-    dall'ultima ricerca e non ancora abbinate vengono dopo, perché prima vanno abbinate. Una cassa che
-    sta in tutte e due le liste compare **una volta sola**, da abbinata: è lo stesso oggetto, e
-    vederlo due volte farebbe premere «Abbina» su una cassa che è già a posto.
+    Le tiene BlueZ, non noi. Sono una cosa diversa da quelle che si vedono passare in una ricerca, e
+    dall'8/11 stanno in un elenco loro: su queste l'unica azione è dimenticarle.
     """
-    bt = dict(bluetooth or {})
-    fuori: list[dict] = []
-    visti: set[str] = set()
-    for c in (bt.get("casse") or []):
+    fuori, visti = [], set()
+    for c in (dict(bluetooth or {}).get("casse") or []):
         if isinstance(c, dict) and c.get("mac"):
             mac = str(c["mac"]).upper()
             if mac in visti:
@@ -186,14 +182,42 @@ def casse_da_mostrare(bluetooth: dict | None) -> list[dict]:
             visti.add(mac)
             fuori.append({"mac": mac, "nome": str(c.get("nome") or "(senza nome)"),
                           "abbinata": True, "collegata": bool(c.get("collegata"))})
-    for c in ((bt.get("trovate") or {}).get("casse") or []):
-        if isinstance(c, dict) and c.get("mac"):
-            mac = str(c["mac"]).upper()
-            if mac in visti:
-                continue
-            visti.add(mac)
-            fuori.append({"mac": mac, "nome": str(c.get("nome") or "(senza nome)"),
-                          "abbinata": False, "collegata": False})
+    return fuori
+
+
+def casse_trovate(bluetooth: dict | None, da_quando: float) -> list[dict]:
+    """Le casse viste da una ricerca fatta **dopo** ``da_quando``, tolte quelle già ricordate.
+
+    Il nodo tiene l'ultima ricerca in un file, e quel file sopravvive a tutto: riaprendo la finestra
+    si rivedeva l'elenco di giorni prima, con dentro casse spente da un pezzo marcate «da abbinare».
+    L'8/11 Marco apre il programma e trova la sua cassa «da abbinare» mentre quella non è nemmeno in
+    abbinamento; poi preme «Cerca casse…» e per qualche secondo non cambia niente, perché sta ancora
+    guardando il file vecchio. Due sintomi, una causa: quell'elenco non diceva *cosa c'è adesso*,
+    diceva *cosa si è visto l'ultima volta*.
+
+    Si passa il momento in cui la finestra si è aperta: una ricerca più vecchia non si mostra. Così
+    l'elenco nasce **vuoto** — che è la verità, perché nessuno ha ancora cercato — e si riempie solo
+    con quello che la ricerca di adesso ha davvero visto. Il filtro si fa sul dato (il nodo scrive
+    `quando` insieme ai risultati) e non su una bandierina della finestra: una bandierina si dimentica
+    di cambiare, una data no.
+    """
+    bt = dict(bluetooth or {})
+    ricerca = dict(bt.get("trovate") or {})
+    if float(ricerca.get("quando") or 0) < float(da_quando):
+        return []
+    gia = {c["mac"] for c in casse_ricordate(bt)}
+    fuori, visti = [], set()
+    for c in (ricerca.get("casse") or []):
+        if not (isinstance(c, dict) and c.get("mac")):
+            continue
+        mac = str(c["mac"]).upper()
+        # Una cassa già ricordata non si ripropone: vederla anche qui farebbe premere «Abbina» su
+        # una che è già a posto, ed è il gesto che il 21/10 incantava il controller.
+        if mac in gia or mac in visti:
+            continue
+        visti.add(mac)
+        fuori.append({"mac": mac, "nome": str(c.get("nome") or "(senza nome)"),
+                      "abbinata": False, "collegata": False})
     return fuori
 
 
@@ -237,14 +261,18 @@ def uscite_per_le_azioni(dispositivi: dict | None) -> list[dict]:
     if jack.get("presente") and jack.get("attivo", True):
         fuori.append({"uscita": "jack", "scheda": str(jack.get("scheda") or ""), "mac": "",
                       "etichetta": _('Jack 3,5 mm')})
-    for c in casse_da_mostrare(d.get("bluetooth")):
-        if c["abbinata"]:
-            fuori.append({"uscita": "bluetooth", "scheda": "", "mac": c["mac"], "etichetta": c["nome"]})
+    # Prima il filo, poi la radio. Deciso da Marco l'8/11: «la cassa principale deve prediligere
+    # connessioni sicure come jack/usb». Non è un gusto: una cassa Bluetooth si scollega da sola, si
+    # dimentica l'abbinamento quando qualcuno la rimette in abbinamento, e il 21/10 ha tenuto fermo
+    # un nodo per cinque ore. L'uscita di una sirena è l'ultimo posto dove mettere la cosa che cade
+    # più spesso — e questa lista è anche l'ordine in cui le uscite si propongono.
     for gruppo, come in (("usb", _('Cassa USB')), ("hdmi", _('HDMI'))):
         for c in (d.get(gruppo) or []):
             if isinstance(c, dict) and c.get("scheda"):
                 fuori.append({"uscita": gruppo, "scheda": str(c["scheda"]), "mac": "",
                               "etichetta": _('{come} — {nome}', come=come, nome=str(c.get("nome") or c["scheda"]))})
+    for c in casse_ricordate(d.get("bluetooth")):
+        fuori.append({"uscita": "bluetooth", "scheda": "", "mac": c["mac"], "etichetta": c["nome"]})
     for u in fuori:
         u["chiave"] = chiave_uscita(u["uscita"], u["scheda"], u["mac"])
     return fuori
