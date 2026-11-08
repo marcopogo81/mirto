@@ -1,0 +1,7 @@
+# Gli script del nodo finiscono sul Raspberry: con i fine riga di Windows bash non li esegue.
+*.sh text eol=lf
+
+# Python e configurazioni: fine riga uniformi in tutto il progetto
+*.py text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf

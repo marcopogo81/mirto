@@ -1,0 +1,78 @@
+# Configurazione di Mirto Node (/etc/mirto-node/node.toml).
+# Dopo una modifica: sudo systemctl restart mirto-node
+
+# Nome mostrato in Mirto
+nome = "NOME_NODO"
+
+# Porta HTTPS su cui Mirto contatta il nodo
+porta = 8443
+
+# Azione "luce_prova": fa lampeggiare il LED verde del Raspberry (prova senza hardware)
+led_prova = true
+
+[audio]
+# L'uscita jack e\' utilizzabile? Spegnendola sparisce dai dispositivi proponibili E dai ripieghi:
+# su un nodo che non ha niente attaccato al jack, ripiegarci sopra vuol dire una sirena che suona in
+# un buco senza che nessuno lo sappia. Si cambia dal pannello: Audio del nodo -> tab Jack.
+jack = true
+# Dove suona la sirena (si sceglie comodamente con:  sudo mirto-nodo audio)
+#   "bluetooth" = cassa Bluetooth (es. JBL)        "jack" = uscita cuffie 3,5 mm del Raspberry
+#   "usb"       = scheda o cassa audio USB         "hdmi" = TV o monitor
+#   "predefinito" = uscita predefinita del sistema
+uscita = "bluetooth"
+# Per jack, USB e HDMI: nome della scheda come in /proc/asound/cards (es. "Headphones", "vc4hdmi0", "Device")
+scheda = ""
+# Indirizzo della cassa, da "bluetoothctl devices" (es. "AA:BB:CC:DD:EE:FF")
+bluetooth_mac = ""
+# Volume della sirena (0-100); il volume della cassa si regola con i suoi tasti
+volume = 80
+# Ogni quanti minuti di silenzio mandare un suono impercettibile per non far spegnere la cassa (0 = mai)
+tieni_sveglia_minuti = 4
+
+[dissuasore]
+# Suoni contro uccelli e animali (rapace, falco, sparo, cannoncino, allarme_corvi), scelti da Mirto.
+# Massimo 30 secondi per volta e 2 minuti ogni ora; mai mentre suona la sirena.
+attivo = true
+volume = 90
+# File WAV propri (es. verso registrato di un rapace): il nome del file diventa il nome del suono
+cartella_suoni = "/etc/mirto-node/suoni"
+# Prova:  sudo python3 -m mirto_node --prova-suono rapace   (oppure  --prova-suono elenco)
+
+[microfono]
+# Microfono USB o vivavoce: Mirto riconosce i suoni (vetro rotto, allarme fumo, cane…) e /ascolta funziona.
+# L'audio non viene salvato sul nodo: arriva a Mirto solo mentre lo sta ascoltando.
+# Dal 22/10 questa sezione la scrive Mirto: Impostazioni → Nodi → «Audio del nodo…» → Microfono del nodo.
+# Qui si può ancora mettere a mano, ma non serve più un terminale per accendere il microfono.
+attivo = false
+# Nome della scheda come in /proc/asound/cards (es. "Device" per molti microfoni USB); vuoto = predefinita.
+# Attenzione: su un Raspberry la scheda "predefinita" è quella delle cuffie, che NON registra — il nome va
+# messo. Lo propone la finestra, che elenca solo le schede capaci di registrare.
+scheda = ""
+# Guadagno e automatismi NON si impostano qui: sono manopole della scheda, le gira il nodo (al massimo, con
+# l'automatismo spento, la prima volta che la usa) e si cambiano dalla stessa finestra. Restano scritte in
+# /etc/mirto-node/manopole.json, perché ALSA al riavvio le dimentica.
+# Prova:  arecord -D plughw:CARD=Device -f S16_LE -r 16000 -c 1 -d 5 prova.wav && aplay prova.wav
+
+[camera]
+# Camera collegata al Raspberry, trasmessa da MediaMTX (rtsp://<nodo>:8554/cam, con password)
+attiva = true
+# true solo per la Camera Module NoIR, quella senza filtro infrarossi, da usare con faretti a
+# infrarossi: cambia le regolazioni di colore. Con una camera normale lasciare false.
+noir = false
+larghezza = 1280
+altezza = 720
+fps = 15
+# kbit/s del video: 1500 bastano per 720p (circa 16 GB al giorno se Mirto registra di continuo)
+bitrate = 1500
+
+[registrazione]
+# Il nodo registra da solo la sua camera (anche con Mirto spento), ad anello: quando serve spazio
+# cancella i file più vecchi, quindi non si riempie e non si blocca mai.
+attiva = true
+# Disco USB (SSD o chiavetta) montato qui: lo prepara  sudo mirto-nodo disco . Vuoto = microSD.
+disco = ""
+# Spazio massimo in GB (0 = sul disco USB tutto tranne il minimo libero; sulla microSD 2 GB, circa 3 ore)
+massimo_gb = 0
+# Percentuale del disco che resta sempre libera
+minimo_libero_percento = 10
+

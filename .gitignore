@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+
+# Modelli scaricati al primo avvio
+models/
+*.onnx
+
+# Dati locali (eventi, foto, log)
+data/
+*.sqlite
+*.log
+
+# File di sincronizzazione
+.sync.tar
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Foto di prova delle camere
+prova_camera.jpg
+prova_indice_*.jpg
+
+# Appunti personali con credenziali: mai nel repository
+BotTelegram.txt
+*token*.txt
+
+# Cache degli strumenti
+.ruff_cache/
+.wrangler/
+
+# Dati personali e appunti privati: restano solo sul Mac, mai nel repository
+DATI_PERSONALI.md
+privato/
+_to_delete/
+
+# Il risultato delle prove di finestra, che Marco rigenera a ogni giro sul Mac: PySide6 non si
+# installa nel container (pypi e' bloccato dal proxy), quindi quelle 102 prove le puo' eseguire solo
+# lui — e il file che ne esce non e' codice.
+prove_finestre.txt
+prove_camere.txt
+prove_indagine.txt

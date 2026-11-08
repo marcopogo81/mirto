@@ -1,0 +1,9 @@
+{
+  "name": "myhouse-stats",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --no-warnings test/worker.test.js",
+    "deploy": "wrangler deploy"
+  }
+}

@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+  # il Worker delle statistiche ha un suo package.json: senza questa voce nessuno lo aggiorna
+  - package-ecosystem: npm
+    directory: "/tools/stats-worker"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3

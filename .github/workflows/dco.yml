@@ -1,0 +1,42 @@
+# Ogni commit di una pull request deve certificare il Developer Certificate of Origin con la riga
+# «Signed-off-by» (git commit -s). È il posto del CLA in un progetto che vuole restare libero: non
+# chiede di cedere diritti, chiede di dichiarare che il contributo si può distribuire con Apache 2.0.
+#
+# Il controllo è uno script di dieci righe invece di una action di terzi: una dipendenza in meno nella
+# catena di fornitura, e la regola si legge qui senza aprire un altro repository.
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  signed-off:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+      - name: Ogni commit ha Signed-off-by
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mancanti=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "::error::$(git log -1 --format='%h %s' "$sha") non ha Signed-off-by"
+              mancanti=$((mancanti + 1))
+            fi
+          done <<< "$(git rev-list "$BASE..$HEAD")"
+          if [ "$mancanti" -gt 0 ]; then
+            echo ""
+            echo "Per sistemare: git rebase --signoff $BASE  (oppure git commit --amend -s sull'ultimo)"
+            echo "Il DCO è in CONTRIBUTING.md; il testo completo su https://developercertificate.org/"
+            exit 1
+          fi
+          echo "Tutti i commit firmati."

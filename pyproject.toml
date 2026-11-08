@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mirto"
+# la versione sta in un posto solo: mirto/__init__.py (vedi [tool.setuptools.dynamic])
+dynamic = ["version"]
+description = "Mirto: videosorveglianza desktop locale con rilevamento persone e avvisi"
+requires-python = ">=3.11"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Marco Dalicco" }]
+keywords = ["surveillance", "camera", "yolox", "telegram", "home-security", "privacy", "pyside6"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: Italian",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+    "Topic :: Multimedia :: Video :: Capture",
+    "Topic :: Security",
+]
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+    "onnxruntime>=1.17; sys_platform != 'win32'",
+    # su Windows il provider DirectML (GPU) sta in un pacchetto a parte, che sostituisce onnxruntime
+    "onnxruntime-directml>=1.17; sys_platform == 'win32'",
+    "PySide6>=6.6",
+    "PyYAML>=6.0",
+    "platformdirs>=4.0",
+    "keyring>=24.0",
+    "cryptography>=42.0",
+    "zeroconf>=0.130",
+    "certifi>=2024.2.2",
+    "pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'",
+    "cv2_enumerate_cameras>=1.1; sys_platform == 'win32'",
+    "ai-edge-litert>=2.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "imageio-ffmpeg>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/marcopogo81/Mirto"
+Issues = "https://github.com/marcopogo81/Mirto/issues"
+Changelog = "https://github.com/marcopogo81/Mirto/blob/main/CHANGELOG.md"
+
+[project.scripts]
+mirto = "mirto.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "mirto.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["mirto*"]
+
+[tool.setuptools.package-data]
+mirto = ["locales/*.json", "gui/icons/**/*"]

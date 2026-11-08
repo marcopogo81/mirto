@@ -1,0 +1,10 @@
+# Falsi positivi di gitleaks, uno per riga, ognuno con sopra il motivo.
+# Formato: <commit>:<file>:<regola>:<riga>  (lo stampa gitleaks stesso come "Fingerprint").
+#
+# Regola della casa: non si aggiunge una riga qui senza aver aperto il file a quella riga
+# e aver guardato cosa c'è. Se è un segreto vero non si silenzia: si revoca e si cambia.
+# tests/test_docs.py fallisce se una riga non ha il suo commento.
+
+# «api = cv2.CAP_AVFOUNDATION if … else cv2.CAP_MSMF if … else cv2.CAP_ANY»: una variabile
+# chiamata «api» con un valore lungo. Sono costanti di OpenCV, non una chiave.
+0d5b4cd7b97f653b7d5a60d8940a0c3029059cc2:mirto/__main__.py:generic-api-key:111

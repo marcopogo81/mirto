@@ -1,0 +1,23 @@
+# Dipendenze di Mirto (Python 3.11+)
+numpy>=1.26
+opencv-python>=4.9
+onnxruntime>=1.17 ; sys_platform != "win32"
+# su Windows il provider DirectML (GPU) sta in un pacchetto a parte, che sostituisce onnxruntime
+onnxruntime-directml>=1.17 ; sys_platform == "win32"
+PySide6>=6.6
+PyYAML>=6.0
+platformdirs>=4.0
+keyring>=24.0
+cryptography>=42.0
+zeroconf>=0.130
+certifi>=2024.2.2
+
+# Scoperta camere con ID stabile
+pyobjc-framework-AVFoundation>=10.0 ; sys_platform == "darwin"
+cv2_enumerate_cameras>=1.1 ; sys_platform == "win32"
+
+# Specie degli uccelli (modello TFLite); non esiste per i Mac Intel
+ai-edge-litert>=2.0 ; sys_platform != "darwin" or platform_machine != "x86_64"
+
+# Registrazione video (NVR): contiene un ffmpeg pronto per Mac, Windows e Linux
+imageio-ffmpeg>=0.5

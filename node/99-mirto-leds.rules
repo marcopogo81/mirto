@@ -1,0 +1,12 @@
+# I LED del Raspberry appartengono a root. Questa regola rende comandabile, al gruppo del servizio
+# del nodo, il solo file che gli serve: «trigger» (azione S-03). Il servizio gira senza privilegi,
+# e così «luce di prova» funziona senza dargli poteri che non gli servono.
+#
+# Solo «trigger», perché il nodo lampeggia con il trigger «timer» del kernel: scrivere la
+# luminosità a mano non comanda il LED verde — su un Pi 4 lo stesso LED compare più volte in
+# /sys/class/leds e l'attività della microSD sovrascrive subito quello che scriviamo (provato sul
+# nodo vero, da root). I due file con i tempi del lampeggio nascono insieme a quel trigger, quindi
+# questa regola non li troverebbe: il nodo li prova e, se restano di root, lampeggia col mezzo
+# secondo scelto dal kernel.
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="ACT|led0", \
+  RUN+="/bin/sh -c 'chgrp mirto-node /sys/class/leds/%k/trigger 2>/dev/null; chmod g+w /sys/class/leds/%k/trigger 2>/dev/null'"

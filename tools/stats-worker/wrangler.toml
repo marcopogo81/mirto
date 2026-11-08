@@ -1,0 +1,25 @@
+# Server delle statistiche anonime di Mirto: Cloudflare Workers + D1, piano gratuito.
+# Istruzioni passo per passo in README.md (cartella tools/stats-worker).
+# Il nome resta «myhouse-stats» anche dopo che il programma si chiama Mirto: il Worker e il
+# database D1 sono gia' pubblicati con questo nome, e cambiarlo qui non rinomina quelli vivi —
+# ne creerebbe di nuovi, vuoti, e le statistiche gia' raccolte resterebbero nell'altro.
+name = "myhouse-stats"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true      # indirizzo https://myhouse-stats.myhousesurveillance.workers.dev
+preview_urls = false    # niente indirizzi di anteprima pubblici
+
+# Niente registri delle richieste: altrimenti Cloudflare conserverebbe anche gli indirizzi IP.
+[observability]
+enabled = false
+
+[vars]
+LATEST_VERSION = "0.2.0"   # l'ultima versione pubblicata: Mirto avvisa chi ne ha una più vecchia
+
+[[d1_databases]]
+binding = "DB"
+database_name = "myhouse-stats"
+database_id = "50f578bc-114c-4408-a194-3d0d236f11a0"   # per un tuo server: "npx wrangler d1 create myhouse-stats"
+
+[triggers]
+crons = ["17 3 * * *"]   # ogni notte: cancella i dati più vecchi di 13 mesi

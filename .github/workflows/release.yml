@@ -1,0 +1,270 @@
+# SPDX-License-Identifier: Apache-2.0
+# Rilascio: dal tag «v0.2.0» a una Release su GitHub con la .app per macOS, l'installer per
+# Windows, la distinta dei componenti (SBOM), le impronte dei file e le note prese dal CHANGELOG.
+#
+# La Release nasce come **bozza**: si pubblica a mano dopo aver scaricato i due file e averli
+# aperti una volta.
+#
+# Senza i segreti, il lavoro si fa lo stesso ma i file non sono firmati: macOS dira' che l'app
+# «non puo' essere verificata» e SmartScreen avvisera' prima di avviare l'installer. I segreti
+# stanno in Settings → Secrets and variables → Actions.
+#   Apple (W-05)
+#     APPLE_CERTIFICATE_P12        certificato "Developer ID Application" in .p12, passato in base64
+#     APPLE_CERTIFICATE_PASSWORD   la password scelta esportandolo
+#     APPLE_SIGNING_IDENTITY       es. "Developer ID Application: Nome Cognome (TEAMID)"
+#     APPLE_ID, APPLE_TEAM_ID      l'account dell'Apple Developer Program
+#     APPLE_APP_PASSWORD           password per app creata su appleid.apple.com
+#   SignPath (W-06, gratuito per progetti interamente open source)
+#     SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
+#     SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # creare la Release e caricarci i file
+
+jobs:
+  # Il rilascio aspetta le prove. Prima partivano in parallelo sullo stesso tag: se la suite
+  # falliva, la Release usciva lo stesso - ed essendo una bozza, nessuno se ne accorgeva
+  # guardando il verde o il rosso, perche' erano due corse diverse (O-03).
+  prove:
+    name: Prove
+    uses: ./.github/workflows/tests.yml
+
+  macos:
+    name: App per macOS
+    needs: prove
+    runs-on: macos-latest
+    env:
+      FIRMA_PRONTA: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Version and names
+        id: dati
+        run: |
+          VERSIONE=$(python -c "import mirto; print(mirto.__version__)")
+          echo "versione=$VERSIONE" >> "$GITHUB_OUTPUT"
+          echo "dmg=Mirto-$VERSIONE-macos.dmg" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$VERSIONE" ]; then
+            echo "::error::il tag ${GITHUB_REF_NAME} non corrisponde a mirto.__version__ ($VERSIONE)"
+            exit 1
+          fi
+
+      - name: Build the app (PyInstaller)
+        run: pyinstaller --noconfirm packaging/mirto.spec
+
+      - name: Apple certificate into a temporary keychain
+        if: env.FIRMA_PRONTA == 'true'
+        env:
+          CERTIFICATO: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          PASSWORD_CERTIFICATO: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          PASSWORD_PORTACHIAVI=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
+          echo "PASSWORD_PORTACHIAVI=$PASSWORD_PORTACHIAVI" >> "$GITHUB_ENV"
+          security create-keychain -p "$PASSWORD_PORTACHIAVI" rilascio.keychain
+          security set-keychain-settings -lut 3600 rilascio.keychain
+          security unlock-keychain -p "$PASSWORD_PORTACHIAVI" rilascio.keychain
+          security list-keychains -d user -s rilascio.keychain login.keychain
+          echo "$CERTIFICATO" | base64 --decode > certificato.p12
+          security import certificato.p12 -k rilascio.keychain -P "$PASSWORD_CERTIFICATO" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$PASSWORD_PORTACHIAVI" rilascio.keychain >/dev/null
+          rm -f certificato.p12
+
+      - name: Sign the app
+        if: env.FIRMA_PRONTA == 'true'
+        env:
+          IDENTITA: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --deep --timestamp --options runtime \
+            --entitlements packaging/entitlements.plist \
+            --sign "$IDENTITA" dist/Mirto.app
+          codesign --verify --strict --verbose=2 dist/Mirto.app
+
+      - name: Build the disk image
+        run: |
+          rm -rf dist/disco && mkdir -p dist/disco
+          cp -R dist/Mirto.app dist/disco/
+          ln -s /Applications dist/disco/Applications
+          hdiutil create -volname Mirto -srcfolder dist/disco -ov -format UDZO \
+            "dist/${{ steps.dati.outputs.dmg }}"
+
+      - name: Sign, notarise and staple the disk image
+        if: env.FIRMA_PRONTA == 'true'
+        env:
+          IDENTITA: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          DMG="dist/${{ steps.dati.outputs.dmg }}"
+          codesign --force --timestamp --sign "$IDENTITA" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+
+      - name: Say it out loud when the build is unsigned
+        if: env.FIRMA_PRONTA != 'true'
+        run: |
+          echo "::warning::.dmg non firmato (mancano i segreti Apple): macOS dira' che l'app non puo' essere verificata"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: macos
+          path: dist/${{ steps.dati.outputs.dmg }}
+          if-no-files-found: error
+
+  windows:
+    name: Installer per Windows
+    needs: prove
+    runs-on: windows-latest
+    env:
+      SIGNPATH_PRONTA: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Version and names
+        id: dati
+        shell: bash
+        run: |
+          VERSIONE=$(python -c "import mirto; print(mirto.__version__)")
+          echo "versione=$VERSIONE" >> "$GITHUB_OUTPUT"
+          echo "setup=Mirto-$VERSIONE-setup.exe" >> "$GITHUB_OUTPUT"
+
+      - name: Build the program (PyInstaller)
+        run: pyinstaller --noconfirm packaging/mirto.spec
+
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DMirtoVersion=${{ steps.dati.outputs.versione }}" packaging\mirto.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC ha restituito $LASTEXITCODE" }
+
+      # SignPath firma un artefatto gia' caricato: prima si carica, poi si chiede la firma,
+      # e l'installer firmato torna indietro al posto di quello senza firma.
+      - name: Upload the unsigned installer for SignPath
+        id: non_firmato
+        if: env.SIGNPATH_PRONTA == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: windows-non-firmato
+          path: dist/${{ steps.dati.outputs.setup }}
+          if-no-files-found: error
+
+      - name: Sign the installer (SignPath Foundation)
+        if: env.SIGNPATH_PRONTA == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092  # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.non_firmato.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist
+
+      - name: Say it out loud when the installer is unsigned
+        if: env.SIGNPATH_PRONTA != 'true'
+        shell: bash
+        run: |
+          echo "::warning::installer non firmato (manca SignPath): SmartScreen avvisera' prima di avviarlo"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: windows
+          path: dist/${{ steps.dati.outputs.setup }}
+          if-no-files-found: error
+
+  rilascio:
+    name: Bozza di Release
+    runs-on: ubuntu-latest
+    needs: [macos, windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install cyclonedx-bom
+
+      - name: Version
+        id: dati
+        run: echo "versione=$(python -c 'import mirto; print(mirto.__version__)')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
+        with:
+          path: consegna
+          merge-multiple: true
+
+      - name: Bill of materials (SBOM) and checksums
+        run: |
+          cyclonedx-py environment --help
+          cyclonedx-py environment --output-format JSON \
+            > "consegna/Mirto-${{ steps.dati.outputs.versione }}-sbom.cdx.json"
+          cd consegna && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Release notes from the CHANGELOG
+        env:
+          FIRMA_APPLE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+          FIRMA_WINDOWS: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        run: |
+          python3 tools/note-di-rilascio.py "${{ steps.dati.outputs.versione }}" > note.md
+          {
+            echo
+            echo "---"
+            echo
+            if [ "$FIRMA_APPLE" != "true" ]; then
+              echo "> **The .dmg is not signed.** The first time you open it, macOS will say the app cannot"
+              echo "> be verified. Drag Mirto into Applications, try to open it, then go to"
+              echo "> *System Settings → Privacy & Security*, scroll to the bottom and press **Open Anyway**."
+              echo "> From the second time on it opens normally. (Up to macOS Sonoma, right-click → *Open* was enough.)"
+            fi
+            if [ "$FIRMA_WINDOWS" != "true" ]; then
+              echo "> **The installer is not signed.** SmartScreen will warn you: *More info* →"
+              echo "> *Run anyway*."
+            fi
+            echo
+            echo "**Verify your download**: \`sha256sum -c SHA256SUMS\` (on macOS \`shasum -a 256 -c\`)."
+            echo "The software bill of materials (SBOM, CycloneDX) is attached to the Release."
+          } >> note.md
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" --draft \
+            --title "Mirto ${{ steps.dati.outputs.versione }}" --notes-file note.md consegna/*

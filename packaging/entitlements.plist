@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0
+     Permessi della .app firmata con «hardened runtime» (codesign, opzione runtime).
+     Ognuno è qui per un motivo preciso: toglierne uno fa fallire l'avvio, non la firma. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- La videosorveglianza: senza questo la camera non si apre nemmeno dopo il consenso -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <!-- Solo se l'utente accende «Ascolta il microfono del Mac» -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <!-- Python e Qt generano ed eseguono codice in memoria: con l'hardened runtime servono entrambi -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- PyInstaller porta dentro librerie di terzi (ffmpeg, onnxruntime, OpenCV) firmate da altri -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

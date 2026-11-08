@@ -1,0 +1,21 @@
+Mirto
+Copyright 2026 Marco Dalicco
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Developed with the assistance of Claude Code (Anthropic).
+
+This product includes or uses software developed by third parties:
+
+- YOLOX (object detection models, downloaded at first run, not bundled in the
+  source repository) - Copyright (c) 2021-2022 Megvii Inc. - Apache License 2.0
+  https://github.com/Megvii-BaseDetection/YOLOX
+- OpenCV - Apache License 2.0 - https://opencv.org
+- Lucide icons (mirto/gui/icons) - Copyright (c) Lucide Icons and
+  Contributors - ISC License (see mirto/gui/icons/LICENSE-lucide.txt)
+
+The complete list of third-party components and their licenses is in
+THIRD_PARTY_NOTICES.md.
+
+"Mirto" and the Mirto logo are not licensed under the Apache License
+(section 6): forks and redistributions must not present themselves as the
+original Mirto project.
