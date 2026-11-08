@@ -420,8 +420,15 @@ class DiagnosticaTest(unittest.TestCase):
     volontà di chi lo usa, ma perché il rapporto passa da un filtro e un test lo verifica.
     """
 
+    # I finti segreti qui sotto devono avere la **forma** di un segreto, perché è su quella che il
+    # filtro lavora — ma non devono *sembrare* un segreto a chi li legge da fuori. L'8/11 il
+    # controllo di GitHub ha segnalato il token di prova come «Telegram Bot Token — Public leak»:
+    # era inventato, ma era inventato *bene*, con l'aria di avere dell'entropia dentro. Un dato di
+    # prova fatto così fa suonare ogni scanner, a noi e a chiunque faccia un fork, per sempre.
+    # Quindi: la forma la rispettano (`\d{6,}:[\w-]{20,}`), ma lo dicono da sé di non essere veri.
+    # È la stessa regola del 7/11 con gitleaks: un allarme si spegne togliendone il motivo.
     SEGRETI = {
-        "token Telegram": "8123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+        "token Telegram": "8123456789:QUESTO-NON-E-UN-TOKEN-VERO-SOLO-UNA-PROVA",
         "password nell'indirizzo": "rtsp://mirto:4ab8c848a260a128ac0dc80f@192.168.2.2:8554/cam",
         "chiave esadecimale": "e0d1d36ecbb563d0fb977b55e0d1d36ecbb563d0fb977b55",
         "indirizzo di casa": "192.168.2.2",
