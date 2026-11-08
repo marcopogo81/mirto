@@ -143,11 +143,23 @@ class DcoTest(unittest.TestCase):
             self.assertNotIn(parola, testo, "il CLA è stato scartato: non deve rientrare dalla finestra")
 
     def test_the_history_is_already_signed(self):
-        """La regola vale anche per chi la scrive: gli ultimi commit sono firmati."""
+        """La regola vale anche per chi la scrive: gli ultimi commit sono firmati.
+
+        `--no-merges`, e non è un dettaglio: una commit di fusione non la scrive nessuno, quindi non
+        c'è nessuno che possa certificarla. Su una pull request GitHub ne fabbrica una sua — «Merge
+        <testa> into <base>» — e **quella** è la commit che il lavoro si ritrova sotto il naso. Senza
+        questa riga la prova diventava rossa su *qualunque* pull request, di chiunque: l'8/11 l'ha
+        fatta rossa dependabot su tutti e sei i sistemi, e sarebbe toccato identico al primo
+        contributore arrivato da fuori — accolto da una prova rossa che parla della nostra
+        disciplina e che lui non poteva in nessun modo far diventare verde.
+
+        Il controllo vero (`dco.yml`) non ci cascava: legge `base..testa`, cioè le commit del ramo,
+        non la fusione finta. Rossa era solo la copia locale, che guarda `git log` da HEAD.
+        """
         import subprocess
 
-        res = subprocess.run(["git", "log", "-15", "--format=%H%n%B%n---FINE---"], cwd=ROOT,
-                             capture_output=True, text=True)
+        res = subprocess.run(["git", "log", "-15", "--no-merges", "--format=%H%n%B%n---FINE---"],
+                             cwd=ROOT, capture_output=True, text=True)
         if res.returncode != 0:
             self.skipTest("non è un repository git (sorgente scompattata)")
         messaggi = [m for m in res.stdout.split("---FINE---") if m.strip()]
@@ -1213,6 +1225,50 @@ class UnaLunghezzaNonSiScriveAManoTest(unittest.TestCase):
                                     f"{tag.group('n')} accanto a «{pre.group('p')}» "
                                     f"(lungo {len(pre.group('p'))})")
         self.assertEqual(guai, [], "lunghezza scritta a mano invece di len(...):\n  " + "\n  ".join(guai))
+
+
+class DentroUnArchivioIlSeparatoreELaBarraTest(unittest.TestCase):
+    """`str(f.relative_to(dove))` dentro un tar: su Windows mette la barra rovesciata (8/11).
+
+    Il pacchetto che Mirto manda a un nodo si costruiva con `str(Path)` come nome dei membri. Su
+    macOS e Linux `str()` e `as_posix()` danno la stessa cosa, quindi non si vedeva; su Windows
+    `mirto_node/server.py` diventa `mirto_node\\server.py`, e quel nome arriva sul Raspberry come
+    **un file solo**, con la barra rovesciata dentro il nome, nella radice del pacchetto. `install.sh`
+    non trova nessuna cartella `mirto_node` e l'aggiornamento muore. Cioe': un Mirto su Windows non
+    poteva aggiornare un nodo, e nessuno di noi due usa Windows.
+
+    L'ha trovato la CI del repository pubblico, rossa solo sui due lavori Windows — ma la prova che
+    l'ha vista (`test_the_package_carries_only_what_the_node_needs`) **puo' fallire solo su Windows**,
+    cioe' dorme proprio dove lavoriamo. Questa invece guarda il codice, e quindi parla anche da qui:
+    in un modulo che costruisce archivi, un percorso relativo e' il nome di un membro, e il nome di
+    un membro non dipende dal sistema su cui gira il programma.
+    """
+
+    def test_a_module_that_builds_archives_always_uses_as_posix(self):
+        archivi = re.compile(r"^\s*(import|from)\s+(tarfile|zipfile)\b", re.M)
+        relativo = re.compile(r"\.relative_to\(")
+        guai = []
+        for cartella in ("mirto", "node", "tools"):
+            for f in sorted((ROOT / cartella).rglob("*.py")):
+                if "__pycache__" in str(f):
+                    continue
+                testo = f.read_text(encoding="utf-8")
+                if not archivi.search(testo):
+                    continue
+                for i, riga in enumerate(testo.splitlines(), 1):
+                    for m in relativo.finditer(riga):
+                        # la chiusura della parentesi di `relative_to(...)`, e cosa viene dopo
+                        resto, livello = "", 0
+                        for j, c in enumerate(riga[m.end() - 1:], m.end() - 1):
+                            livello += (c == "(") - (c == ")")
+                            if livello == 0:
+                                resto = riga[j + 1:]
+                                break
+                        if not resto.startswith(".as_posix()"):
+                            guai.append(f"{f.relative_to(ROOT)}:{i}: {riga.strip()}")
+        self.assertEqual(guai, [], "qui un percorso relativo diventa il nome di un membro di un "
+                                   "archivio: ci vuole .as_posix(), o su Windows esce una barra "
+                                   "rovesciata dentro il nome:\n  " + "\n  ".join(guai))
 
 
 class GliIndirizziDelProgettoStannoInUnPostoSoloTest(unittest.TestCase):

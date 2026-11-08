@@ -2777,14 +2777,33 @@ class IlPacchettoVeroArrivaAlNodoTest(unittest.TestCase):
 
     def test_the_scripts_keep_the_bit_that_lets_root_run_them(self):
         """`install.sh` lo lancia root: un file arrivato senza il bit di esecuzione e' un
-        aggiornamento che fallisce a meta', ed e' il genere di cosa che si scopre sul Raspberry."""
+        aggiornamento che fallisce a meta', ed e' il genere di cosa che si scopre sul Raspberry.
+
+        Il bit si guarda **dentro il tar**, perche' quello e' il bit che arriva sul Raspberry e
+        l'unico che esista su tutti i sistemi: Windows non ha un bit di esecuzione, quindi un file
+        scompattato la' risponde sempre «no» e la prova era rossa per un motivo che non c'entrava
+        niente con quello che voleva controllare (8/11, i due lavori Windows della CI). Il controllo
+        sul disco resta, dove il disco ha i permessi: e' quello che prova che lo scompattatore del
+        nodo non li butti via per strada (il filtro `data` di `tarfile` tiene il bit solo se c'e').
+        """
         import base64
+        import io
         import os
         import stat
+        import tarfile
 
         from mirto.actions.aggiorna_nodo import fai_pacchetto
 
         crudo, versione, sha = fai_pacchetto()
+        with tarfile.open(fileobj=io.BytesIO(crudo)) as tar:
+            modi = {m.name: m.mode for m in tar.getmembers()}
+        self.assertTrue(modi["install.sh"] & stat.S_IXUSR,
+                        "nel pacchetto install.sh deve essere eseguibile")
+        self.assertTrue(modi["boot-segnali.sh"] & stat.S_IXUSR,
+                        "nel pacchetto boot-segnali.sh deve essere eseguibile")
+        self.assertFalse(modi["README.md"] & stat.S_IXUSR,
+                         "un file che nessuno lancia non si manda eseguibile")
+
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         d = Path(tmp.name)
@@ -2792,8 +2811,10 @@ class IlPacchettoVeroArrivaAlNodoTest(unittest.TestCase):
                     hostname=lambda: "n", folder=d)
         nodo.aggiorna({"versione": versione, "sha256": sha,
                        "pacchetto": base64.b64encode(crudo).decode()})
-        modo = os.stat(d / "nuovo" / "install.sh").st_mode
-        self.assertTrue(modo & stat.S_IXUSR, "install.sh deve restare eseguibile")
+        self.assertTrue((d / "nuovo" / "install.sh").is_file())
+        if os.name == "posix":
+            modo = os.stat(d / "nuovo" / "install.sh").st_mode
+            self.assertTrue(modo & stat.S_IXUSR, "install.sh deve restare eseguibile")
 
     def test_the_package_carries_only_what_the_node_needs(self):
         """Un pacchetto e' anche quello che qualcuno leggera' per sapere cosa gira sul suo Raspberry."""

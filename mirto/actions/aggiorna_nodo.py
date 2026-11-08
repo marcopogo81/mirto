@@ -95,7 +95,13 @@ def fai_pacchetto(dove: Path | None = None) -> tuple[bytes, str, str]:
     for nome in DA_MANDARE:
         p = dove / nome
         if p.is_dir():
-            pezzi += [(str(f.relative_to(dove)), f) for f in sorted(p.rglob("*"))
+            # `as_posix()`, non `str()`: dentro un tar il separatore è la barra, su **qualunque**
+            # sistema. Su Windows `str(Path("mirto_node/server.py"))` dà `mirto_node\server.py`, e
+            # quel nome arriva sul Raspberry come un file solo, con la barra rovesciata dentro il
+            # nome, nella radice del pacchetto: `install.sh` non trova nessuna cartella `mirto_node`
+            # e l'aggiornamento muore. Cioè: un Mirto su Windows non poteva aggiornare un nodo.
+            # Visto l'8/11 dalla CI del repository pubblico, rosso solo sui due lavori Windows.
+            pezzi += [(f.relative_to(dove).as_posix(), f) for f in sorted(p.rglob("*"))
                       if f.is_file() and not _da_saltare(f)]
         elif p.is_file():
             pezzi.append((nome, p))
