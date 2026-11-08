@@ -32,7 +32,7 @@ jobs:
               echo "::error::$(git log -1 --format='%h %s' "$sha") non ha Signed-off-by"
               mancanti=$((mancanti + 1))
             fi
-          done <<< "$(git rev-list "$BASE..$HEAD")"
+          done <<< "$(git rev-list --no-merges "$BASE..$HEAD")"
           if [ "$mancanti" -gt 0 ]; then
             echo ""
             echo "Per sistemare: git rebase --signoff $BASE  (oppure git commit --amend -s sull'ultimo)"

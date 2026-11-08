@@ -6,7 +6,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, lancio]
+    branches: [main]
   pull_request:
   workflow_dispatch:
   # Richiamabile da release.yml: il rilascio non parte finche' queste prove non sono verdi.

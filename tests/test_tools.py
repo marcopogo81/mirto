@@ -125,6 +125,23 @@ class DcoTest(unittest.TestCase):
         self.assertIn("fetch-depth: 0", testo, "senza la storia completa non si leggono i commit della PR")
         self.assertIn("rebase --signoff", testo, "chi sbaglia deve trovare il rimedio nell'errore")
 
+    def test_the_check_and_its_local_copy_agree_about_merge_commits(self):
+        """Il controllo vero e la sua copia locale devono perdonare le stesse commit (8/11).
+
+        Una commit di fusione non la scrive nessuno, quindi non c'e' nessuno che possa certificarla, e
+        `rebase --signoff` — il rimedio che l'errore suggerisce — la riscriverebbe. Se le due meta'
+        non sono d'accordo, una pull request e' verde da una parte e rossa dall'altra, e chi la manda
+        non capisce quale delle due gli stia dicendo la verita'.
+
+        E' il difetto del 26/10 in un'altra veste: due elenchi scritti a mano in due posti restano
+        pari finche' qualcuno se lo ricorda. Qui il legame e' questa prova.
+        """
+        self.assertIn("rev-list --no-merges", self.DCO.read_text(encoding="utf-8"),
+                      "dco.yml chiede la firma anche alle commit di fusione, la copia locale no")
+        mio = Path(__file__).read_text(encoding="utf-8")
+        self.assertIn('"-15", "--no-merges"', mio,
+                      "la copia locale perdona le fusioni, dco.yml no")
+
     def test_the_check_has_no_third_party_action(self):
         """Un controllo di dieci righe non vale una dipendenza in più nella catena di fornitura."""
         usati = re.findall(r"uses:\s*([\w.-]+/[\w.-]+)", self.DCO.read_text(encoding="utf-8"))
@@ -363,6 +380,30 @@ class ProveRosseSiLeggonoTest(unittest.TestCase):
         annotazioni = [r for r in righe if str(r).startswith("::error")]
         self.assertEqual(len(annotazioni), 4, "tre per bene, più il riassunto delle altre")
         self.assertIn("altre 8 prove rosse", annotazioni[-1])
+
+
+class UnWorkflowNonAspettaUnRamoCheNonCeTest(unittest.TestCase):
+    """`branches: [main, lancio]` dopo il passaggio al pubblico (8/11).
+
+    `lancio` era il ramo del repository privato. Qui non esiste e non puo' esistere: il blocco in
+    `.git/hooks/pre-push` verso `mirto` accetta solo `main` e i tag `v*`, perche' gli altri rami
+    hanno dentro la storia privata. Un innesco su un ramo che non c'e' non rompe niente — e' peggio:
+    non fa niente, e chi legge il file crede che da qualche parte ci sia un ramo `lancio`.
+    """
+
+    def test_no_workflow_waits_for_a_branch_that_cannot_exist(self):
+        atteso = {"main"}
+        guai = []
+        for f in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            for i, riga in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+                m = re.match(r"\s*branches:\s*\[(?P<rami>[^\]]*)\]", riga)
+                if not m:
+                    continue
+                rami = {r.strip().strip("'\"") for r in m.group("rami").split(",") if r.strip()}
+                if rami - atteso:
+                    guai.append(f"{f.name}:{i}: {sorted(rami - atteso)}")
+        self.assertEqual(guai, [], "rami che sul repository pubblico non esistono (il pre-push "
+                                   "lascia passare solo main e i tag v*):\n  " + "\n  ".join(guai))
 
 
 class WorkflowsArePinnedTest(unittest.TestCase):
