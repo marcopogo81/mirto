@@ -581,6 +581,12 @@ class AudioPlayer:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self.last_error = ""
+        # L'ultimo ripiego gia' raccontato nel diario. Senza, la riga «uscita non disponibile» esce a
+        # **ogni** controllo: su un nodo appena nato, che una cassa non ce l'ha, erano quattro righe
+        # identiche ogni quarto d'ora, per sempre (visto l'8/11). E' lo stesso difetto dell'anello del
+        # 22/10: righe identiche che riempiono il diario e nascondono quelle che contano. Un avviso
+        # che si ripete uguale insegna a non leggere gli avvisi.
+        self._ripiego_detto: tuple = ()
         self.legame_perso = False   # il collegamento è morto con «br-connection-unknown»
         self.last_played = 0.0
         self._ka_thread: threading.Thread | None = None
@@ -696,6 +702,8 @@ class AudioPlayer:
             return pronta
         if self._uscita_pronta(self.output, self.card):
             self.in_uso, self.card_in_uso, self.ripiego = self.output, self.card, ""
+            # Tornata a posto: il prossimo ripiego e' una notizia nuova e va detto di nuovo.
+            self._ripiego_detto = ()
             self._sistema_manopole()
             return True
         motivo = self.last_error
@@ -705,8 +713,14 @@ class AudioPlayer:
                 self._sistema_manopole()
                 self.ripiego = OUTPUT_DA.get(alt, alt)
                 self.last_error = motivo
-                log.warning("Uscita audio «%s» non disponibile (%s): suono %s",
-                            self.output, motivo or "motivo sconosciuto", self.ripiego)
+                # Si racconta quando **cambia**, non a ogni controllo: la prima volta, e poi solo se
+                # cambia l'uscita, il motivo o il ripiego. Il caso che si ripete uguale resta nel
+                # diario a livello debug, per chi lo va a cercare.
+                adesso = (self.output, motivo or "", self.ripiego)
+                dillo = log.warning if adesso != self._ripiego_detto else log.debug
+                self._ripiego_detto = adesso
+                dillo("Uscita audio «%s» non disponibile (%s): suono %s",
+                      self.output, motivo or "motivo sconosciuto", self.ripiego)
                 return True
         self.in_uso, self.card_in_uso, self.ripiego = self.output, self.card, ""
         self.last_error = motivo

@@ -198,8 +198,20 @@ for h in "$MNT"/home/*; do
   [ "$(basename "$h")" = "mirto" ] || { echo "     ✗ resta $(basename "$h") in /home"; BAD=1; }
 done
 ls "$MNT"/var/lib/mirto-node/registrazioni/cam/*.mp4 >/dev/null 2>&1 && { echo "     ✗ restano video registrati"; BAD=1; }
+# Gli abbinamenti Bluetooth: BlueZ li tiene in /var/lib/bluetooth/<controller>/<cassa>/, e dentro
+# c'e' la chiave del collegamento. Un'immagine che se li porta dietro arriva a chi la scrive con
+# l'indirizzo della cassa di casa nostra e la sua chiave — in un file, su ogni scheda distribuita.
+# La pulizia la fa gia' prepare_image.sh con «bluetoothctl remove», ma con l'uscita buttata via:
+# e' esattamente lo schema «cancella per elenco» che il 21/10 aveva lasciato dentro la password del
+# Wi-Fi. Qui si guarda l'immagine vera, che e' l'ultimo posto dove fermarla.
+for c in "$MNT"/var/lib/bluetooth/*/*; do
+  [ -d "$c" ] || continue
+  case "$(basename "$c")" in
+    [0-9A-Fa-f][0-9A-Fa-f]:*) echo "     ✗ resta un abbinamento Bluetooth: $(basename "$c")"; BAD=1 ;;
+  esac
+done
 [ "$BAD" = 0 ] || { echo "Controlli NON superati: immagine non creata."; exit 1; }
-echo "     ✓ utente mirto bloccato, nessuna chiave, password nota, rete salvata o video registrato"
+echo "     ✓ utente mirto bloccato, nessuna chiave, password nota, rete salvata, video o cassa abbinata"
 
 echo "6/7  Rimpicciolisco…"
 fstrim "$MNT" >/dev/null 2>&1 || true

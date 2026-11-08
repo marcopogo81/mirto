@@ -579,7 +579,7 @@ class AudioDialog(QDialog):
         azione, self.attesa = self.attesa, ""
         andata = str(esito.get("esito") or "")
         messaggio = str(esito.get("messaggio") or "")
-        nome = self.in_corso[1] or _('la cassa')
+        mac_in_corso, nome = self.in_corso[0], self.in_corso[1] or _('la cassa')
         self.in_corso = ("", "")
         self._aggiorna_dispositivi()
         if azione == "cerca":
@@ -589,11 +589,33 @@ class AudioDialog(QDialog):
             self.nota.esito(_('«{nome}» non è più abbinata.', nome=nome) if andata == "ok"
                             else _('«{nome}» non si è potuta dimenticare: {messaggio}', nome=nome,
                                    messaggio=messaggio), andata == "ok")
+        elif andata != "ok":
+            self.nota.esito(_('«{nome}» non si è abbinata: {messaggio}', nome=nome,
+                              messaggio=messaggio), False)
         else:
-            self.nota.esito(_('«{nome}» è abbinata: ora puoi fare il suono di prova.', nome=nome)
-                            if andata == "ok"
-                            else _('«{nome}» non si è abbinata: {messaggio}', nome=nome, messaggio=messaggio),
-                            andata == "ok")
+            # Abbinare non vuol dire usare: l'abbinamento è di sistema, mentre *quale* cassa il nodo
+            # usa sta in `node.toml` e ci arriva con «Applica». Fino all'8/11 qui si diceva «ora puoi
+            # fare il suono di prova», che era falso — la prova sarebbe uscita dal jack — e la
+            # finestra sembrava non aver fatto niente finché non si premeva Applica.
+            # Chi ha appena abbinato una cassa l'ha abbinata per usarla: la si sceglie qui, e resta
+            # da premere Applica, che è l'unico passo che cambia davvero il nodo.
+            scelta = self._scegli_cassa(mac_in_corso)
+            self.nota.esito(
+                _('«{nome}» è abbinata, e l\'ho scelta qui sotto: premi Applica perché il nodo la '
+                  'usi.', nome=nome) if scelta else
+                _('«{nome}» è abbinata. Scegli «Bluetooth» qui sotto e premi Applica perché il nodo '
+                  'la usi.', nome=nome), True)
+
+    def _scegli_cassa(self, mac: str) -> bool:
+        """Mette la cassa appena abbinata nella tendina dell'uscita. Dice se c'è riuscita."""
+        if not mac:
+            return False
+        for i in range(self.scelta_uscita.count()):
+            dati = self.scelta_uscita.itemData(i) or {}
+            if str(dati.get("uscita")) == "bluetooth" and str(dati.get("mac", "")).upper() == mac.upper():
+                self.scelta_uscita.setCurrentIndex(i)
+                return True
+        return False
 
     def _aggiorna_dispositivi(self) -> None:
         """Ricarica i dispositivi dal nodo e rifà le tab: l'elenco delle casse è appena cambiato."""
