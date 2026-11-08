@@ -35,12 +35,14 @@ import threading
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -77,6 +79,8 @@ class AudioDialog(QDialog):
     # Il livello arriva da un thread che legge il flusso del nodo: un segnale è l'unico modo onesto di
     # portarlo all'interfaccia, che vive in un thread suo e non si tocca da fuori.
     livello_letto = Signal(float, float)
+    # Lo stato del nodo arriva anche lui da un thread, per il motivo spiegato in `_ripassa`.
+    stato_letto = Signal(dict)
 
     def __init__(self, nome: str, ponte, parent=None):
         super().__init__(parent)
@@ -151,6 +155,7 @@ class AudioDialog(QDialog):
         self.scelta_uscita.currentIndexChanged.connect(lambda _i: self._uscita_cambiata())
         self.prova_btn.clicked.connect(self._prova)
         self.livello_letto.connect(self._livello_arrivato)
+        self.stato_letto.connect(self._stato_arrivato)
         self.tabs.currentChanged.connect(lambda _i: self._ascolto_forse())
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._ripassa)
@@ -182,6 +187,24 @@ class AudioDialog(QDialog):
         self._riempi_uscite()
         self._mostra()
         self._ascolto_forse()
+
+    @staticmethod
+    def _riquadro(lista: QListWidget, vuoto: str) -> None:
+        """Dà all'elenco un bordo che si vede, e qualcosa da dire quando è vuoto.
+
+        Un riquadro senza bordo e senza righe non si distingue dallo sfondo: non si capisce se sia
+        una lista vuota o un pezzo di finestra (Marco, 8/11). Il testo del vuoto va **dentro**, dove
+        uno sta guardando, non in una nota sotto che si legge dopo.
+        """
+        lista.setFrameShape(QFrame.Shape.StyledPanel)
+        lista.setStyleSheet(f"QListWidget {{ border:1px solid {T.LINE}; border-radius:8px; "
+                            f"background:{T.PANEL}; }}")
+        lista.setMinimumHeight(86)
+        if not lista.count():
+            vuota = QListWidgetItem(vuoto)
+            vuota.setFlags(Qt.ItemFlag.NoItemFlags)      # non si sceglie: non è una cassa
+            vuota.setForeground(QColor(T.FAINT))
+            lista.addItem(vuota)
 
     def _pagina(self) -> tuple[QWidget, QVBoxLayout]:
         w = QWidget()
@@ -226,48 +249,56 @@ class AudioDialog(QDialog):
         """
         w, lay = self._pagina()
 
-        lay.addWidget(QLabel(_('Casse che il nodo ricorda:')))
+        # Il titolo e il pulsante che agisce su questo elenco stanno sulla **stessa riga**, sopra di
+        # esso: Marco, 8/11, *«il pulsante disabbina devi metterlo coerentemente all'elenco»*. Prima
+        # stava sotto, dove si leggeva come se valesse per tutta la scheda.
+        testa = QHBoxLayout()
+        testa.addWidget(QLabel(_('Casse che il nodo ricorda:')))
+        testa.addStretch(1)
+        self.dimentica_btn = QPushButton(_('Dimentica'))
+        self.dimentica_btn.clicked.connect(self._dimentica)
+        testa.addWidget(self.dimentica_btn)
+        lay.addLayout(testa)
         self.casse = QListWidget()
         for c in casse_ricordate(self.disp.get("bluetooth")):
             voce = QListWidgetItem(f"{c['nome']} · {c['mac']}" + (_(' · collegata') if c["collegata"] else ""))
             voce.setData(Qt.ItemDataRole.UserRole, c)
             self.casse.addItem(voce)
-        if not self.casse.count():
-            lay.addWidget(self._nota_piccola(_('Nessuna: il nodo non ha ancora nessuna cassa Bluetooth.')))
+        # Un riquadro vuoto e senza bordo non si distingue dallo sfondo: non si capisce se sia una
+        # lista vuota o niente del tutto (8/11). Il bordo lo si vede sempre, e il «vuoto» lo dice
+        # **dentro** il riquadro, dove uno sta guardando, invece che in una nota sotto.
+        self._riquadro(self.casse, _('Nessuna: questo nodo non ha ancora casse Bluetooth.'))
         tenere = quale_cassa_tenere(self.in_corso[0], getattr(self, "_mac_da_tenere", ""),
                                     str((self.disp.get("predefinito") or {}).get("bluetooth_mac") or ""),
-                                    [self.casse.item(i).data(Qt.ItemDataRole.UserRole)["mac"]
-                                     for i in range(self.casse.count())])
+                                    [str((self.casse.item(i).data(Qt.ItemDataRole.UserRole) or {}).get("mac") or "")
+                                     for i in range(self.casse.count())
+                                     if self.casse.item(i).data(Qt.ItemDataRole.UserRole)])
         for i in range(self.casse.count()):
-            if self.casse.item(i).data(Qt.ItemDataRole.UserRole)["mac"] == tenere:
+            dati = self.casse.item(i).data(Qt.ItemDataRole.UserRole) or {}
+            if dati.get("mac") and dati["mac"] == tenere:
                 self.casse.setCurrentRow(i)
                 break
         self.casse.currentRowChanged.connect(lambda _i: self._mostra())
         lay.addWidget(self.casse, 1)
-        self.dimentica_btn = QPushButton(_('Dimentica'))
-        self.dimentica_btn.clicked.connect(self._dimentica)
-        riga = QHBoxLayout()
-        riga.addStretch(1)
-        riga.addWidget(self.dimentica_btn)
-        lay.addLayout(riga)
 
-        lay.addWidget(QLabel(_('Cerca una cassa nuova:')))
+        testa2 = QHBoxLayout()
+        testa2.addWidget(QLabel(_('Cerca una cassa nuova:')))
+        testa2.addStretch(1)
+        self.cerca_btn = QPushButton(_('Cerca casse…'))
+        self.abbina_btn = QPushButton(_('Abbina'))
+        self.cerca_btn.clicked.connect(self._cerca)
+        self.abbina_btn.clicked.connect(self._abbina)
+        testa2.addWidget(self.cerca_btn)
+        testa2.addWidget(self.abbina_btn)
+        lay.addLayout(testa2)
         self.trovate = QListWidget()
         for c in casse_trovate(self.disp.get("bluetooth"), self.aperta_il):
             voce = QListWidgetItem(f"{c['nome']} · {c['mac']}")
             voce.setData(Qt.ItemDataRole.UserRole, c)
             self.trovate.addItem(voce)
         self.trovate.currentRowChanged.connect(lambda _i: self._mostra())
+        self._riquadro(self.trovate, _('Premi «Cerca casse…»: qui compaiono solo le casse viste adesso.'))
         lay.addWidget(self.trovate, 1)
-        self.cerca_btn = QPushButton(_('Cerca casse…'))
-        self.abbina_btn = QPushButton(_('Abbina'))
-        self.cerca_btn.clicked.connect(self._cerca)
-        self.abbina_btn.clicked.connect(self._abbina)
-        riga2 = QHBoxLayout()
-        riga2.addWidget(self.cerca_btn)
-        riga2.addStretch(1)
-        riga2.addWidget(self.abbina_btn)
-        lay.addLayout(riga2)
         lay.addWidget(self._nota_piccola(
             _('Accendi la cassa, mettila in abbinamento (il tasto Bluetooth finché lampeggia veloce) '
               'e premi «Cerca casse…». Abbinarla non la fa suonare: quale cassa usa il nodo si '
@@ -666,12 +697,38 @@ class AudioDialog(QDialog):
             self.nota.setText(_('Din-don inviato: se non lo senti, controlla volume e cassa.'))
 
     def _ripassa(self) -> None:
-        """Ogni tre secondi, finché il nodo sta lavorando: ha finito? Com'è andata?"""
-        try:
-            nuovo = dict(self.ponte.stato() or {})
-        except Exception:  # noqa: BLE001
-            return            # il nodo non risponde adesso: si riprova al giro dopo, senza allarmare
-        self.stato = nuovo
+        """Ogni tre secondi, finché il nodo sta lavorando: chiede com'è andata, **fuori** di qui.
+
+        La domanda va fatta in un thread suo, e non è un dettaglio: `audio_state` sul nodo interroga
+        ALSA, e durante un abbinamento Bluetooth ALSA può restare appesa dei secondi, perché la
+        scheda della cassa sta comparendo. Fino all'8/11 questa riga chiamava il nodo **sul thread
+        della finestra**: la finestra non aspettava male, era ferma davvero — non si ridisegnava,
+        non rispondeva ai clic — e si sbloccava solo quando il nodo rispondeva o quando qualcuno la
+        chiudeva. Marco l'ha visto due volte: *«è arrivato prima l'ok della cassa ma la finestra è
+        rimasta bloccata, ho chiuso e riaperto e l'ho trovata abbinata»*.
+
+        Un giro per volta: se il nodo ci mette più di tre secondi, il tic dopo non ne accoda un
+        altro — sarebbero due domande in fila a una macchina che è già lenta a rispondere.
+        """
+        if getattr(self, "_sto_chiedendo", False):
+            return
+        self._sto_chiedendo = True
+
+        def chiedi() -> None:
+            try:
+                nuovo = dict(self.ponte.stato() or {})
+            except Exception:  # noqa: BLE001
+                nuovo = {}    # il nodo non risponde adesso: si riprova al giro dopo, senza allarmare
+            self.stato_letto.emit(nuovo)
+
+        threading.Thread(target=chiedi, daemon=True).start()
+
+    def _stato_arrivato(self, nuovo: dict) -> None:
+        """La risposta del nodo, tornata sul thread della finestra: qui si può toccare l'interfaccia."""
+        self._sto_chiedendo = False
+        if not nuovo:
+            return
+        self.stato = dict(nuovo)
         if not self.attesa:
             return
         if esito_arrivato(self.stato.get("esito"), self.firma_prima, self.attesa):

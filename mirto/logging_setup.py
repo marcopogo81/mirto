@@ -38,6 +38,39 @@ def installa_ganci_errori() -> None:
     threading.excepthook = su_eccezione_thread
 
 
+class _SenzaIndirizzoSparito(logging.Filter):
+    """Toglie dal registro l'avviso di zeroconf quando un indirizzo di rete sparisce.
+
+    `Error with socket N (('169.254.x.y', 5353)): [Errno 49] Can't assign requested address`, con
+    tutto il traceback appresso. Succede ogni volta che un'interfaccia cambia o se ne va — un cavo
+    staccato, il Wi-Fi che si riattacca, l'indirizzo link-local del cavo diretto al nodo — e zeroconf
+    la gestisce da sé: l'ha già scritta come avviso dopo averla risolta.
+
+    Si toglie per la stessa ragione delle righe dell'anello (22/10) e dell'uscita audio (8/11): un
+    avviso che compare da solo, non chiede niente a nessuno e si ripete, insegna a non leggere gli
+    avvisi — e il prossimo, quello vero, passa inosservato in mezzo. Resta a livello `debug`, per chi
+    lo va a cercare.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name.split(".")[0] != "zeroconf" or record.levelno > logging.WARNING:
+            return True
+        testo = str(record.getMessage())
+        sparito = "Can't assign requested address" in testo or "Errno 49" in testo
+        if sparito:
+            record.levelno, record.levelname = logging.DEBUG, "DEBUG"
+            record.exc_info = None          # il traceback di una cosa gestita non serve a nessuno
+            return logging.getLogger().isEnabledFor(logging.DEBUG)
+        return True
+
+
+def zittisci_zeroconf() -> None:
+    """Mette il filtro qui sopra su zeroconf, una volta sola."""
+    log_zc = logging.getLogger("zeroconf")
+    if not any(isinstance(f, _SenzaIndirizzoSparito) for f in log_zc.filters):
+        log_zc.addFilter(_SenzaIndirizzoSparito())
+
+
 def setup_logging(verbose: bool = False) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -61,6 +94,7 @@ def setup_logging(verbose: bool = False) -> None:
     )
     file_h.setFormatter(fmt)
     root.addHandler(file_h)
+    zittisci_zeroconf()
     installa_ganci_errori()   # da qui un errore non catturato finisce nel registro, non nel nulla
     if ripulite:
         # Detto a voce alta: un registro già mandato a qualcuno resta mandato, quindi la password

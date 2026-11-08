@@ -488,6 +488,48 @@ class UnFoglioDiStileConLeGraffeDoppieTest(unittest.TestCase):
                                    + "\n  ".join(guai))
 
 
+class UnAvvisoCheNonChiedeNienteNonEUnAvvisoTest(unittest.TestCase):
+    """L'avviso di zeroconf quando un indirizzo di rete sparisce (8/11).
+
+    `Error with socket N (('169.254.x.y', 5353)): [Errno 49] Can't assign requested address`, col
+    traceback appresso, a ogni cambio di interfaccia: un cavo staccato, il Wi-Fi che si riattacca,
+    l'indirizzo link-local del cavo diretto al nodo. Zeroconf la gestisce da se' e poi la racconta.
+
+    Si toglie per la stessa ragione delle righe dell'anello (22/10) e dell'uscita audio di stamattina:
+    un avviso che compare da solo, non chiede niente a nessuno e si ripete, insegna a non leggere gli
+    avvisi — e il prossimo, quello vero, passa inosservato in mezzo agli altri.
+    """
+
+    def setUp(self):
+        import logging
+
+        from mirto.logging_setup import _SenzaIndirizzoSparito
+
+        self.filtro = _SenzaIndirizzoSparito()
+        self.logging = logging
+        logging.getLogger().setLevel(logging.INFO)
+
+    def riga(self, nome, messaggio, livello=None):
+        return self.logging.LogRecord(nome, livello or self.logging.WARNING, "", 1, messaggio, None, None)
+
+    def test_the_address_that_went_away_is_not_worth_a_warning(self):
+        r = self.riga("zeroconf", "Error with socket 31: [Errno 49] Can't assign requested address")
+        self.assertFalse(self.filtro.filter(r), "a livello info non deve comparire")
+        self.assertEqual(r.levelname, "DEBUG", "resta per chi la va a cercare")
+
+    def test_everything_else_zeroconf_says_still_gets_through(self):
+        self.assertTrue(self.filtro.filter(self.riga("zeroconf", "qualcosa che non abbiamo previsto")))
+
+    def test_our_own_logs_are_never_touched(self):
+        """Il filtro guarda **chi parla**, non solo cosa dice: un nostro messaggio uguale resta."""
+        self.assertTrue(self.filtro.filter(self.riga("mirto.core", "Can't assign requested address")))
+
+    def test_an_error_is_never_hidden(self):
+        """Un ERROR di zeroconf non si tocca: il filtro vale per gli avvisi che si risolvono da se'."""
+        r = self.riga("zeroconf", "Errno 49", self.logging.ERROR)
+        self.assertTrue(self.filtro.filter(r))
+
+
 class UnMetodoSenzaSelfVuoleStaticmethodTest(unittest.TestCase):
     """`@staticmethod` perso nel rinominio: il programma non partiva piu' (8/11).
 
