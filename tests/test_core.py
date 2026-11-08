@@ -4641,6 +4641,77 @@ class NomeDellaCameraDelNodoTest(unittest.TestCase):
                          "ma quello che si vede resta «Porta», perché l'ha scelto una persona")
 
 
+class LAvvisoDelBuioSiDiceUnaVoltaMaNonPerSempreTest(unittest.TestCase):
+    """«Immagine troppo scura» si dice una volta per camera — ma per **questo** testo, non per sempre.
+
+    Marco, 25/10: *«la camera del Raspberry 3B non e' NoIR, quindi non ha visione notturna»*. La
+    frase tornava ogni notte su una camera che non puo' risolverla, e un avviso che si ripete insegna
+    a ignorare gli avvisi. Da li' il «una volta sola».
+
+    Poi pero' quella frase diceva di procurarsi «un modulo NoIR con illuminatore»: a chi la NoIR ce
+    l'ha gia', di ricomprare quello che ha; a chi ha una webcam USB, una cosa che per lei non esiste.
+    Detta una volta per sempre sarebbe rimasta sbagliata per sempre. Il numero accanto al nome della
+    camera e' la via d'uscita, e costa un avviso in piu' a chi aveva sentito quello sbagliato.
+    """
+
+    class Finto:
+        def __init__(self, dati=None):
+            self.dati = dict(dati or {})
+            self.detti = []
+            self.salvata = 0
+
+        # fa da MirtoCore e da Config insieme: a `_buio_una_volta` servono solo questi
+        config = property(lambda self: self)
+        get = lambda self, chiave, difetto=None: self.dati.get(chiave, difetto)   # noqa: E731
+        set = lambda self, chiave, valore: self.dati.__setitem__(chiave, valore)  # noqa: E731
+        camera_name = lambda self, cam_id: "Ingresso"                             # noqa: E731
+
+        def save(self):
+            self.salvata += 1
+
+        def _message(self, testo):
+            self.detti.append(testo)
+
+    def buio(self, finto, cam_id="cam1"):
+        from mirto.core import MirtoCore
+
+        MirtoCore._buio_una_volta(finto, cam_id)
+
+    def test_it_is_said_once_and_then_never_again(self):
+        finto = self.Finto()
+        self.buio(finto)
+        self.buio(finto)
+        self.buio(finto)
+        self.assertEqual(len(finto.detti), 1, "ripeterlo insegna a ignorare gli avvisi")
+        self.assertGreaterEqual(finto.salvata, 1, "e deve sopravvivere alla chiusura del programma")
+
+    def test_another_camera_is_another_story(self):
+        finto = self.Finto()
+        self.buio(finto, "cam1")
+        self.buio(finto, "cam2")
+        self.assertEqual(len(finto.detti), 2)
+
+    def test_it_never_tells_a_noir_owner_to_buy_a_noir(self):
+        """Il rimedio dipende dalla camera, e il messaggio non sa quale sia: allora li dice tutti e due."""
+        finto = self.Finto()
+        self.buio(finto)
+        testo = finto.detti[0]
+        self.assertIn("faretti a infrarossi", testo, "e' questo che serve a una NoIR, non un'altra NoIR")
+        self.assertNotIn("modulo NoIR", testo)
+        self.assertIn("una luce dove guarda", testo, "e questo a tutte le altre, webcam USB comprese")
+
+    def test_a_camera_that_heard_the_wrong_one_hears_the_right_one_once(self):
+        """Chi aveva sentito la versione sbagliata la risente giusta — una volta, e poi basta."""
+        finto = self.Finto({"cameras.dark_told": ["cam1"]})      # com'era segnato fino all'8/11
+        self.buio(finto)
+        self.assertEqual(len(finto.detti), 1, "la versione vecchia non vale per quella nuova")
+        self.buio(finto)
+        self.assertEqual(len(finto.detti), 1, "ma la nuova vale, e non si ricomincia da capo")
+        segnate = finto.get("cameras.dark_told")
+        self.assertEqual(len(segnate), 1,
+                         f"l'elenco non deve crescere a ogni ritocco del testo: {segnate}")
+
+
 class ProveCheNonSiPiantanoTest(unittest.TestCase):
     """Nessuna prova deve poter aprire una finestra modale: resterebbe li' per sempre.
 

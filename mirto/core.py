@@ -29,6 +29,11 @@ log = logging.getLogger(__name__)
 
 OFFLINE_ALERT_SECONDS = 120  # avviso se una camera resta non raggiungibile per 2 minuti
 
+# Versione del messaggio «immagine troppo scura». Si alza **quando il testo cambia**: chi l'aveva
+# già sentito lo risente una volta, e una volta sola. Senza, un avviso che si dice una volta per
+# sempre resta per sempre quello che era — anche se era sbagliato, come la versione 1.
+AVVISO_BUIO = 2
+
 
 class MirtoCore:
     def __init__(self, config: Config | None = None, secrets: SecretStore | None = None,
@@ -230,18 +235,28 @@ class MirtoCore:
         che conta passa inosservato con gli altri.
 
         Non si azzera quando torna chiaro: tornerebbe ogni sera, che è esattamente il difetto. Il
-        rimedio è fisico — una luce, o una camera a infrarossi — quindi è una cosa da sapere una
+        rimedio è fisico — una luce, o dei faretti a infrarossi — quindi è una cosa da sapere una
         volta, non uno stato da sorvegliare. Il contrassegno sulla piastrella, quello sì, resta
         acceso finché l'immagine è scura: quello è lo stato di adesso, e non parla a nessuno.
+
+        «Una volta sola» però vale per **questo** testo, non per sempre: accanto al nome della camera
+        si segna `AVVISO_BUIO`. Serviva: fino all'8/11 la frase diceva di procurarsi «un modulo NoIR
+        con illuminatore» — cioè, a chi la NoIR ce l'ha già, di ricomprare quello che ha, e a chi ha
+        una webcam USB una cosa che per lei non esiste. Detta una volta per sempre, sarebbe rimasta
+        sbagliata per sempre, senza nessun modo di rimediare se non azzerare la configurazione.
         """
+        segno = f"{cam_id}#{AVVISO_BUIO}"
         dette = list(self.config.get("cameras.dark_told") or [])
-        if cam_id in dette:
+        if segno in dette:
             return
-        self._message(_('Immagine troppo scura su {camera_name}: al buio questa camera non vede. '
-                        'Serve una luce dove guarda, oppure una camera a infrarossi (modulo NoIR con '
-                        'illuminatore): non è un\'impostazione da cambiare. Lo dico una volta sola.',
+        self._message(_('Immagine troppo scura su {camera_name}: al buio questa camera non vede, e '
+                        'non è un\'impostazione da cambiare. Serve una luce dove guarda; se la '
+                        'camera è il modello NoIR servono invece faretti a infrarossi, che è il modo '
+                        'in cui quelle camere vedono al buio. Lo dico una volta sola.',
                         camera_name=self.camera_name(cam_id)))
-        self.config.set("cameras.dark_told", dette + [cam_id])
+        # Via le versioni vecchie della stessa camera: l'elenco non deve crescere a ogni ritocco.
+        dette = [d for d in dette if d != cam_id and not d.startswith(f"{cam_id}#")]
+        self.config.set("cameras.dark_told", dette + [segno])
         try:
             self.config.save()
         except Exception:

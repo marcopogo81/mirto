@@ -595,7 +595,7 @@
  "Immagine ferma · {ora}": "Picture frozen · {ora}",
  "Immagine ferma · {ora} · {quanto} fa": "Picture frozen · {ora} · {quanto} ago",
  "Immagine troppo scura": "Image too dark",
- "Immagine troppo scura su {camera_name}: al buio questa camera non vede. Serve una luce dove guarda, oppure una camera a infrarossi (modulo NoIR con illuminatore): non è un'impostazione da cambiare. Lo dico una volta sola.": "Image too dark on {camera_name}: this camera cannot see in the dark. It needs a light where it looks, or an infrared camera (NoIR module with illuminator): no setting will fix it. Said once only.",
+ "Immagine troppo scura su {camera_name}: al buio questa camera non vede, e non è un'impostazione da cambiare. Serve una luce dove guarda; se la camera è il modello NoIR servono invece faretti a infrarossi, che è il modo in cui quelle camere vedono al buio. Lo dico una volta sola.": "Image too dark on {camera_name}: this camera cannot see in the dark, and that is not a setting you can change. It needs a light where it is looking; if the camera is the NoIR model it needs infrared lamps instead, which is how those cameras see in the dark. I am saying this once only.",
  "Impedisci la sospensione del computer": "Prevent the computer from sleeping",
  "Importa": "Import",
  "Importa ({n})": "Import ({n})",
