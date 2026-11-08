@@ -2036,6 +2036,7 @@ class MainWindow(QMainWindow):
         s.addRect(QRectF(2.6, 12.2, 17.0, 5.2))
         return s.simplified()
 
+    @staticmethod
     def tray_pixmap(color: str, size: int = 22, pieno: bool | None = None) -> QPixmap:
         """L'arbusto col colore dello stato: di contorno sulla barra del Mac, pieno altrove.
 

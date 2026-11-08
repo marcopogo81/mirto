@@ -382,6 +382,55 @@ class ProveRosseSiLeggonoTest(unittest.TestCase):
         self.assertIn("altre 8 prove rosse", annotazioni[-1])
 
 
+class UnMetodoSenzaSelfVuoleStaticmethodTest(unittest.TestCase):
+    """`@staticmethod` perso nel rinominio: il programma non partiva piu' (8/11).
+
+    `MainWindow.tray_pixmap` era `@staticmethod`; il rinominio del 7/11 ha perso il decoratore e ha
+    lasciato la firma `def tray_pixmap(color, size=22, …)`. Python non protesta: senza decoratore
+    quella resta una funzione, e `self.tray_pixmap(colore)` infila **la finestra** dentro `color` e
+    il colore dentro `size`. Il pixmap nasce nullo e si muore su `QColor(<la finestra>)` — cioe' il
+    programma non si apre affatto.
+
+    La prova che c'era non poteva vederlo, ed e' la parte da ricordare:
+    `MainWindow.tray_pixmap("#2FB383", 22, pieno=True)` chiama **dalla classe**, cioe' nel modo in
+    cui il programma non la chiama mai. Una funzione provata in un modo diverso da come la usa chi
+    la usa e' una funzione non provata: verde non voleva dire funzionante.
+
+    Questa guarda il codice invece di eseguirlo, quindi parla anche dal container dove PySide6 non
+    c'e' — che e' esattamente il posto da cui il difetto e' uscito.
+    """
+
+    def test_every_method_either_takes_self_or_says_it_does_not(self):
+        import ast
+
+        salvacondotto = {"staticmethod", "classmethod", "property", "setter", "getter", "deleter"}
+        guai = []
+        for f in sorted(ROOT.rglob("*.py")):
+            testo = str(f)
+            if "__pycache__" in testo or "/.venv/" in testo or "/privato/" in testo:
+                continue
+            try:
+                albero = ast.parse(f.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for classe in (n for n in ast.walk(albero) if isinstance(n, ast.ClassDef)):
+                for m in classe.body:
+                    if not isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    decoratori = {d.id if isinstance(d, ast.Name) else getattr(d, "attr", "")
+                                  for d in m.decorator_list}
+                    if decoratori & salvacondotto:
+                        continue
+                    args = m.args.posonlyargs + m.args.args
+                    if not args or args[0].arg not in ("self", "cls"):
+                        primo = args[0].arg if args else "niente"
+                        guai.append(f"{f.relative_to(ROOT)}:{m.lineno}: "
+                                    f"{classe.name}.{m.name} comincia con «{primo}»")
+        self.assertEqual(guai, [], "un metodo che non prende self vuole @staticmethod, altrimenti "
+                                   "chiamandolo sull'oggetto il primo argomento diventa l'oggetto:\n  "
+                                   + "\n  ".join(guai))
+
+
 class UnWorkflowNonAspettaUnRamoCheNonCeTest(unittest.TestCase):
     """`branches: [main, lancio]` dopo il passaggio al pubblico (8/11).
 
