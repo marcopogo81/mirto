@@ -224,6 +224,33 @@ class IDocumentiPubbliciSonoInIngleseTest(unittest.TestCase):
                     guai.append(f"{nome}:{n}: {riga.strip()[:70]}")
         self.assertEqual(guai, [], "italiano nei documenti pubblici:\n  " + "\n  ".join(guai))
 
+    def test_what_a_package_listing_shows_is_english_too(self):
+        """Il sottotitolo del pacchetto era rimasto in italiano (8/11).
+
+        I documenti sono passati all'inglese il 7/11, ma `pyproject.toml` no: `description` diceva
+        ancora «videosorveglianza desktop locale con rilevamento persone e avvisi», e fra i
+        classificatori c'era solo `Natural Language :: Italian`. Quella riga e quella etichetta sono
+        esattamente cio' che vede chi **non** e' ancora arrivato sul repository — chi scorre un
+        elenco di pacchetti — e dicevano «questo non e' per te» a chiunque non parli italiano.
+
+        La prova degli altri documenti non poteva vederlo: cerca lettere accentate, e in quella
+        frase non ce n'erano. Qui il controllo e' sulle parole, perche' su una riga sola si puo'
+        fare, e resta grossolano apposta: non giudica la lingua, si accorge di un ritorno.
+        """
+        import tomllib
+
+        spie = r"\b(con|per|della|dello|delle|degli|dei|non|che|una|uno|sono|anche|questo|questa)\b"
+        dati = tomllib.loads(leggi("pyproject.toml"))["project"]
+        guai = []
+        for dove, testo in [("description", dati["description"])] + \
+                           [(f"keywords[{i}]", k) for i, k in enumerate(dati.get("keywords", []))]:
+            if re.search(spie, testo, re.I) or re.search(r"[àèéìòùÀÈÉÌÒÙ]", testo):
+                guai.append(f"{dove}: {testo}")
+        self.assertEqual(guai, [], "italiano in quello che si vede da un elenco di pacchetti:\n  "
+                                   + "\n  ".join(guai))
+        self.assertIn("Natural Language :: English", dati["classifiers"],
+                      "il programma parla anche inglese: chi legge i classificatori non lo sa")
+
     def test_the_italian_readme_does_not_come_back(self):
         """Cancellato il 7/11: due README si allontanano, e quello che nessuno rilegge resta indietro."""
         self.assertFalse((ROOT / "README.it.md").exists(),
