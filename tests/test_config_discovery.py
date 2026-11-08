@@ -92,6 +92,23 @@ class IlPortachiaviDelNomeVecchioSiEreditaTest(unittest.TestCase):
         with self.assertLogs("mirto.credentials", level="ERROR"):
             self.assertEqual(store.get("email_password"), "VECCHIA")
 
+    def test_a_refused_read_is_said_out_loud(self):
+        """Un «no» del Portachiavi non puo' sparire in un log a livello debug.
+
+        `keyring` restituisce None quando la voce manca e alza quando la lettura **fallisce** — su
+        macOS, tipicamente, perche' e' comparsa la richiesta di consenso e si e' risposto di no.
+        Senza avviso uno vede «token mancante» e non ha modo di collegarlo a una finestra chiusa di
+        fretta: il segreto resta bloccato sotto il nome di prima per sempre.
+        """
+        kr = self.FintoPortachiavi()
+        kr.get_password = lambda servizio, nome: (_ for _ in ()).throw(RuntimeError("negato"))  \
+            if servizio == "MyHouse" else None
+        store = SecretStore("Mirto", kr, servizio_di_prima="MyHouse")
+        with self.assertLogs("mirto.credentials", level="WARNING") as registro:
+            self.assertIsNone(store.get("telegram_bot_token"))
+        self.assertIn("telegram_bot_token", "\n".join(registro.output))
+        self.assertIn("MyHouse", "\n".join(registro.output))
+
     def test_deleting_takes_away_the_old_copy_too(self):
         nome = credentials.rtsp_name("ingresso")
         kr = self.FintoPortachiavi({("Mirto", nome): "a:b", ("MyHouse", nome): "a:vecchia"})

@@ -111,7 +111,14 @@ class SecretStore:
         try:
             vecchio = self._kr.get_password(self.servizio_di_prima, name)
         except Exception as exc:
-            log.debug("Niente da ereditare per %s da %s: %s", name, self.servizio_di_prima, exc)
+            # Non è un «non c'è»: `keyring` restituisce None quando la voce manca, e alza solo
+            # quando la lettura **fallisce** — su macOS, tipicamente, perché il Portachiavi ha
+            # chiesto il consenso e si è risposto di no. Detto a livello `debug` sarebbe un segreto
+            # che resta bloccato sotto il nome di prima senza che nessuno lo sappia: uno vede
+            # «token mancante» e non ha modo di collegarlo a una finestra chiusa di fretta.
+            log.warning("«%s» non si è potuto leggere dal portachiavi sotto «%s» (il nome di prima): "
+                        "%s. Se c'è, resta lì: riapri Mirto e dai il consenso, oppure riscrivi quel "
+                        "segreto dalle impostazioni", name, self.servizio_di_prima, exc)
             return None
         if vecchio is None:
             return None
