@@ -1932,6 +1932,24 @@ class AudioDalWizardTest(unittest.TestCase):
         self.assertTrue(self.player.loops, "il din-don lo suona il nodo, non root")
         self.assertFalse((self.d / "audio-da-fare").exists(), "e non chiede niente a nessuno")
 
+    def test_the_test_sound_can_name_the_speaker_to_try(self):
+        """Dall'API 1.14 la prova dice **da dove**, e non deve piu' passare per l'uscita del nodo.
+
+        Prima sentire una cassa voleva dire prima renderla l'uscita del nodo: un `systemctl
+        restart` per un din-don, e mezzo minuto di casa senza camera per sapere se una cassa suona.
+        """
+        res = self.client.test_sound("jack:Headphones")
+        self.assertEqual(res["chiave"], "jack:Headphones",
+                         "la chiave torna indietro: cosi' Mirto sa che il nodo l'ha capita")
+        sorelle = self.player.sorelle()
+        self.assertEqual([s.cassa for s in sorelle], ["jack:Headphones"],
+                         "ha suonato da un'altra cassa, non dalla sua")
+        self.assertEqual([u for _l, _s, u in sorelle[0].loops], ["jack:Headphones"],
+                         "con la chiave: un'uscita **chiesta** non ripiega (API 1.10)")
+        self.assertFalse(self.player.loops, "e l'uscita del nodo non l'ha toccata nessuno")
+        self.assertEqual(self.audio, {"uscita": "jack", "scheda": "Headphones"},
+                         "provare non configura niente")
+
     def test_an_old_node_says_it_cannot(self):
         muto = Node("Nodo", self.key, {}, None, cameras=lambda: [], addresses=lambda: [],
                     hostname=lambda: "n.local", model=lambda: "Pi", credentials=lambda: None)

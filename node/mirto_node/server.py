@@ -1034,11 +1034,23 @@ class Node:
         if azione == "prova":
             if self.player is None:
                 raise ActionError("questo nodo non ha un'uscita audio", 501)
+            # Dall'API 1.14 la prova dice **da dove**: `chiave` è «jack:Headphones»,
+            # «usb:UACDemoV10», «bluetooth:AA:BB:…». Senza chiave suona dall'uscita configurata,
+            # che è quello che facevano tutti i Mirto fino a ieri. Serve perché il riquadro in
+            # basso del pannello audio adesso segue la scheda aperta: su «Bluetooth» il pulsante
+            # deve provare *quella cassa*, non l'uscita del nodo. Prima l'unico modo di sentire una
+            # cassa era renderla l'uscita del nodo — cioè riavviare il servizio per un din-don.
+            chiave = str(dati.get("chiave") or "")
             try:
-                self.player.loop(chime_pcm(), 1.0)
+                # `uscita=chiave`: un'uscita **chiesta** non ripiega (regola dell'API 1.10). Giusto
+                # cosi': una prova che suona da un'altra parte senza dirlo e' peggio del silenzio.
+                self.player.per(chiave).loop(chime_pcm(), 1.0, uscita=chiave)
             except AudioError as exc:
                 raise ActionError(f"suono non riuscito: {exc}", 503) from exc
-            return {"esito": "ok", "azione": "prova"}
+            # La chiave torna indietro: cosi' Mirto sa che il nodo l'ha capita. Un nodo piu' vecchio
+            # non la rimanda, e Mirto puo' dire la verita' («ha suonato dall'uscita del nodo»)
+            # invece di far credere che abbia provato la cassa scelta.
+            return {"esito": "ok", "azione": "prova", "chiave": chiave}
         if azione == "microfono":
             return self._set_microfono(dati)
         if azione == "jack":

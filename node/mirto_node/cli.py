@@ -760,8 +760,16 @@ def _abbina_cassa(mac: str) -> int:
         warn(f"collegamento non riuscito: {motivo}")
         warn(rimedio)
         return 1
-    write_cfg("audio", {"uscita": "bluetooth", "scheda": "", "bluetooth_mac": mac})
-    restart("mirto-node")
+    # Abbinare **non** vuol dire usare, e fino all'8/11 qui sotto c'erano due righe che lo
+    # contraddicevano: la cassa appena abbinata diventava l'uscita del nodo e il servizio si
+    # riavviava. Due danni in uno. Il primo: una cassa Bluetooth si prendeva da sola il posto che
+    # Marco vuole riservato al filo — «la cassa principale deve prediligere connessioni sicure come
+    # jack/usb» — e lo faceva senza che nessuno l'avesse chiesto, contraddicendo anche il messaggio
+    # che Mirto mostra alla fine («per farla suonare, sceglila come uscita»). Il secondo: il riavvio
+    # stava **prima** dell'esito che Mirto aspetta, quindi quegli otto secondi di systemctl erano
+    # tutti attesa di chi guardava. Marco, provando: «ho atteso ancora buoni 8 secondi dopo l'audio
+    # dalla cassa». Adesso l'abbinamento finisce quando la cassa e' collegata, che e' quando la
+    # cassa stessa fa il suo suono: chi vuole farla suonare la sceglie come uscita, in un gesto suo.
     _esito_audio("abbina", "ok", f"cassa {mac} abbinata e collegata")
     ok(f"cassa {mac} abbinata")
     return 0

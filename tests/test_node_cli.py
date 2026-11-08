@@ -507,7 +507,8 @@ class AbbinamentoCassaTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         for nome, valore in (("sh", finto_sh), ("_sessione_bluetoothctl", finta_sessione),
                              ("_collegata", finto_collegata), ("CONF", P(tmp.name)),
-                             ("write_cfg", lambda *a, **k: None), ("restart", lambda *a: True),
+                             ("write_cfg", lambda sez, *a, **k: chiamate.append(["write_cfg", sez])),
+                             ("restart", lambda serv: chiamate.append(["restart", serv]) or True),
                              ("time", types.SimpleNamespace(sleep=lambda *_a: None, time=lambda: 0))):
             self.addCleanup(setattr, cli, nome, getattr(cli, nome))
             setattr(cli, nome, valore)
@@ -548,6 +549,23 @@ class AbbinamentoCassaTest(unittest.TestCase):
         self.assertEqual(cli._abbina_cassa(self.MAC), 0)
         self.assertEqual(len([c for c in chiamate if c[0] == "bluetoothctl-sessione"]), 1)
         self.assertEqual(self.esito(conf)["esito"], "ok")
+
+    def test_pairing_a_speaker_does_not_make_it_the_output(self):
+        """Abbinare non vuol dire usare: il nodo ricorda la cassa, non ci sposta sopra la sirena.
+
+        Fino all'8/11 un abbinamento riuscito scriveva ``[audio] uscita = bluetooth`` e riavviava il
+        servizio. Due cose sbagliate in una: una cassa che si prende da sola il posto che Marco vuole
+        riservato al filo (*«la cassa principale deve prediligere connessioni sicure come jack/usb»*),
+        e un `systemctl restart` messo **prima** dell'esito che Mirto aspetta — otto secondi di
+        attesa dopo che la cassa aveva già fatto il suo suono.
+        """
+        cli, chiamate, conf = self.nodo(["Connection successful"], [True])
+        self.assertEqual(cli._abbina_cassa(self.MAC), 0)
+        self.assertEqual(self.esito(conf)["esito"], "ok")
+        self.assertNotIn("write_cfg", [c[0] for c in chiamate],
+                         "abbinare non deve cambiare l'uscita configurata del nodo")
+        self.assertNotIn("restart", [c[0] for c in chiamate],
+                         "un riavvio del servizio qui è solo attesa regalata a chi guarda")
 
     def test_a_dead_bond_is_redone_without_a_terminal(self):
         cli, chiamate, conf = self.nodo(["Failed to connect: br-connection-unknown", "Connection successful"],

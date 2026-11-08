@@ -279,9 +279,17 @@ class NodeClient:
         """Avvia l'abbinamento di una cassa Bluetooth (API 1.5)."""
         return self.request("POST", "/configura/audio", {"azione": "abbina", "mac": mac}, timeout=20)
 
-    def test_sound(self) -> dict:
-        """Din-don di prova dall'uscita configurata adesso (API 1.5)."""
-        return self.request("POST", "/configura/audio", {"azione": "prova"}, timeout=30)
+    def test_sound(self, chiave: str = "") -> dict:
+        """Din-don di prova da un'uscita qualsiasi del nodo (API 1.14), o da quella configurata.
+
+        ``chiave`` è ``jack:Headphones``, ``usb:UACDemoV10``, ``bluetooth:AA:BB:…``; vuota vuol dire
+        «da dove suona il nodo adesso», che è l'unica cosa che sapevano fare i nodi fino all'API
+        1.13. Un nodo vecchio ignora la chiave e suona dall'uscita sua: lo si capisce perché nella
+        risposta la chiave non torna indietro, e allora si dice com'è andata invece di far credere
+        che abbia provato la cassa scelta.
+        """
+        return self.request("POST", "/configura/audio", {"azione": "prova", "chiave": chiave},
+                            timeout=30)
 
     def set_microphone(self, attivo: bool, scheda: str = "") -> dict:
         """Accende o spegne il microfono del nodo e dice quale usare (API 1.6).

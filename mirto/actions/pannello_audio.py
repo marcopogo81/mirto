@@ -10,8 +10,13 @@ queste regole sono nate da un guaio visto su hardware la sera del 21/10, col Pi 
 * ``esito_arrivato`` — la risposta del nodo è quella di **adesso**, non quella del tentativo di prima;
 * ``attesa_scaduta`` — un'attesa senza fine è un programma bloccato: dopo il tempo dichiarato dal nodo,
   più mezzo minuto di grazia, la finestra smette di aspettare e lo dice;
-* ``si_puo_provare`` — il din-don suona su come è configurato **il nodo**, non su quello che si è
-  appena scelto nella finestra: prima si applica, poi si prova.
+* ``uscita_della_scheda`` — di quale dispositivo parla il riquadro in basso del pannello: lo decide
+  la scheda aperta, non una tendina che elenca tutto sotto a tutto.
+
+Qui c'era anche ``si_puo_provare``, che diceva quando il din-don aveva senso: il nodo suonava solo
+dall'uscita sua, quindi provare una cassa voleva dire prima renderla l'uscita del nodo — cioè
+riavviare il servizio per un din-don. Dall'API 1.14 la prova dice **da dove**, e quella regola non
+ha più niente da regolare: è sparita invece di restare lì a mentire.
 
 Dal 22/10, con la prima cassa USB e il primo microfono USB attaccati a un nodo, ci sono anche le
 **manopole**: quelle vere della scheda audio, lette dal nodo con ``amixer``. Non è un vezzo da
@@ -80,25 +85,6 @@ def attesa_scaduta(inizio: float, attesa_s: float, adesso: float) -> bool:
     che dica cos'è successo. Mezzo minuto di grazia oltre il tempo che il nodo stesso ha dichiarato.
     """
     return (adesso - inizio) > max(float(attesa_s or 0), 20.0) + 30.0
-
-
-def si_puo_provare(stato: dict | None, scelta: dict | None) -> bool:
-    """Il suono di prova ha senso adesso?
-
-    Il din-don esce da come è configurato **il nodo**: se nella finestra si sceglie «Bluetooth» e la
-    cassa non è ancora abbinata, premere «Suono di prova» non può che non far succedere niente — e chi
-    prova pensa che sia rotto l'audio. Si può provare solo quando la scelta della finestra è già
-    quella del nodo, cassa compresa.
-    """
-    s, c = stato or {}, scelta or {}
-    if str(c.get("uscita") or "") != str(s.get("uscita") or ""):
-        return False
-    if str(c.get("scheda") or "") != str(s.get("scheda") or ""):
-        return False
-    if str(c.get("uscita") or "") == "bluetooth":
-        mac = str(s.get("bluetooth_mac") or "")
-        return bool(mac) and str(c.get("bluetooth_mac") or "") == mac
-    return True
 
 
 def etichetta_manopola(manopola: dict) -> str:
@@ -272,10 +258,39 @@ def uscite_per_le_azioni(dispositivi: dict | None) -> list[dict]:
                 fuori.append({"uscita": gruppo, "scheda": str(c["scheda"]), "mac": "",
                               "etichetta": _('{come} — {nome}', come=come, nome=str(c.get("nome") or c["scheda"]))})
     for c in casse_ricordate(d.get("bluetooth")):
-        fuori.append({"uscita": "bluetooth", "scheda": "", "mac": c["mac"], "etichetta": c["nome"]})
+        # Col tipo davanti, come le altre. Marco, 8/11: *«nelle descrizioni c'è il tipo jack, usb +
+        # modello, ma manca bluetooth: viene indicato solo il nome del dispositivo»* — e in un elenco
+        # dove le altre voci dicono come sono attaccate, una che dice solo un nome di marca sembra
+        # una cosa d'altro tipo.
+        fuori.append({"uscita": "bluetooth", "scheda": "", "mac": c["mac"],
+                      "etichetta": _('Cassa Bluetooth — {nome}', nome=c["nome"])})
     for u in fuori:
         u["chiave"] = chiave_uscita(u["uscita"], u["scheda"], u["mac"])
     return fuori
+
+
+def uscita_della_scheda(scheda: str, dispositivi: dict | None, mac: str = "", card: str = "") -> dict:
+    """Di quale dispositivo parla il riquadro in basso, guardando quella scheda. ``{}`` se nessuno.
+
+    Marco, 8/11: *«vorrei fosse statica»*, della tendina che elencava tutte le uscite sotto a tutte
+    le schede. Aveva già detto il perché il giorno prima: *«è fuorviante vedere 3 scelte sui 3 tab in
+    ogni scheda dei tab»*. Una tendina che sotto «Bluetooth» propone anche il jack e l'USB fa sembrare
+    che la scheda aperta non conti — e il pulsante di prova lì accanto diventa indecifrabile: suona
+    dalla cassa che sto guardando o da quella scelta nella tendina?
+
+    Qui si risponde una volta sola, e fuori dall'interfaccia perché si possa provare: **la scheda
+    aperta decide il dispositivo**. Il jack è uno solo; il Bluetooth è la cassa scelta fra quelle
+    ricordate; l'USB è il dispositivo scelto fra quelli attaccati. La scheda del microfono non è
+    un'uscita e non ha niente da dire: ``{}``, e il riquadro sparisce.
+    """
+    uscite = uscite_per_le_azioni(dispositivi)
+    if scheda == "jack":
+        return next((u for u in uscite if u["uscita"] == "jack"), {})
+    if scheda == "bluetooth":
+        return next((u for u in uscite if u["uscita"] == "bluetooth" and u["mac"] == mac), {}) if mac else {}
+    if scheda == "usb":
+        return next((u for u in uscite if u["uscita"] in ("usb", "hdmi") and u["scheda"] == card), {}) if card else {}
+    return {}
 
 
 def uscita_in_uso(dispositivi: dict | None) -> str:

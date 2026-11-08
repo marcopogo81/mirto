@@ -23,7 +23,7 @@ from ..i18n import _
 ERRORE, AVVISO = "errore", "avviso"      # non funziona / funziona ma va sistemato
 
 CALDO, BOLLENTE = 70.0, 80.0             # °C: oltre il secondo il Raspberry si rallenta da solo
-API_ATTESA = "1.13"                      # quello che Mirto sa sfruttare adesso
+API_ATTESA = "1.14"                      # quello che Mirto sa sfruttare adesso
 SEGNALE_DEBOLE = 40                      # %: sotto, un nodo in Wi-Fi va spostato, non impostato meglio
 
 

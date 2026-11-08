@@ -2236,9 +2236,14 @@ class FinestreDiDialogoTest(unittest.TestCase):
                 fatte.append(("dimentica", mac))
                 return {"esito": "avviato", "attesa_s": 20}
 
-            def prova(self):
-                fatte.append(("prova",))
-                return {"esito": "ok"}
+            def prova(self, chiave=""):
+                fatte.append(("prova", chiave))
+                return {"esito": "ok", "chiave": chiave}   # un nodo API 1.14 rimanda la chiave
+
+            def imposta(self, uscita, scheda="", bluetooth_mac=""):
+                fatte.append(("imposta", uscita, scheda, bluetooth_mac))
+                disp["predefinito"] = {"uscita": uscita, "scheda": scheda, "bluetooth_mac": bluetooth_mac}
+                return disp
 
         return Ponte(), fatte
 
@@ -2265,15 +2270,53 @@ class FinestreDiDialogoTest(unittest.TestCase):
         self.assertIn("Uscita predefinita del nodo:", self._etichette(dlg),
                       "quello che resta e' l'uscita **del nodo**: la usa chi non dice niente")
 
-    def test_the_outputs_offered_are_the_devices_that_exist(self):
+    def test_the_box_at_the_bottom_follows_the_tab(self):
+        """Il riquadro in basso dice di che cosa parla la scheda aperta, e non e' una tendina.
+
+        Marco, 7/11: *«e' fuorviante vedere 3 scelte sui 3 tab in ogni scheda dei tab»*; l'8/11,
+        provando: *«vorrei fosse statica»*. Una tendina che sotto «Bluetooth» propone anche il jack
+        rende indecifrabile il pulsante di prova li' accanto: suona dalla cassa che sto guardando o
+        da quella scelta nella tendina?
+        """
         from mirto.gui.audio_ui import AudioDialog
 
         ponte, _f = self._ponte_audio()
         dlg = AudioDialog("Ingresso", ponte)
-        chiavi = [(dlg.scelta_uscita.itemData(i) or {}).get("chiave") for i in range(dlg.scelta_uscita.count())]
-        self.assertEqual(chiavi, ["jack:Headphones", "bluetooth:AA:BB:CC:DD:EE:FF", "usb:UACDemoV10"])
-        self.assertEqual(dlg.scelta()["scheda"], "UACDemoV10", "parte da quello che il nodo sta usando")
-        self.assertIsNone(dlg.scelta_uscita_cambiata(), "nessuno ha toccato niente: niente da mandare")
+        self.assertFalse(hasattr(dlg, "scelta_uscita"), "la tendina non c'e' piu'")
+        dlg.tabs.setCurrentIndex(0)
+        self.assertEqual(dlg.uscita_di_questa_scheda()["chiave"], "jack:Headphones")
+        dlg.tabs.setCurrentIndex(1)
+        self.assertEqual(dlg.uscita_di_questa_scheda()["chiave"], "bluetooth:AA:BB:CC:DD:EE:FF")
+        self.assertIn("JBL Flip 6", dlg.etichetta_uscita.text())
+        dlg.tabs.setCurrentIndex(2)
+        self.assertEqual(dlg.uscita_di_questa_scheda()["chiave"], "usb:UACDemoV10")
+        dlg.tabs.setCurrentIndex(3)
+        self.assertFalse(dlg.riquadro_visibile,
+                         "il microfono non e' un'uscita: il riquadro sparisce invece di parlare d'altro")
+        dlg.tabs.setCurrentIndex(0)
+        self.assertTrue(dlg.riquadro_visibile, "e torna tornando su un'uscita")
+
+    def test_a_bluetooth_speaker_says_what_kind_of_thing_it_is(self):
+        """Marco, 8/11: *«c'e' il tipo jack, usb + modello, ma manca bluetooth»*."""
+        from mirto.actions.pannello_audio import uscite_per_le_azioni
+
+        nomi = {u["uscita"]: u["etichetta"] for u in uscite_per_le_azioni(self.DISPOSITIVI)}
+        self.assertTrue(nomi["bluetooth"].startswith("Cassa Bluetooth"),
+                        f"in un elenco dove le altre dicono come sono attaccate: {nomi['bluetooth']}")
+
+    def test_using_this_device_for_the_actions_is_one_gesture(self):
+        """«Usa per le azioni» manda l'uscita al nodo subito, e si spegne quando e' gia' quella."""
+        from mirto.gui.audio_ui import AudioDialog
+
+        ponte, fatte = self._ponte_audio()
+        dlg = AudioDialog("Ingresso", ponte)
+        dlg.tabs.setCurrentIndex(2)                       # USB: e' gia' il predefinito del nodo
+        self.assertFalse(dlg.usa_btn.isEnabled())
+        self.assertTrue(dlg.usa_btn.toolTip(), "spento senza dire perche' e' un pulsante rotto")
+        dlg.tabs.setCurrentIndex(0)                       # il jack, che il nodo non sta usando
+        self.assertTrue(dlg.usa_btn.isEnabled())
+        dlg.usa_btn.click()
+        self.assertIn(("imposta", "jack", "Headphones", ""), fatte)
 
     def test_switching_the_jack_off_goes_to_the_node_right_away(self):
         """Non e' una scelta da «Applica»: toglie il jack anche dai ripieghi, e si vede subito."""
@@ -2283,8 +2326,10 @@ class FinestreDiDialogoTest(unittest.TestCase):
         dlg = AudioDialog("Ingresso", ponte)
         dlg.jack_on.setChecked(False)
         self.assertIn(("jack", False), fatte)
-        chiavi = [(dlg.scelta_uscita.itemData(i) or {}).get("chiave") for i in range(dlg.scelta_uscita.count())]
-        self.assertNotIn("jack:Headphones", chiavi, "spento, non lo si puo' piu' scegliere")
+        dlg.tabs.setCurrentIndex(0)
+        self.assertEqual(dlg.uscita_di_questa_scheda(), {}, "spento, non c'e' piu' niente da provare")
+        self.assertFalse(dlg.prova_btn.isEnabled())
+        self.assertFalse(dlg.usa_btn.isEnabled())
 
     def test_turning_a_knob_applies_it_now_and_with_the_key_the_node_wants(self):
         from PySide6.QtWidgets import QSlider
@@ -2486,17 +2531,34 @@ class FinestreDiDialogoTest(unittest.TestCase):
         self.assertEqual(dlg.casse.count(), 1, "e l'elenco e' arrivato")
         self.assertTrue(dlg.cerca_btn.isEnabled())
 
-    def test_the_test_sound_waits_for_the_choice_to_be_applied(self):
-        """Il din-don esce da com'e' configurato il nodo: premerlo prima di «Applica» non farebbe niente."""
+    def test_the_test_sound_plays_on_the_device_of_this_tab(self):
+        """Il din-don suona da **questa** scheda (API 1.14), non dall'uscita del nodo.
+
+        Prima il nodo sapeva suonare solo da dove era configurato: sentire una cassa voleva dire
+        prima renderla l'uscita del nodo, cioe' riavviare il servizio per un din-don.
+        """
+        from mirto.gui.audio_ui import AudioDialog
+
+        ponte, fatte = self._ponte_audio()
+        dlg = AudioDialog("Ingresso", ponte)
+        dlg.tabs.setCurrentIndex(0)                       # il jack, che il nodo non sta usando
+        self.assertTrue(dlg.prova_btn.isEnabled())
+        dlg.prova_btn.click()
+        self.assertIn(("prova", "jack:Headphones"), fatte)
+        dlg.tabs.setCurrentIndex(1)
+        dlg.prova_btn.click()
+        self.assertIn(("prova", "bluetooth:AA:BB:CC:DD:EE:FF"), fatte)
+
+    def test_an_old_node_that_cannot_try_a_speaker_says_so(self):
+        """Un nodo prima dell'API 1.14 ignora la chiave: lo si dice, invece di far credere."""
         from mirto.gui.audio_ui import AudioDialog
 
         ponte, _f = self._ponte_audio()
+        ponte.prova = lambda chiave="": {"esito": "ok"}   # nessuna chiave di ritorno: nodo vecchio
         dlg = AudioDialog("Ingresso", ponte)
-        self.assertTrue(dlg.prova_btn.isEnabled(), "scelta e nodo coincidono: si puo' provare")
-        dlg.scelta_uscita.setCurrentIndex(0)              # il jack, che il nodo non sta usando
-        self.assertIsNotNone(dlg.scelta_uscita_cambiata())
-        self.assertFalse(dlg.prova_btn.isEnabled())
-        self.assertIn("Prima applica", dlg.prova_btn.toolTip())
+        dlg.tabs.setCurrentIndex(0)
+        dlg.prova_btn.click()
+        self.assertIn("vecchio", dlg.nota.text())
 
     def test_the_audio_dialog_still_works_with_a_node_that_has_no_devices(self):
         """Un nodo prima di API 1.7 non conosce questa strada: non e' un guasto, e il resto deve reggere."""
@@ -2510,8 +2572,9 @@ class FinestreDiDialogoTest(unittest.TestCase):
         self.assertEqual(dlg.disp, {})
         self.assertEqual(dlg.manopole_dati, {})
         self.assertEqual(dlg.tabs.count(), 4, "le tab ci sono lo stesso, vuote")
-        self.assertEqual(dlg.scelta_uscita.count(), 0)
+        self.assertEqual(dlg.uscita_di_questa_scheda(), {})
         self.assertFalse(dlg.prova_btn.isEnabled(), "non c'e' niente da provare")
+        self.assertFalse(dlg.usa_btn.isEnabled(), "ne' da rendere predefinito")
         self.assertFalse(dlg.micro_on.isEnabled())
 
     # --- la finestra dell'azione, rifatta il 22/10 ---------------------------

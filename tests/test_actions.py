@@ -83,22 +83,6 @@ class CassaSceltaTest(unittest.TestCase):
         self.assertTrue(attesa_scaduta(0.0, 60, 91.0), "poi si smette, e si dice che non ha risposto")
         self.assertTrue(attesa_scaduta(0.0, 0, 51.0), "senza tempo dichiarato: cinquanta secondi")
 
-    def test_the_test_sound_needs_a_node_that_is_already_set_up(self):
-        """Il din-don esce da com'è configurato il nodo, non da quello che si è appena scelto."""
-        from mirto.actions.pannello_audio import si_puo_provare
-
-        nodo_bt = {"uscita": "bluetooth", "scheda": "", "bluetooth_mac": "AA:BB:CC:DD:EE:FF"}
-        self.assertTrue(si_puo_provare(nodo_bt, {"uscita": "bluetooth", "scheda": "",
-                                                 "bluetooth_mac": "AA:BB:CC:DD:EE:FF"}))
-        self.assertFalse(si_puo_provare({"uscita": "bluetooth", "scheda": "", "bluetooth_mac": ""},
-                                        {"uscita": "bluetooth", "scheda": "", "bluetooth_mac": ""}),
-                         "Bluetooth senza cassa abbinata: non suonerebbe niente")
-        self.assertFalse(si_puo_provare(nodo_bt, {"uscita": "jack", "scheda": "Headphones",
-                                                  "bluetooth_mac": ""}),
-                         "scelta non ancora applicata: prima «Applica», poi la prova")
-        self.assertTrue(si_puo_provare({"uscita": "jack", "scheda": "Headphones"},
-                                       {"uscita": "jack", "scheda": "Headphones", "bluetooth_mac": ""}))
-
 
 class NodesTest(unittest.TestCase):
     @classmethod
@@ -1078,6 +1062,28 @@ class TabDeiDispositiviTest(unittest.TestCase):
                       "trovate": {"casse": [{"mac": "AA:BB:CC:DD:EE:FF", "nome": "JBL Flip 6", "abbinata": True},
                                             {"mac": "11:22:33:44:55:66", "nome": "Cassa nuova", "abbinata": False}]}},
     }
+
+    def test_the_box_at_the_bottom_talks_about_the_tab_you_are_looking_at(self):
+        """La scheda aperta decide il dispositivo, non una tendina che elenca tutto sotto a tutto.
+
+        Marco, 7/11: *«è fuorviante vedere 3 scelte sui 3 tab in ogni scheda dei tab»*; l'8/11,
+        provando: *«vorrei fosse statica»*. Qui c'era `si_puo_provare`, la regola che diceva quando
+        il din-don aveva senso — serviva perché il nodo suonava solo dall'uscita sua. Dall'API 1.14
+        la prova dice da dove, e la regola non ha più niente da regolare.
+        """
+        from mirto.actions.pannello_audio import uscita_della_scheda
+
+        self.assertEqual(uscita_della_scheda("jack", self.DISP)["chiave"], "jack:Headphones")
+        self.assertEqual(uscita_della_scheda("bluetooth", self.DISP, mac="AA:BB:CC:DD:EE:FF")["chiave"],
+                         "bluetooth:AA:BB:CC:DD:EE:FF")
+        self.assertEqual(uscita_della_scheda("usb", self.DISP, card="UACDemoV10")["chiave"],
+                         "usb:UACDemoV10")
+        self.assertEqual(uscita_della_scheda("bluetooth", self.DISP), {},
+                         "nessuna cassa scelta: non si inventa quella che capita")
+        self.assertEqual(uscita_della_scheda("microfono", self.DISP), {},
+                         "il microfono non è un'uscita: il riquadro sparisce invece di parlare d'altro")
+        self.assertEqual(uscita_della_scheda("bluetooth", self.DISP, mac="00:00:00:00:00:00"), {},
+                         "una cassa che il nodo non ricorda più non è un dispositivo da provare")
 
     def test_the_two_lists_are_two_lists(self):
         """Dall'8/11 le ricordate e le trovate non stanno piu' insieme: due elenchi, due azioni."""
