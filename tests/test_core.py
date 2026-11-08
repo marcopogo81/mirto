@@ -2381,7 +2381,7 @@ class FinestreDiDialogoTest(unittest.TestCase):
 
         from mirto.gui.audio_ui import AudioDialog
 
-        ponte, _f = self._ponte_audio()
+        ponte, fatte = self._ponte_audio()
         dlg = AudioDialog("Ingresso", ponte)
         micro = dlg.tabs.widget(3)
         self.assertEqual([c.value() for c in micro.findChildren(QSlider)], [100], "guadagno al massimo")
@@ -2394,8 +2394,13 @@ class FinestreDiDialogoTest(unittest.TestCase):
         self.assertIn("Automatismo del guadagno", self._etichette(micro))
         self.assertEqual(dlg.micro_scelto(), "Device")
         self.assertIsNone(dlg.scelta_microfono(), "nessuno l'ha toccato")
+        # Spegnerlo arriva al nodo **adesso**: niente «Applica» da premere dopo (8/11). Fino a oggi
+        # qui si guardava cosa sarebbe partito all'Applica, che e' la domanda di un pannello che non
+        # c'e' piu'; e intanto il nodo finto non aveva nemmeno il metodo, quindi questa riga non era
+        # mai arrivata fino in fondo.
         dlg.micro_on.setChecked(False)
-        self.assertEqual(dlg.scelta_microfono(), {"attivo": False, "scheda": "Device"})
+        self.assertIn(("microfono", False, "Device"), fatte, "il nodo l'ha gia' saputo")
+        self.assertIsNone(dlg.scelta_microfono(), "ed e' gia' andato: non resta niente da mandare")
 
     def test_the_microphone_tab_measures_the_level(self):
         """Chiesto da Marco il 22/10: «i sensori che leggono l'audio e fanno capire se le regolazioni
@@ -2470,17 +2475,22 @@ class FinestreDiDialogoTest(unittest.TestCase):
         L'elenco si rifa' dopo ogni tentativo, e la scelta tornava sulla prima riga: il tentativo dopo
         sarebbe andato su un dispositivo che nessuno aveva scelto.
         """
-        from mirto.gui.audio_ui import AudioDialog
-
         import time as _t
 
+        from mirto.gui.audio_ui import AudioDialog
+
         disp = {**self.DISPOSITIVI,
-                "bluetooth": {"casse": [], "trovate": {"quando": _t.time(), "casse": [
+                "bluetooth": {"casse": [], "trovate": {"quando": 0, "casse": [
                     {"mac": "FF:02:3C:D5:9A:7E", "nome": "BLE MF8470", "abbinata": False},
                     {"mac": "AA:BB:CC:DD:EE:FF", "nome": "JBL Flip 6", "abbinata": False}]}, "esito": {}}}
         stato = dict(self.AUDIO_STATO)
         ponte, fatte = self._ponte_audio(stato=stato, disp=disp)
         dlg = AudioDialog("Ingresso", ponte)
+        # «quando» si mette **dopo** aver aperto la finestra, ed e' il punto: si mostrano solo le
+        # ricerche fatte da quando e' aperta. Scriverlo prima, anche di un microsecondo, vuol dire
+        # una ricerca «di prima» — che e' esattamente quella che non si deve vedere.
+        disp["bluetooth"]["trovate"]["quando"] = _t.time()
+        dlg._aggiorna_dispositivi()
         # Dall'8/11 le casse viste passare stanno nel **loro** elenco, separate da quelle che il
         # nodo ricorda: su una si preme «Abbina», sull'altra «Dimentica», e sono due cose diverse.
         # La lezione del 21/10 vale adesso qui: l'elenco si rifa' dopo ogni tentativo.
