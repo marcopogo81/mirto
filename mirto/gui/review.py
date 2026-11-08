@@ -832,7 +832,8 @@ class ReviewView(QWidget):
                 self.player.play()
             else:  # mostra il fotogramma anche in pausa
                 self.player.play()
-                QTimer.singleShot(120, lambda: (not self.playing) and self.player and self.player.pause())
+                QTimer.singleShot(120, self,
+                                  lambda: (not self.playing) and self.player and self.player.pause())
         elif status == S.EndOfMedia and self.current is not None:
             self._advance()
         elif status == S.InvalidMedia and self.current is not None:

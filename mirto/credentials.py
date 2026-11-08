@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import time
 
-from . import APP_NAME
+from . import APP_NAME, NOME_DI_PRIMA
 
 log = logging.getLogger(__name__)
 
@@ -48,8 +48,17 @@ def rtsp_name(net_id: str) -> str:
 
 
 class SecretStore:
-    def __init__(self, service: str = APP_NAME, backend=None, clock=time.monotonic):
+    def __init__(self, service: str = APP_NAME, backend=None, clock=time.monotonic,
+                 servizio_di_prima: str | None = NOME_DI_PRIMA):
         self.service = service
+        # Il portachiavi tiene i segreti sotto il **nome del servizio**, e rinominando il programma
+        # quel nome è cambiato: tutto quello che stava sotto «MyHouse» — token di Telegram, password
+        # delle camere, e le chiavi dei nodi — è rimasto lì, invisibile. L'8/11 Marco ha riaperto
+        # Mirto e ha trovato «Telegram attivo ma token mancante» e due nodi con «chiave condivisa
+        # mancante»: niente era perso, semplicemente nessuno andava più a cercarlo col nome giusto.
+        # Le cartelle dei dati questa eredità ce l'avevano già (``config._eredita``); il portachiavi
+        # no, perché è l'unico posto dove i dati non sono file e non si vedono guardando.
+        self.servizio_di_prima = servizio_di_prima if servizio_di_prima != service else None
         self._memory: dict[str, str] = {}
         self._noti: dict[str, str | None] = {}  # segreti già letti dal portachiavi
         self._rifiutati: dict[str, float] = {}  # e quelli che il portachiavi non ha voluto dare
@@ -85,9 +94,42 @@ class SecretStore:
                 log.error("Lettura dal portachiavi fallita per %s: %s", name, exc)
             self._rifiutati[name] = self.clock()
             return None
+        if valore is None and self.servizio_di_prima:
+            valore = self._eredita(name)
         self._rifiutati.pop(name, None)
         self._noti[name] = valore
         return valore
+
+    def _eredita(self, name: str) -> str | None:
+        """Cerca il segreto sotto il nome di prima e, se c'è, lo **sposta** sotto quello di adesso.
+
+        Sposta e non copia, come fa ``config._eredita`` con le cartelle: un segreto in due posti è
+        un segreto che dopo si cambia in uno solo. Se lo spostamento non riesce per intero il valore
+        si restituisce lo stesso — meglio un programma che funziona con l'eredità a metà che un
+        programma che non vede le sue chiavi perché non è riuscito a riordinare il portachiavi.
+        """
+        try:
+            vecchio = self._kr.get_password(self.servizio_di_prima, name)
+        except Exception as exc:
+            log.debug("Niente da ereditare per %s da %s: %s", name, self.servizio_di_prima, exc)
+            return None
+        if vecchio is None:
+            return None
+        try:
+            self._kr.set_password(self.service, name, vecchio)
+        except Exception as exc:
+            log.error("«%s» sta nel portachiavi sotto «%s» ma non riesco a spostarlo su «%s»: %s",
+                      name, self.servizio_di_prima, self.service, exc)
+            return vecchio
+        try:
+            self._kr.delete_password(self.servizio_di_prima, name)
+        except Exception:
+            log.warning("«%s» è ora sotto «%s», ma la copia sotto «%s» non si è lasciata togliere: "
+                        "toglila a mano dal portachiavi", name, self.service, self.servizio_di_prima)
+        else:
+            log.warning("«%s» stava nel portachiavi sotto «%s» (il nome di prima): spostato su «%s»",
+                        name, self.servizio_di_prima, self.service)
+        return vecchio
 
     def set(self, name: str, value: str) -> None:
         if self._kr is None:
@@ -101,10 +143,13 @@ class SecretStore:
         if self._kr is None:
             self._memory.pop(name, None)
             return
-        try:
-            self._kr.delete_password(self.service, name)
-        except Exception:
-            pass
+        for servizio in (self.service, self.servizio_di_prima):
+            if not servizio:
+                continue
+            try:
+                self._kr.delete_password(servizio, name)
+            except Exception:
+                pass    # non c'era, o il portachiavi ha detto di no: in entrambi i casi non c'e' piu'
         self._noti[name] = None
 
     def forget(self) -> None:

@@ -27,6 +27,84 @@ class ConfigTest(unittest.TestCase):
             self.assertIsNone(again.get("non.esiste"))
 
 
+class IlPortachiaviDelNomeVecchioSiEreditaTest(unittest.TestCase):
+    """Cambiando nome, i segreti non devono diventare invisibili (8/11).
+
+    Il portachiavi tiene i segreti sotto il **nome del servizio**. Rinominando il programma quel
+    nome e' passato da «MyHouse» a «Mirto», e tutto quello che c'era sotto il nome di prima — token
+    di Telegram, password delle camere di rete, **e le chiavi dei nodi** — e' rimasto dov'era,
+    invisibile. Marco ha riaperto Mirto e ha trovato «Telegram attivo ma token mancante» e due nodi
+    con «chiave condivisa mancante»: nulla era perso, semplicemente nessuno andava piu' a cercarlo
+    col nome giusto. Le cartelle questa eredita' ce l'avevano gia' dal 7/11; il portachiavi no,
+    perche' e' l'unico posto dove i dati non sono file e non si vedono guardando il disco.
+    """
+
+    class FintoPortachiavi:
+        def __init__(self, dentro=None):
+            self.dentro = dict(dentro or {})
+            self.letture = []
+
+        def get_password(self, servizio, nome):
+            self.letture.append(servizio)
+            return self.dentro.get((servizio, nome))
+
+        def set_password(self, servizio, nome, valore):
+            self.dentro[(servizio, nome)] = valore
+
+        def delete_password(self, servizio, nome):
+            if (servizio, nome) not in self.dentro:
+                raise KeyError(nome)
+            del self.dentro[(servizio, nome)]
+
+    def test_a_secret_written_under_the_old_name_is_found_and_moved(self):
+        kr = self.FintoPortachiavi({("MyHouse", "telegram_bot_token"): "IL-TOKEN"})
+        store = SecretStore(service="Mirto", backend=kr, servizio_di_prima="MyHouse")
+        self.assertEqual(store.get("telegram_bot_token"), "IL-TOKEN")
+        self.assertEqual(kr.dentro.get(("Mirto", "telegram_bot_token")), "IL-TOKEN",
+                         "il segreto va spostato sotto il nome di adesso")
+        self.assertNotIn(("MyHouse", "telegram_bot_token"), kr.dentro,
+                         "si sposta, non si copia: un segreto in due posti dopo si cambia in uno solo")
+
+    def test_the_node_key_too(self):
+        """Quella che ha fatto dire «chiave condivisa mancante» su due nodi abbinati."""
+        nome = credentials.node_key_name("ingresso")
+        kr = self.FintoPortachiavi({("MyHouse", nome): "CHIAVE"})
+        self.assertEqual(SecretStore("Mirto", kr, servizio_di_prima="MyHouse").get(nome), "CHIAVE")
+
+    def test_the_new_name_wins_and_the_old_one_is_not_even_asked(self):
+        kr = self.FintoPortachiavi({("Mirto", "email_password"): "NUOVA",
+                                    ("MyHouse", "email_password"): "VECCHIA"})
+        store = SecretStore("Mirto", kr, servizio_di_prima="MyHouse")
+        self.assertEqual(store.get("email_password"), "NUOVA")
+        self.assertEqual(kr.letture, ["Mirto"],
+                         "su macOS ogni lettura puo' far comparire una richiesta di consenso: se il "
+                         "segreto c'e' gia', il nome di prima non si disturba")
+
+    def test_a_secret_nowhere_stays_nowhere(self):
+        kr = self.FintoPortachiavi()
+        self.assertIsNone(SecretStore("Mirto", kr, servizio_di_prima="MyHouse").get("sms_http_api_key"))
+
+    def test_if_the_move_fails_the_value_comes_back_anyway(self):
+        """Meglio funzionare con l'eredita' a meta' che non vedere le proprie chiavi."""
+        kr = self.FintoPortachiavi({("MyHouse", "email_password"): "VECCHIA"})
+        kr.set_password = lambda *a: (_ for _ in ()).throw(RuntimeError("portachiavi in sola lettura"))
+        store = SecretStore("Mirto", kr, servizio_di_prima="MyHouse")
+        with self.assertLogs("mirto.credentials", level="ERROR"):
+            self.assertEqual(store.get("email_password"), "VECCHIA")
+
+    def test_deleting_takes_away_the_old_copy_too(self):
+        nome = credentials.rtsp_name("ingresso")
+        kr = self.FintoPortachiavi({("Mirto", nome): "a:b", ("MyHouse", nome): "a:vecchia"})
+        SecretStore("Mirto", kr, servizio_di_prima="MyHouse").delete(nome)
+        self.assertEqual(kr.dentro, {}, "togliendo una camera non deve restarne la password di prima")
+
+    def test_the_same_name_twice_is_not_an_inheritance(self):
+        kr = self.FintoPortachiavi({("Mirto", "email_password"): "X"})
+        store = SecretStore("Mirto", kr, servizio_di_prima="Mirto")
+        self.assertIsNone(store.servizio_di_prima, "ereditare da se' stessi non vuol dire niente")
+        self.assertEqual(store.get("email_password"), "X")
+
+
 class LaCartellaDelNomeVecchioSiEreditaTest(unittest.TestCase):
     """Cambiando nome, la configurazione non deve sparire (7/11).
 
@@ -147,11 +225,24 @@ class SecretCacheTest(unittest.TestCase):
         self.assertEqual(kr.letture, ["telegram_bot_token"])
 
     def test_a_missing_secret_is_not_asked_again(self):
+        """Quello che conta e' che la **seconda** volta non si torni al portachiavi.
+
+        Dall'8/11 la prima volta le domande sono due: prima col nome di adesso, poi col nome di
+        prima, per ereditare i segreti rimasti sotto «MyHouse». Non e' un ritorno al difetto del
+        22/10 (la richiesta di consenso che ricompariva all'infinito): il consenso si chiede per
+        **leggere il contenuto** di una voce che esiste, e qui non esiste da nessuna delle due
+        parti. Dove invece esiste, quella seconda domanda e' l'eredita' che fa il suo mestiere, e
+        avviene una volta sola perche' subito dopo il segreto e' sotto il nome di adesso.
+
+        Quindi non si conta quante domande: si guarda che dopo la prima non ne arrivino altre.
+        """
         kr = PortachiaviContatore()
         store = SecretStore(backend=kr)
         self.assertIsNone(store.get("email_password"))
+        dopo_la_prima = list(kr.letture)
         self.assertIsNone(store.get("email_password"))
-        self.assertEqual(kr.letture, ["email_password"])
+        self.assertEqual(kr.letture, dopo_la_prima,
+                         "un segreto che non c'e' non si richiede al portachiavi")
 
     def test_writing_and_deleting_keep_the_memory_honest(self):
         kr = PortachiaviContatore({"x": "vecchio"})

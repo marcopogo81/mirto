@@ -10,6 +10,11 @@ Può inoltre comandare dispositivi di deterrenza su nodi esterni via HTTP.
 __version__ = "0.2.0"
 APP_NAME = "Mirto"
 
+# Il nome di prima sta qui perche' lo guardano in due: ``config`` per le cartelle dei dati e
+# ``credentials`` per il portachiavi. Scritto a mano in due file diventa due verita' diverse il
+# giorno che una delle due si dimentica di cambiarlo.
+NOME_DI_PRIMA = "MyHouse"   # il programma si e' chiamato cosi' fino al 7/11/2026
+
 # Gli indirizzi del progetto stanno qui e solo qui. Erano scritti a mano in tre file diversi
 # (i rilasci in telemetry_ui, le donazioni in app, e per chiedere qualcosa l'indirizzo di posta
 # personale di Marco dentro la procedura delle azioni): il repository cambia nome prima del lancio

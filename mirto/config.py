@@ -19,7 +19,7 @@ from typing import Any
 import yaml
 from platformdirs import user_config_dir, user_data_dir
 
-from . import APP_NAME
+from . import APP_NAME, NOME_DI_PRIMA
 
 log = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
-NOME_DI_PRIMA = "MyHouse"   # il programma si e' chiamato cosi' fino al 7/11/2026
+# NOME_DI_PRIMA sta in mirto/__init__.py: lo guardano anche le credenziali.
 
 
 def ambiente(nome: str) -> str | None:

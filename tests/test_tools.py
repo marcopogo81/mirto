@@ -382,6 +382,71 @@ class ProveRosseSiLeggonoTest(unittest.TestCase):
         self.assertIn("altre 8 prove rosse", annotazioni[-1])
 
 
+class UnaChiamataRimandataDiceACheCosaAppartieneTest(unittest.TestCase):
+    """`QTimer.singleShot(2500, lambda: self.etichetta.setText(""))` su un oggetto gia' morto (8/11).
+
+    Nella forma a due argomenti il timer non appartiene a nessuno: scade comunque, e la lambda tocca
+    un oggetto che nel frattempo Qt puo' aver distrutto — «Internal C++ object already deleted».
+    Marco l'ha visto tre volte in un minuto salvando le impostazioni: la scheda si ricostruisce,
+    l'etichetta «✓ Salvato» muore, e due secondi e mezzo dopo qualcuno le scrive dentro.
+
+    Qt la forma giusta ce l'ha: `singleShot(ms, oggetto, funzione)` non esegue niente se
+    l'**oggetto** e' sparito. Quindi una chiamata rimandata deve dire a che cosa appartiene, e il
+    controllo non e' «non usare lambda» ma «di' di chi e' il tempo che stai aspettando».
+
+    Quando e' uscito il difetto i casi erano quattro: uno schiantava gia', gli altri tre erano lo
+    stesso difetto non ancora manifestato.
+    """
+
+    def test_a_deferred_lambda_names_the_object_it_belongs_to(self):
+        import ast
+
+        guai = []
+        for f in sorted((ROOT / "mirto").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if (isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "singleShot"
+                        and len(n.args) == 2 and isinstance(n.args[1], ast.Lambda)):
+                    guai.append(f"{f.relative_to(ROOT)}:{n.lineno}")
+        self.assertEqual(guai, [], "singleShot(ms, lambda) non appartiene a nessuno: se l'oggetto che "
+                                   "la lambda tocca muore prima, il programma si schianta. Usa "
+                                   "singleShot(ms, oggetto, lambda):\n  " + "\n  ".join(guai))
+
+
+class UnFoglioDiStileConLeGraffeDoppieTest(unittest.TestCase):
+    """`"border-radius:10px; }}"` senza la `f` davanti: Qt scarta tutto il foglio (8/11).
+
+    Le graffe si raddoppiano **solo** dentro un f-string, dove servono a dire «questa e' una graffa
+    vera, non un campo». In una stringa normale `}}` resta `}}`, il CSS e' invalido e Qt lo butta —
+    scrivendo «Could not parse stylesheet», che e' un avviso su stdout e non un errore: il pannello
+    semplicemente nasce senza fondo e senza bordo, e nessuno sa perche'.
+
+    Il caso vero era una riga spezzata in due: la prima meta' f-string, la seconda no. L'occhio
+    legge le due righe come una sola stringa, il parser no.
+    """
+
+    def test_a_plain_string_in_a_stylesheet_has_no_doubled_braces(self):
+        import ast
+
+        guai = []
+        for f in sorted((ROOT / "mirto").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if not (isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "setStyleSheet"):
+                    continue
+                # Un f-string e' un JoinedStr e le sue graffe doppie il parser le ha gia' risolte:
+                # qui restano solo le stringhe normali, dove «}}» non puo' che essere una svista.
+                for pezzo in ast.walk(n):
+                    if (isinstance(pezzo, ast.Constant) and isinstance(pezzo.value, str)
+                            and ("}}" in pezzo.value or "{{" in pezzo.value)):
+                        guai.append(f"{f.relative_to(ROOT)}:{n.lineno}: {pezzo.value.strip()[:60]}")
+        self.assertEqual(guai, [], "graffe doppie in una stringa che non e' un f-string: Qt scarta "
+                                   "tutto il foglio di stile senza dirlo come un errore:\n  "
+                                   + "\n  ".join(guai))
+
+
 class UnMetodoSenzaSelfVuoleStaticmethodTest(unittest.TestCase):
     """`@staticmethod` perso nel rinominio: il programma non partiva piu' (8/11).
 

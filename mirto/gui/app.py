@@ -2232,5 +2232,7 @@ def run_gui() -> int:
     win.mic = MacMicCapture(core, win)  # si accende solo se attivato in Impostazioni → Suoni
     from .telemetry_ui import ask_consent  # noqa: PLC0415
 
-    QTimer.singleShot(2500, lambda: ask_consent(core, win))  # una volta sola, a finestra già aperta
+    # Il contesto e' la finestra: se si chiude prima dei due secondi e mezzo, il consenso non si
+    # chiede a un oggetto che non c'e' piu'.
+    QTimer.singleShot(2500, win, lambda: ask_consent(core, win))  # una volta sola, a finestra aperta
     return app.exec()

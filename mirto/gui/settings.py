@@ -842,7 +842,8 @@ class SettingsDialog(QDialog):
             # Quando il nodo avrà finito, il pulsante torna «Ascolta» da solo: i secondi li dice lui
             # nella risposta, perché è l'unico a sapere quanto dura davvero quel file.
             durata = float((res or {}).get("durata") or 0) if isinstance(res, dict) else 0.0
-            QTimer.singleShot(int(max(1.0, durata) * 1000) + 200, lambda: self._suono_finito(nome))
+            QTimer.singleShot(int(max(1.0, durata) * 1000) + 200, self,
+                              lambda: self._suono_finito(nome))
         self._bg(lambda: client.activate("dissuasore", 30, extra={"suono": nome, "volte": 1}), partito)
 
     def _suono_finito(self, nome: str) -> None:
@@ -1686,8 +1687,11 @@ class SettingsDialog(QDialog):
 
         pannello = QFrame()
         pannello.setObjectName("bandaAzioni")
+        # La seconda riga **non** è un f-string, quindi `}}` resterebbe `}}` e il foglio di stile
+        # sarebbe invalido: Qt lo scarta in silenzio e scrive «Could not parse stylesheet» sei volte
+        # a ogni apertura. Le graffe si raddoppiano solo dove c'è la f davanti alle virgolette.
         pannello.setStyleSheet(f"#bandaAzioni {{ background:{T.PANEL}; border:1px solid {T.LINE}; "
-                               "border-radius:10px; }}")
+                               "border-radius:10px; }")
         dentro = QVBoxLayout(pannello)
         dentro.setContentsMargins(14, 10, 14, 10)
         dentro.setSpacing(8)
@@ -2743,7 +2747,10 @@ class SettingsDialog(QDialog):
         from PySide6.QtCore import QTimer  # noqa: PLC0415
 
         self.salvato.setText(_('✓ Salvato'))
-        QTimer.singleShot(2500, lambda: self.salvato.setText(""))
+        # Il contesto è **l'etichetta**, non la finestra: se Qt la distrugge nei due secondi e mezzo
+        # (succede quando la scheda si ricostruisce), il timer non parte invece di schiantarsi su un
+        # oggetto C++ che non c'è più. L'8/11 questo errore è comparso tre volte in un minuto.
+        QTimer.singleShot(2500, self.salvato, lambda: self.salvato.setText(""))
 
     def _save(self, close: bool = True):
         from ..system import autostart  # noqa: PLC0415
