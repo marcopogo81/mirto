@@ -2245,6 +2245,11 @@ class FinestreDiDialogoTest(unittest.TestCase):
                 disp["predefinito"] = {"uscita": uscita, "scheda": scheda, "bluetooth_mac": bluetooth_mac}
                 return disp
 
+            def microfono(self, attivo, scheda=""):
+                fatte.append(("microfono", attivo, scheda))
+                stato["microfono"] = dict(stato.get("microfono") or {}, attivo=attivo, scheda=scheda)
+                return stato
+
         return Ponte(), fatte
 
     @staticmethod
@@ -2252,6 +2257,31 @@ class FinestreDiDialogoTest(unittest.TestCase):
         from PySide6.QtWidgets import QLabel
 
         return " | ".join(w.text() for w in dove.findChildren(QLabel))
+
+    @staticmethod
+    def _ripassa(dlg, secondi: float = 3.0) -> None:
+        """Un giro di domanda al nodo, aspettando che la risposta torni.
+
+        Dall'8/11 `_ripassa` non chiede piu' sul thread della finestra: `audio_state` interroga ALSA
+        e durante un abbinamento puo' restare appesa dei secondi, e la finestra restava ferma
+        davvero. La risposta torna con un segnale, che fra thread diversi Qt **accoda**: senza un
+        giro di eventi non arriva mai. Chiamare `dlg._ripassa()` e guardare subito dopo com'e'
+        andata e' proprio la prova che non si puo' piu' fare — ed e' quello che ha tenuto la CI
+        rossa per due push.
+        """
+        import time as _t
+
+        from PySide6.QtWidgets import QApplication
+
+        dlg._ripassa()
+        fine = _t.monotonic() + secondi
+        while _t.monotonic() < fine:
+            QApplication.processEvents()
+            if not getattr(dlg, "_sto_chiedendo", False):
+                QApplication.processEvents()
+                return
+            _t.sleep(0.01)
+        raise AssertionError("il nodo finto non ha risposto entro il tempo")
 
     def test_the_audio_dialog_has_one_tab_per_kind_of_device(self):
         """Chiesto da Marco il 22/10, guardando il pannello finito: jack, Bluetooth e USB sono cose
@@ -2442,19 +2472,25 @@ class FinestreDiDialogoTest(unittest.TestCase):
         """
         from mirto.gui.audio_ui import AudioDialog
 
+        import time as _t
+
         disp = {**self.DISPOSITIVI,
-                "bluetooth": {"casse": [], "trovate": {"casse": [
+                "bluetooth": {"casse": [], "trovate": {"quando": _t.time(), "casse": [
                     {"mac": "FF:02:3C:D5:9A:7E", "nome": "BLE MF8470", "abbinata": False},
                     {"mac": "AA:BB:CC:DD:EE:FF", "nome": "JBL Flip 6", "abbinata": False}]}, "esito": {}}}
         stato = dict(self.AUDIO_STATO)
         ponte, fatte = self._ponte_audio(stato=stato, disp=disp)
         dlg = AudioDialog("Ingresso", ponte)
-        dlg.casse.setCurrentRow(1)
-        self.assertEqual(dlg.mac_scelto(), "AA:BB:CC:DD:EE:FF")
+        # Dall'8/11 le casse viste passare stanno nel **loro** elenco, separate da quelle che il
+        # nodo ricorda: su una si preme «Abbina», sull'altra «Dimentica», e sono due cose diverse.
+        # La lezione del 21/10 vale adesso qui: l'elenco si rifa' dopo ogni tentativo.
+        dlg.trovate.setCurrentRow(1)
+        self.assertEqual(dlg.cassa_trovata()["mac"], "AA:BB:CC:DD:EE:FF")
         dlg._abbina()
         stato["esito"] = {"azione": "abbina", "quando": 9, "esito": "errore", "messaggio": "non risponde"}
-        dlg._ripassa()
-        self.assertEqual(dlg.mac_scelto(), "AA:BB:CC:DD:EE:FF", "e dopo l'errore resta scelta lei")
+        self._ripassa(dlg)
+        self.assertEqual(dlg.cassa_trovata().get("mac"), "AA:BB:CC:DD:EE:FF",
+                         "e dopo l'errore resta scelta lei")
         self.assertIn("JBL Flip 6", dlg.nota.text(), "l'errore dice di quale cassa si parla")
         dlg._abbina()
         self.assertEqual([c for c in fatte if c[0] == "abbina"],
@@ -2467,7 +2503,11 @@ class FinestreDiDialogoTest(unittest.TestCase):
         disp = {**self.DISPOSITIVI, "bluetooth": {"casse": [], "trovate": {}, "esito": {}}}
         ponte, _f = self._ponte_audio(disp=disp)
         dlg = AudioDialog("Ingresso", ponte)
-        self.assertEqual(dlg.casse.count(), 0)
+        # Un riquadro vuoto **dice** che e' vuoto, dentro, dove uno sta guardando (8/11): quindi una
+        # riga c'e', ma non e' una cassa — non si sceglie e non porta dati. Contare le righe direbbe
+        # «uno»; quello che conta e' che non ci sia niente da scegliere.
+        self.assertEqual(dlg.cassa_scelta(), {}, "niente di scelto, perche' non c'e' niente")
+        self.assertEqual(dlg.cassa_trovata(), {})
         self.assertFalse(dlg.abbina_btn.isEnabled())
         self.assertFalse(dlg.dimentica_btn.isEnabled())
         self.assertTrue(dlg.cerca_btn.isEnabled(), "si parte da qui")
@@ -2503,11 +2543,11 @@ class FinestreDiDialogoTest(unittest.TestCase):
         ponte, _f = self._ponte_audio(stato=stato)
         dlg = AudioDialog("Ingresso", ponte)
         dlg._cerca()
-        dlg._ripassa()
+        self._ripassa(dlg)
         self.assertEqual(dlg.attesa, "cerca", "l'esito di prima non e' la risposta di adesso")
         self.assertFalse(dlg.cerca_btn.isEnabled(), "e intanto il pulsante resta spento")
         dlg.inizio = _t.monotonic() - 300          # il nodo non risponde piu'
-        dlg._ripassa()
+        self._ripassa(dlg)
         self.assertEqual(dlg.attesa, "", "l'attesa finisce")
         self.assertTrue(dlg.cerca_btn.isEnabled(), "il pulsante torna premibile")
         self.assertFalse(dlg.nota.sta_aspettando(), "la barra si ferma")
@@ -2517,18 +2557,24 @@ class FinestreDiDialogoTest(unittest.TestCase):
         """La ricerca dura quindici secondi: la finestra ripassa, non resta bloccata."""
         from mirto.gui.audio_ui import AudioDialog
 
+        import time as _t
+
         stato = dict(self.AUDIO_STATO)
         disp = {**self.DISPOSITIVI, "bluetooth": {"casse": [], "trovate": {}, "esito": {}}}
         ponte, _f = self._ponte_audio(stato=stato, disp=disp)
         dlg = AudioDialog("Ingresso", ponte)
         dlg._cerca()
         self.assertEqual(dlg.attesa, "cerca")
-        disp["bluetooth"] = {"casse": [], "esito": {}, "trovate": {"casse": [
-            {"mac": "AA:BB:CC:DD:EE:FF", "nome": "JBL", "abbinata": False}]}}
+        # «quando» e' adesso: dall'8/11 si mostrano solo le ricerche fatte dopo che la finestra e'
+        # aperta, altrimenti all'apertura si rivedeva l'elenco di giorni prima con dentro casse
+        # spente marcate «da abbinare».
+        disp["bluetooth"] = {"casse": [], "esito": {}, "trovate": {"quando": _t.time(), "casse": [
+            {"mac": "AA:BB:CC:DD:EE:FF", "nome": "Cassa del salotto", "abbinata": False}]}}
         stato["esito"] = {"azione": "cerca", "esito": "ok", "messaggio": "1 casse", "quando": 7}
-        dlg._ripassa()
+        self._ripassa(dlg)
         self.assertEqual(dlg.attesa, "", "finita l'attesa")
-        self.assertEqual(dlg.casse.count(), 1, "e l'elenco e' arrivato")
+        self.assertEqual(dlg.trovate.count(), 1, "e l'elenco di quelle viste passare e' arrivato")
+        self.assertEqual(dlg.cassa_trovata(), {}, "nessuna scelta: «Abbina» non si accende da solo")
         self.assertTrue(dlg.cerca_btn.isEnabled())
 
     def test_the_test_sound_plays_on_the_device_of_this_tab(self):

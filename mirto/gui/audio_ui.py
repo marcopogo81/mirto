@@ -62,7 +62,8 @@ from .sistema import level_bar
 from ..actions.pannello_audio import (attesa_scaduta, casse_ricordate, casse_trovate, chiave_manopola,
                                       esito_arrivato, etichetta_manopola, firma_esito, giudizio_livello,
                                       livello_da_pcm, microfono_da_mandare, picco_tenuto,
-                                      quale_cassa_tenere, uscita_della_scheda, uscita_in_uso,
+                                      quale_cassa_tenere, quale_trovata_tenere,
+                                      uscita_della_scheda, uscita_in_uso,
                                       uscite_per_le_azioni)
 from ..i18n import _
 
@@ -180,6 +181,7 @@ class AudioDialog(QDialog):
         # ricordarsene la scelta tornerebbe indietro da sola sotto le dita di chi l'ha appena fatta.
         self._micro_da_tenere = self.micro_scelto()
         self._usb_da_tenere = self.usb_scelto()
+        self._trovata_da_tenere = str(self.cassa_trovata().get("mac") or "")
         # Mentre si ridisegna, spuntare una casella o muovere una tendina è **questa** riga che lo
         # fa, non chi guarda: senza dirlo, ogni ridisegno manderebbe al nodo le scelte che sta solo
         # rimettendo com'erano — e una di quelle fa riavviare il servizio. Prima la guardia si
@@ -310,13 +312,28 @@ class AudioDialog(QDialog):
             voce = QListWidgetItem(f"{c['nome']} · {c['mac']}")
             voce.setData(Qt.ItemDataRole.UserRole, c)
             self.trovate.addItem(voce)
+        # La cassa scelta deve restare scelta anche qui. È la lezione del 21/10 — su hardware, dopo
+        # un abbinamento fallito risultava selezionato un dispositivo BLE qualsiasi al posto della
+        # JBL, e il tentativo dopo sarebbe andato su quello — e da quando gli elenchi sono due
+        # (8/11) l'elenco che si rifà dopo un tentativo è questo. Senza ripiego sulla prima riga:
+        # accenderebbe «Abbina» su una cassa che nessuno ha scelto.
+        tenere2 = quale_trovata_tenere(
+            self.in_corso[0], getattr(self, "_trovata_da_tenere", ""),
+            [str((self.trovate.item(i).data(Qt.ItemDataRole.UserRole) or {}).get("mac") or "")
+             for i in range(self.trovate.count())])
+        for i in range(self.trovate.count()):
+            dati = self.trovate.item(i).data(Qt.ItemDataRole.UserRole) or {}
+            if dati.get("mac") and dati["mac"] == tenere2:
+                self.trovate.setCurrentRow(i)
+                break
         self.trovate.currentRowChanged.connect(lambda _i: self._mostra())
         self._riquadro(self.trovate, _('Premi «Cerca casse…»: qui compaiono solo le casse viste adesso.'))
         lay.addWidget(self.trovate, 1)
         lay.addWidget(self._nota_piccola(
             _('Accendi la cassa, mettila in abbinamento (il tasto Bluetooth finché lampeggia veloce) '
-              'e premi «Cerca casse…». Abbinarla non la fa suonare: quale cassa usa il nodo si '
-              'sceglie qui sotto, e per le sirene conviene il filo.')))
+              'e premi «Cerca casse…». Abbinarla non la fa suonare: per sentirla premi «Suono di '
+              'prova» qui sotto, e per farla suonare alle azioni «Usa per le azioni» — anche se per '
+              'le sirene conviene il filo.')))
         return w
 
     def _tab_usb(self) -> QWidget:

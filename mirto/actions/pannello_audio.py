@@ -57,6 +57,24 @@ def quale_cassa_tenere(in_corso: str, scelta: str, configurata: str, disponibili
     return disponibili[0] if disponibili else ""
 
 
+def quale_trovata_tenere(in_corso: str, scelta: str, disponibili: list[str]) -> str:
+    """Come sopra, ma per l'elenco delle casse **viste passare**. Niente ripiego sulla prima.
+
+    La lezione del 21/10 — l'elenco si rifà dopo ogni tentativo e la scelta non deve spostarsi — da
+    quando gli elenchi sono due (8/11) vale qui: è questo l'elenco su cui si preme «Abbina», ed è
+    questo che si rifà dopo un tentativo fallito.
+
+    Quello che **non** vale è il ripiego sulla prima riga. Su una cassa ricordata scegliere la prima
+    è quello che fa un menù a tendina da solo e non succede niente; qui accenderebbe «Abbina» su una
+    cassa che nessuno ha scelto, in un elenco che Marco vuole nasca vuoto. Nessuna, allora: «Abbina»
+    resta spento finché qualcuno non sceglie.
+    """
+    for candidata in (in_corso, scelta):
+        if candidata and candidata in disponibili:
+            return candidata
+    return ""
+
+
 def firma_esito(esito: dict | None) -> tuple:
     """Come riconoscere «questa risposta del nodo» da un'altra uguale di prima."""
     e = esito or {}

@@ -45,6 +45,23 @@ class SigningTest(unittest.TestCase):
 class CassaSceltaTest(unittest.TestCase):
     """La regola che tiene selezionata la cassa giusta quando l'elenco si rifà (hardware, 21/10)."""
 
+    def test_a_speaker_seen_passing_is_kept_chosen_but_never_picked_for_you(self):
+        """Stessa lezione del 21/10, sull'elenco che dall'8/11 si rifà dopo ogni tentativo.
+
+        Senza il ripiego sulla prima riga, però: lì accenderebbe «Abbina» su una cassa che nessuno
+        ha scelto, in un elenco che Marco vuole nasca vuoto.
+        """
+        from mirto.actions.pannello_audio import quale_trovata_tenere
+
+        elenco = ["FF:02:3C:D5:9A:7E", "AA:BB:CC:DD:EE:FF"]
+        self.assertEqual(quale_trovata_tenere("AA:BB:CC:DD:EE:FF", "FF:02:3C:D5:9A:7E", elenco),
+                         "AA:BB:CC:DD:EE:FF", "quella del tentativo in corso viene prima")
+        self.assertEqual(quale_trovata_tenere("", "AA:BB:CC:DD:EE:FF", elenco), "AA:BB:CC:DD:EE:FF")
+        self.assertEqual(quale_trovata_tenere("", "11:22:33:44:55:66", elenco), "",
+                         "sparita dall'elenco: nessuna, non la prima che capita")
+        self.assertEqual(quale_trovata_tenere("", "", elenco), "",
+                         "nessuno ha scelto: «Abbina» resta spento")
+
     def test_the_speaker_being_paired_wins(self):
         from mirto.actions.pannello_audio import quale_cassa_tenere
 
