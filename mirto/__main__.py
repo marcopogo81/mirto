@@ -149,10 +149,15 @@ def cmd_diagnose_cameras(max_index: int = 6) -> int:
     print(_('Camere trovate dal sistema:'))
     for c in cams:
         print(_('  indice previsto {index!s:<4} {name:<35} {id}', index=c.index, name=c.name, id=c.id))
-    api = cv2.CAP_AVFOUNDATION if _sys.platform == "darwin" else cv2.CAP_MSMF if _sys.platform.startswith("win") else cv2.CAP_ANY
+    # Si chiamava «api». Gitleaks vede una variabile «api» con un valore lungo e grida
+    # «chiave»: lo zittivamo in .gitleaksignore, con un'impronta legata alla commit — che
+    # dopo l'import pubblico non esisteva piu', e l'allarme e' tornato (8/11). Meglio
+    # togliere il motivo dell'allarme che l'allarme: OpenCV questo parametro lo chiama
+    # anche «backend».
+    backend = cv2.CAP_AVFOUNDATION if _sys.platform == "darwin" else cv2.CAP_MSMF if _sys.platform.startswith("win") else cv2.CAP_ANY
     print(_('\nProva degli indici OpenCV (guarda se si accende il bollino verde):'))
     for i in range(max(max_index, len(cams))):
-        cap = cv2.VideoCapture(i, api)
+        cap = cv2.VideoCapture(i, backend)
         try:
             if not cap.isOpened():
                 print(_('  indice {i}: non disponibile', i=i))

@@ -316,6 +316,31 @@ class GitleaksIgnoreTest(unittest.TestCase):
                             f".gitleaksignore riga {numero}: manca il commento che spiega perché "
                             f"«{riga.strip()}» non è un segreto")
 
+    def test_every_fingerprint_still_points_at_a_commit_that_exists(self):
+        """Un'impronta e' legata alla commit in cui si trova: riscritta la storia, non vale piu'.
+
+        L'8/11, con l'import pubblico, i 174 commit sono diventati uno solo: l'impronta che
+        zittiva un falso allarme puntava a una commit sparita, gitleaks ha rialzato l'allarme e la
+        prima corsa della CI pubblica e' nata rossa. Non si rompe niente di rumoroso — si riaccende
+        un avviso che credevi spento.
+
+        In CI il checkout e' superficiale (una commit sola) e non si puo' chiedere di una vecchia:
+        li' la prova si salta invece di fallire per il motivo sbagliato.
+        """
+        import subprocess
+
+        if not self.righe():
+            return
+        if (ROOT / ".git" / "shallow").exists():
+            self.skipTest("clone superficiale: la storia qui non c'e', non e' un difetto")
+        for numero, riga in self.righe():
+            sha = riga.strip().split(":")[0]
+            esiste = subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", sha],
+                                    capture_output=True).returncode == 0
+            self.assertTrue(esiste, f".gitleaksignore riga {numero}: la commit {sha[:8]} non esiste "
+                                    "piu'. L'allarme che zittiva e' tornato: o si aggiorna "
+                                    "l'impronta, o — meglio — si toglie il motivo dell'allarme")
+
     def test_the_fingerprints_are_well_formed(self):
         for numero, riga in self.righe():
             parti = riga.strip().split(":")

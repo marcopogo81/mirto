@@ -5,6 +5,8 @@
 # e aver guardato cosa c'è. Se è un segreto vero non si silenzia: si revoca e si cambia.
 # tests/test_docs.py fallisce se una riga non ha il suo commento.
 
-# «api = cv2.CAP_AVFOUNDATION if … else cv2.CAP_MSMF if … else cv2.CAP_ANY»: una variabile
-# chiamata «api» con un valore lungo. Sono costanti di OpenCV, non una chiave.
-0d5b4cd7b97f653b7d5a60d8940a0c3029059cc2:mirto/__main__.py:generic-api-key:111
+# Vuoto, e va bene così. L'unica riga che c'era zittiva una variabile chiamata «api» in
+# __main__.py: l'8/11 quella variabile si chiama «backend» e l'allarme non suona più.
+# Un'impronta è legata alla commit in cui si trova, quindi smette di valere ogni volta che la
+# storia viene riscritta — com'è successo con l'import pubblico. Togliere il motivo
+# dell'allarme dura; zittirlo no.
