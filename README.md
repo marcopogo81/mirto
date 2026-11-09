@@ -338,7 +338,7 @@ hardware: cameras, Raspberry nodes, a Telegram bot, a Mac and a Windows PC, in a
 actually on. Nothing reaches `main` without him.
 
 Most of the code, the tests and this documentation are written by **Claude** (Anthropic), one task at a time
-against a written plan, with the full test suite green before each commit. Every commit says so in its own
+against a written plan, with the full test suite green before each commit. Those commits say so in their own
 trailers, so `git log` tells you the same story this paragraph does:
 
 ```

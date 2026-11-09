@@ -221,6 +221,11 @@ class ChiFaCosaTest(unittest.TestCase):
         Questa prova non guarda una stringa scritta a mano da qualche parte: legge le commit vere e
         chiede che la riga mostrata nel README sia una delle loro. Così non può tornare a mentire
         neanche se un giorno i trailer cambiano.
+
+        **Ma solo dove la storia c'è.** In CI il checkout è superficiale: `git log` vede una commit
+        sola, e se quella è di Marco — scritta a mano, firmata e basta — i trailer di Claude non ci
+        sono per il motivo giusto, non perché il README menta. Scritta senza questa distinzione, il
+        9/11 questa prova ha fatto fallire tutti e sei i lavori della CI su una commit onesta.
         """
         import subprocess
 
@@ -232,6 +237,9 @@ class ChiFaCosaTest(unittest.TestCase):
         if uscita.returncode != 0 or not uscita.stdout.strip():
             self.skipTest("niente storia git qui (archivio sorgente o clone senza .git)")
         veri = {r.split(":", 1)[0].strip() for r in uscita.stdout.splitlines() if ":" in r}
+        if veri <= {"Signed-off-by"} and (ROOT / ".git" / "shallow").exists():
+            self.skipTest("clone superficiale: qui c'è solo una commit e non è di Claude, "
+                          "quindi non c'è niente da confrontare — non è un difetto")
 
         testo = leggi("README.md")
         dentro = testo[testo.index("## Who does what"):]
