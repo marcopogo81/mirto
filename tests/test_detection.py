@@ -130,6 +130,55 @@ class EventStoreTest(unittest.TestCase):
         self.assertLessEqual(max(dec.shape[:2]), 1920)
 
 
+class UnaMacchinaLentaVedeLoStessoLaPersonaTest(unittest.TestCase):
+    """Se l'analisi gira di rado, l'evento deve arrivare lo stesso — più tardi, non mai.
+
+    Questa prova nasce da `CoreNotifyTest.test_event_reaches_telegram_and_handlers`, che in CI è
+    caduta quattro volte dicendo «eventi salvati: 0», e ogni volta sembrava lentezza. Non lo era:
+    il finto fotogramma diventava chiaro e poi restava **identico**, MOG2 se lo imparava come
+    sfondo in una quindicina di fotogrammi, e tre secondi dopo `process` azzerava le finestre di
+    conferma. C'era **una sola occasione**; persa quella, non ne arrivavano altre.
+
+    Qui non si aspetta niente e non si carica la macchina: la lentezza si fa succedere a comando,
+    analizzando un fotogramma ogni *k* con l'orologio in mano. È la differenza fra una prova che
+    cade una volta ogni tanto e una che dice cos'è rotto.
+    """
+
+    def _evento_con_un_fotogramma_ogni(self, k: int) -> bool:
+        from mirto.detection.pipeline import CameraPipeline
+        from tests.test_core import fotogramma_con_persona
+
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Config(Path(d) / "c.yaml")
+            src = type("S", (), {"info": CameraInfo("cam1", "Ingresso", index=0)})()
+            eventi = []
+            t = [1000.0]
+            rng = np.random.default_rng(7)
+
+            class Detector:
+                @staticmethod
+                def detect(frame, threshold=0.3, classes=None):
+                    from mirto.detection.person import Detection
+                    return [Detection((10, 10, 50, 90), 0.9)] if frame.mean() > 150 else []
+
+            pipe = CameraPipeline(src, Detector(), cfg, eventi.append, clock=lambda: t[0])
+            for i in range(1, 1500):
+                frame = fotogramma_con_persona(i, rng)   # la camera legge sempre tutto
+                if i % k == 0:                           # la macchina analizza solo ogni k
+                    pipe.process(frame)
+                    t[0] += 0.01 * k                     # il finto legge a 100 al secondo
+                if eventi:
+                    return True
+        return False
+
+    def test_the_event_arrives_even_when_only_one_frame_in_ten_is_looked_at(self):
+        for k in (1, 5, 10, 20):
+            with self.subTest(un_fotogramma_ogni=k):
+                self.assertTrue(self._evento_con_un_fotogramma_ogni(k),
+                                f"analizzando un fotogramma ogni {k} non arriva nessun evento: "
+                                "il movimento muore e le finestre di conferma si azzerano per sempre")
+
+
 @unittest.skipUnless(HAVE_MODEL and HAVE_IMAGES, "modello o immagini di test non disponibili")
 class PersonPipelineTest(unittest.TestCase):
     @classmethod

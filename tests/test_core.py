@@ -27,17 +27,46 @@ class FakeDetector:
         return [Detection((10, 10, 50, 90), 0.9)] if frame.mean() > 150 else []
 
 
+def fotogramma_con_persona(i: int, rng) -> np.ndarray:
+    """Stanza buia per 60 letture, poi luce e qualcuno dentro che si muove.
+
+    Il «si muove» non è colore locale: è la ragione per cui questa prova ha smesso di essere
+    fragile. Fino al 9/11 il finto diventava chiaro **e poi restava identico per sempre**, e
+    un'immagine identica MOG2 se la impara come sfondo in una quindicina di fotogrammi: misurato,
+    il movimento esisteva nei fotogrammi 60–73 e **mai più**. Siccome `CameraPipeline.process`
+    azzera le finestre di conferma tre secondi dopo l'ultimo movimento, la prova aveva **una sola
+    occasione**: se in quei tre secondi la macchina era occupata e l'analisi girava meno di due
+    volte, l'evento non arrivava più — non «più tardi», mai. In CI è successo tre volte in ottobre
+    e una il 9/11, sempre con «eventi salvati: 0».
+
+    Misurato di nuovo col finto di adesso: basta analizzare **un fotogramma su cinque** perché il
+    vecchio non produca niente in millecinquecento letture; questo regge fino a uno su quaranta.
+    Due cose lo rendono impossibile da imparare, e servono tutte e due: il **rumore** (una camera
+    vera ce l'ha, e senza di esso MOG2 azzera la varianza) e la sagoma che ogni volta compare in un
+    punto diverso **e con un grigio diverso** — con una sagoma periodica, anche se si sposta, il
+    movimento muore lo stesso verso il centesimo fotogramma.
+    """
+    f = np.full((120, 160, 3), 200 if i >= 60 else 60, np.uint8)
+    f = np.clip(f.astype(np.int16) + rng.integers(-8, 9, (120, 160, 1), dtype=np.int16),
+                0, 255).astype(np.uint8)
+    if i >= 60:
+        y = int(rng.integers(0, 75))
+        x = int(rng.integers(0, 124))
+        f[y:y + 45, x:x + 36] = int(rng.integers(20, 80))
+    return f
+
+
 class ChangingCapture(FakeCapture):
-    """Sfondo scuro per un po', poi una 'persona' (immagine chiara)."""
-    def __init__(self):
+    """Stanza buia per un po', poi luce e una 'persona' che continua a muoversi."""
+    def __init__(self, seme: int = 7):
         super().__init__(frames=10_000)
         self.n = 0
+        self.rng = np.random.default_rng(seme)   # col seme la prova resta ripetibile
 
     def read(self):
         time.sleep(0.01)
         self.n += 1
-        val = 60 if self.n < 60 else 200
-        return True, np.full((120, 160, 3), val, np.uint8)
+        return True, fotogramma_con_persona(self.n, self.rng)
 
 
 class CoreTest(unittest.TestCase):
@@ -83,14 +112,18 @@ class CoreNotifyTest(unittest.TestCase):
             core.start(threaded_discovery=False)
             core.notifier.bot.stop()
             try:
-                # I messaggi di questi due attese non sono decorazione. Questa prova e' caduta tre
-                # volte in CI quando la suite girava lenta (147 s invece di 117) e ogni volta ha detto
-                # soltanto «False is not true», che non distingue le due meta' della catena: la camera
-                # non ha prodotto l'evento, oppure l'evento c'era e la notifica non e' partita. Il
-                # 23/10 ho provato a farla cadere a comando — da sola e in tre suite intere sotto
-                # carico quadruplo, piu' un conteggio dei thread (picco 3, nessuno lasciato acceso) —
-                # e non si e' riprodotta. Finche' non si riproduce non si corregge: si fa in modo che
-                # la prossima volta dica da sola cos'e' andato storto.
+                # I messaggi di queste due attese non sono decorazione, e il 9/11 hanno fatto il
+                # loro lavoro. Questa prova era caduta tre volte in CI nell'ottobre e il 23/10 non
+                # ero riuscito a riprodurla nemmeno sotto carico quadruplo: avevo lasciato solo
+                # questa diagnostica, perche' finche' non si riproduce non si corregge. Il 9/11 e'
+                # ricaduta, e la diagnostica ha detto da sola di quale meta' si trattava: «eventi
+                # salvati: 0, pipeline: presente» — non la notifica, la catena camera→rilevamento.
+                #
+                # La causa era nel finto, non nel codice: un fotogramma che diventava chiaro e poi
+                # restava identico, che MOG2 impara come sfondo in quindici fotogrammi. Sistemata
+                # in `fotogramma_con_persona`, con una prova deterministica che la tiene ferma
+                # (`UnaMacchinaLentaVedeLoStessoLaPersonaTest` in test_detection.py). La
+                # diagnostica resta: e' servita una volta e costa niente.
                 def dove_siamo() -> str:
                     pipeline = core.pipelines.get("cam1")
                     return (f"chiamate a Telegram: {[c[0] for c in api.calls]} · "
