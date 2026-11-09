@@ -21,7 +21,7 @@ class FakeD1 {
   async batch(list) { for (const s of list) await s.run(); return []; }
 }
 
-const env = { DB: new FakeD1(), LATEST_VERSION: "0.2.0", STATS_TOKEN: "abcdefghijklmnopqrstuvwxyz123456" };
+const env = { DB: new FakeD1(), LATEST_VERSION: "0.2.0", STATS_TOKEN: "finto-solo-per-queste-prove-non-e-un-token" };
 const DAY = 86400000;
 const T0 = Date.UTC(2026, 9, 17, 12);
 const call = (method, path, body, now = T0, headers = {}) => worker.fetch(

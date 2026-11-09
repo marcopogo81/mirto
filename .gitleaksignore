@@ -4,9 +4,30 @@
 # Regola della casa: non si aggiunge una riga qui senza aver aperto il file a quella riga
 # e aver guardato cosa c'è. Se è un segreto vero non si silenzia: si revoca e si cambia.
 # tests/test_docs.py fallisce se una riga non ha il suo commento.
+#
+# Perché queste righe sono tornate (9/11). A ogni push gitleaks guarda **solo i commit nuovi**;
+# lanciato a mano — com'è successo provando il rilascio — guarda **tutta la storia**. Le quattro
+# segnalazioni qui sotto stanno in un commit del 19/10 e nessun push le aveva mai riesaminate.
+# Toglierle dal codice di oggi non le toglie dalla storia: un commit non si riscrive per un falso
+# positivo. Quindi qui si zittiscono per impronta, una per una, dopo averle guardate.
 
-# Vuoto, e va bene così. L'unica riga che c'era zittiva una variabile chiamata «api» in
-# __main__.py: l'8/11 quella variabile si chiama «backend» e l'allarme non suona più.
-# Un'impronta è legata alla commit in cui si trova, quindi smette di valere ogni volta che la
-# storia viene riscritta — com'è successo con l'import pubblico. Togliere il motivo
-# dell'allarme dura; zittirlo no.
+# Una variabile chiamata «api» che tiene una catena di costanti di OpenCV per scegliere il motore
+# di cattura secondo il sistema. Non è una chiave: è una costante della libreria. Nel codice di
+# oggi quella variabile si chiama «backend» e l'allarme non suona più — ma nella storia resta.
+# (La riga non si ricopia qui: gitleaks segnala anche questo file, e il commento che cita la riga
+#  si denuncia da solo. Succede davvero: la prima stesura di questo file, il 9/11, l'ha fatto.)
+ecadad6f0931f684a8d3e37d35e7bd53b949249a:myhouse/__main__.py:generic-api-key:152
+
+# La stessa riga **citata** nel CHANGELOG, dove si raccontava di averla silenziata la prima volta.
+# Gitleaks non distingue una riga di codice da una riga che la racconta.
+ecadad6f0931f684a8d3e37d35e7bd53b949249a:CHANGELOG.md:generic-api-key:274
+
+# E la stessa riga citata dentro questo file, nel commento che spiegava perché era silenziata:
+# gitleaks segnala il proprio file di esclusioni. Non si scappa, e va zittito anche quello.
+ecadad6f0931f684a8d3e37d35e7bd53b949249a:.gitleaksignore:generic-api-key:8
+
+# Il token di prova del Worker delle statistiche, in `worker.test.js`: era l'alfabeto seguito da
+# sei cifre, cioè un valore inventato a tavolino. Il token vero non è mai stato nel repository:
+# sta nei segreti di Cloudflare. Dal 9/11 quel valore nelle prove si autodichiara come finto, così
+# la riga di oggi non somiglia più a una chiave; questa impronta copre quella di allora.
+ecadad6f0931f684a8d3e37d35e7bd53b949249a:tools/stats-worker/test/worker.test.js:generic-api-key:24
