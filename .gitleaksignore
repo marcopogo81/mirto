@@ -5,29 +5,36 @@
 # e aver guardato cosa c'è. Se è un segreto vero non si silenzia: si revoca e si cambia.
 # tests/test_docs.py fallisce se una riga non ha il suo commento.
 #
-# Perché queste righe sono tornate (9/11). A ogni push gitleaks guarda **solo i commit nuovi**;
-# lanciato a mano — com'è successo provando il rilascio — guarda **tutta la storia**. Le quattro
-# segnalazioni qui sotto stanno in un commit del 19/10 e nessun push le aveva mai riesaminate.
-# Toglierle dal codice di oggi non le toglie dalla storia: un commit non si riscrive per un falso
-# positivo. Quindi qui si zittiscono per impronta, una per una, dopo averle guardate.
+# Due cose imparate il 9/11, provando il rilascio, che spiegano perché queste righe sono qui.
+#
+# **A ogni push gitleaks guarda solo i commit nuovi; lanciato a mano — o su un tag — guarda tutta
+# la storia.** Le quattro segnalazioni qui sotto stanno tutte nel primo commit del repository
+# pubblico, «Mirto, da oggi in pubblico», e nessun push le aveva mai riesaminate: sono saltate
+# fuori alla prima scansione completa, cioè provando a rilasciare.
+#
+# **Le impronte vanno calcolate sulla storia vera, quella pubblica.** Il primo tentativo le ha
+# prese dalla copia di lavoro nel container, che ha commit suoi con numeri diversi: erano quattro
+# impronte che non puntavano a niente, e la prova che le controlla è passata lo stesso perché in
+# quella copia quei commit ci sono. Si clona il pubblico e si scansiona lì.
+#
+# Nessuna delle righe qui sotto esiste più nel codice di oggi: non c'è più niente da togliere,
+# resta solo da zittire. Nei commenti si **descrive** la riga, non la si ricopia: questo file viene
+# scansionato anche lui, e un commento che cita la riga si denuncia da solo. Succede davvero.
 
-# Una variabile chiamata «api» che tiene una catena di costanti di OpenCV per scegliere il motore
-# di cattura secondo il sistema. Non è una chiave: è una costante della libreria. Nel codice di
-# oggi quella variabile si chiama «backend» e l'allarme non suona più — ma nella storia resta.
-# (La riga non si ricopia qui: gitleaks segnala anche questo file, e il commento che cita la riga
-#  si denuncia da solo. Succede davvero: la prima stesura di questo file, il 9/11, l'ha fatto.)
-ecadad6f0931f684a8d3e37d35e7bd53b949249a:myhouse/__main__.py:generic-api-key:152
+# Una variabile chiamata «api» che tiene una catena di costanti di OpenCV, per scegliere il motore
+# di cattura secondo il sistema operativo. Non è una chiave: è una costante della libreria. Nel
+# codice di oggi quella variabile si chiama «backend».
+9e53ccd07cec888297045cdce84e2da3f02ec891:mirto/__main__.py:generic-api-key:152
 
-# La stessa riga **citata** nel CHANGELOG, dove si raccontava di averla silenziata la prima volta.
+# La stessa riga citata nel CHANGELOG, dove si raccontava di averla silenziata la prima volta.
 # Gitleaks non distingue una riga di codice da una riga che la racconta.
-ecadad6f0931f684a8d3e37d35e7bd53b949249a:CHANGELOG.md:generic-api-key:274
+9e53ccd07cec888297045cdce84e2da3f02ec891:CHANGELOG.md:generic-api-key:879
 
-# E la stessa riga citata dentro questo file, nel commento che spiegava perché era silenziata:
-# gitleaks segnala il proprio file di esclusioni. Non si scappa, e va zittito anche quello.
-ecadad6f0931f684a8d3e37d35e7bd53b949249a:.gitleaksignore:generic-api-key:8
+# E la stessa riga citata dentro questo file, nel commento che allora spiegava perché era
+# silenziata. Gitleaks segnala il proprio file di esclusioni: è il motivo della regola qui sopra.
+9e53ccd07cec888297045cdce84e2da3f02ec891:.gitleaksignore:generic-api-key:8
 
 # Il token di prova del Worker delle statistiche, in `worker.test.js`: era l'alfabeto seguito da
 # sei cifre, cioè un valore inventato a tavolino. Il token vero non è mai stato nel repository:
-# sta nei segreti di Cloudflare. Dal 9/11 quel valore nelle prove si autodichiara come finto, così
-# la riga di oggi non somiglia più a una chiave; questa impronta copre quella di allora.
-ecadad6f0931f684a8d3e37d35e7bd53b949249a:tools/stats-worker/test/worker.test.js:generic-api-key:24
+# sta nei segreti di Cloudflare. Dal 9/11 quel valore nelle prove si autodichiara come finto.
+9e53ccd07cec888297045cdce84e2da3f02ec891:tools/stats-worker/test/worker.test.js:generic-api-key:24
