@@ -228,11 +228,14 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           path: consegna
+          # Solo i due pacchetti: la corsa porta anche «gitleaks-results.sarif», che il controllo
+          # dei segreti carica sempre, pure quando non trova niente. Arriva con una cartella
+          # dentro, e la riga delle impronte qui sotto si ferma su «work: Is a directory» (9/11).
+          pattern: "{macos,windows}"
           merge-multiple: true
 
       - name: Bill of materials (SBOM) and checksums
         run: |
-          cyclonedx-py environment --help
           cyclonedx-py environment --output-format JSON \
             > "consegna/Mirto-${{ steps.dati.outputs.versione }}-sbom.cdx.json"
           cd consegna && sha256sum * > SHA256SUMS && cat SHA256SUMS
@@ -262,9 +265,19 @@ jobs:
             echo "The software bill of materials (SBOM, CycloneDX) is attached to the Release."
           } >> note.md
 
+      # Solo su un tag. Lanciato a mano questo workflow e' una **prova generale**: costruisce
+      # tutto e non pubblica niente. Senza questa condizione «gh release create» riceverebbe
+      # «main» come nome del tag e nascerebbe una bozza chiamata cosi' (9/11).
       - name: Draft release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" --draft \
             --title "Mirto ${{ steps.dati.outputs.versione }}" --notes-file note.md consegna/*
+
+      - name: Say it was only a rehearsal
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::notice::prova generale riuscita: i file sono costruiti e allegati alla corsa, nessuna Release creata. Per rilasciare davvero serve il tag."
+          ls -lh consegna
