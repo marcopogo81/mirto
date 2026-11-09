@@ -7,6 +7,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+## [0.2.0] – 2026-11-09
+
+**The first public release.** Mirto watches the cameras your computer can already reach, decides on
+your machine whether what moved is a person, and tells you on Telegram within seconds. Nothing is sent
+anywhere to be looked at, and there is no account on anything of ours.
+
+What is in this one, in short:
+
+- **Cameras and detection**: built-in, USB and network cameras, found by themselves; motion wakes a
+  detector that runs on your Mac's Neural Engine or your Windows GPU. Sounds too — breaking glass, a
+  smoke alarm, a dog — listened to and thrown away.
+- **Recording**: clips around each event or continuous, with a timeline, and footage that deletes
+  itself by age or disk quota.
+- **Nodes**: write one image to a microSD and a Raspberry Pi becomes a camera outside with a siren and
+  lights, paired with a 6-digit PIN. Every request is signed, and the limits that matter — the siren
+  stops after 3 minutes, nothing unlocks anything, deterrents never point at a person — are enforced
+  by the node too, which does not trust the app.
+- **macOS and Windows** from the same code, in English and Italian.
+- **The program is called Mirto.** It used to be MyHouse; the name changed throughout on 7 November
+  2026. If you were running MyHouse, read the first entry below: your nodes need their microSD
+  rewritten, and macOS will ask again for camera and microphone permission.
+
+Everything below is the detail, in the order it was built.
+
 ### Changed
 - **The program is called Mirto.** `MyHouse` was already taken — by applications, by packages, and on
   GitHub — and a public project needs a name of its own. The whole name changed at once: what you see
@@ -35,7 +59,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
   window no longer says the node is renamed on the network: the name is a label, the network name stays
   `mirto-node-XXXX.local`.
 
-## [0.2.0] – da rilasciare
 
 ### Security
 - **A node that does not say which certificate it has is not proposed for pairing** (S-06). The

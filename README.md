@@ -136,9 +136,10 @@ vendor's own pages. They change, and this table is only as honest as its dates.*
 
 ## Quick start (macOS)
 
-Ready-made builds — a `.dmg` for macOS and an installer for Windows — land on the
-[Releases page](https://github.com/marcopogo81/mirto/releases) starting with 0.2.0. **There is no
-release yet**, so today the way in is from the sources, which is four commands:
+Ready-made builds — a `.dmg` for macOS and an installer for Windows — are on the
+[Releases page](https://github.com/marcopogo81/mirto/releases), starting with 0.2.0. Neither is signed
+yet: macOS will say the app cannot be verified and SmartScreen will warn you, and the release notes say
+how to get past both. Or run from the sources, which is four commands:
 
 > **While the `.dmg` is unsigned**, the first time you open it macOS says the app cannot be verified.
 > Drag Mirto to Applications, try to open it, then go to **System Settings → Privacy & Security**,
