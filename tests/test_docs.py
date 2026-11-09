@@ -61,6 +61,25 @@ class ComunitaTest(unittest.TestCase):
             self.assertIn(documento, testo, f"il README non rimanda a {documento}")
         self.assertIn("Signed-off-by", testo, "il README non dice come si firma un contributo")
 
+    def test_the_repository_is_named_the_way_github_names_it(self):
+        """`marcopogo81/mirto`, minuscolo: è così che si chiama (9/11).
+
+        GitHub rimanda da `Mirto` a `mirto`, quindi niente si rompe e per questo era rimasto per
+        tutto il rinominio in undici posti — README, le due guide e `pyproject.toml`, da dove finisce
+        nei metadati del pacchetto e nella Release. Ma un `git clone` con la maiuscola crea una
+        cartella `Mirto` e la riga dopo dice `cd mirto`: su Linux il comando che diamo noi fallisce.
+        E un indirizzo che non è quello vero è la prima cosa che un visitatore copia.
+        """
+        import re
+
+        sbagliati = []
+        for nome in ("README.md", "USER_GUIDE.md", "GUIDA_UTENTE.md", "pyproject.toml",
+                     "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md", "ROADMAP.md"):
+            for riga in re.findall(r"github\.com/marcopogo81/\w+", leggi(nome)):
+                if riga != "github.com/marcopogo81/mirto":
+                    sbagliati.append(f"{nome}: {riga}")
+        self.assertEqual(sbagliati, [], "il repository si chiama marcopogo81/mirto, minuscolo")
+
     def test_no_cla_anywhere_in_the_public_documents(self):
         """Il CLA è stato scartato con una ragione: non deve rientrare da un altro file."""
         for nome in ("README.md", "CONTRIBUTING.md", "GOVERNANCE.md", "ROADMAP.md"):
@@ -185,9 +204,44 @@ class ChiFaCosaTest(unittest.TestCase):
     def test_the_readme_says_who_does_what(self):
         self.assertIn("## Who does what", leggi("README.md"))
 
-    def test_the_trailer_is_named_everywhere_it_is_promised(self):
-        for nome in ("README.md", "CONTRIBUTING.md"):
+    def test_contributors_are_asked_for_the_trailer(self):
+        """`Assisted-By:` è quello che si chiede a **chi contribuisce**: deve stare dove si chiede."""
+        for nome in ("CONTRIBUTING.md", "GOVERNANCE.md"):
             self.assertIn("Assisted-By:", leggi(nome), nome)
+
+    def test_the_readme_quotes_a_trailer_our_commits_really_carry(self):
+        """Il README non deve promettere una riga che `git log` non ha.
+
+        Fino al 9/11 diceva «Every commit says so in its own trailer: `Assisted-By: …`», e le commit
+        portano invece `Co-Authored-By:` e `Claude-Session:`. Una bugia da niente, nel paragrafo che
+        spiega **perché** il progetto dichiara com'è costruito: *«a security project that is coy about
+        how it was built invites mistrust the day someone reads the commit history anyway»*. Chi
+        andava a controllare trovava proprio quello.
+
+        Questa prova non guarda una stringa scritta a mano da qualche parte: legge le commit vere e
+        chiede che la riga mostrata nel README sia una delle loro. Così non può tornare a mentire
+        neanche se un giorno i trailer cambiano.
+        """
+        import subprocess
+
+        try:
+            uscita = subprocess.run(["git", "log", "-30", "--format=%(trailers:only=true)"],
+                                    cwd=ROOT, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as exc:   # pragma: no cover
+            self.skipTest(f"git non disponibile: {exc}")
+        if uscita.returncode != 0 or not uscita.stdout.strip():
+            self.skipTest("niente storia git qui (archivio sorgente o clone senza .git)")
+        veri = {r.split(":", 1)[0].strip() for r in uscita.stdout.splitlines() if ":" in r}
+
+        testo = leggi("README.md")
+        dentro = testo[testo.index("## Who does what"):]
+        mostrati = {r.strip().split(":", 1)[0] for r in dentro.splitlines()
+                    if r.strip().endswith(">") and ":" in r and " " not in r.split(":", 1)[0]}
+        self.assertTrue(mostrati, "il README non mostra piu' nessun trailer: era il punto del paragrafo")
+        for nome in mostrati:
+            self.assertIn(nome, veri,
+                          f"il README mostra «{nome}:», che nelle ultime commit non c'e'. "
+                          f"Quelle vere sono: {sorted(veri)}")
 
     def test_the_notice_says_it_too(self):
         self.assertIn("Claude", leggi("NOTICE"))

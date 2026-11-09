@@ -51,9 +51,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/marcopogo81/Mirto"
-Issues = "https://github.com/marcopogo81/Mirto/issues"
-Changelog = "https://github.com/marcopogo81/Mirto/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/marcopogo81/mirto"
+Issues = "https://github.com/marcopogo81/mirto/issues"
+Changelog = "https://github.com/marcopogo81/mirto/blob/main/CHANGELOG.md"
 
 [project.scripts]
 mirto = "mirto.__main__:main"

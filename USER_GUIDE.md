@@ -67,7 +67,7 @@ Approximate time for the first setup: 30 minutes.
 
 ## 2. Installing on macOS
 
-1. Download the `.dmg` file from the [Releases page](https://github.com/marcopogo81/Mirto/releases/latest).
+1. Download the `.dmg` file from the [Releases page](https://github.com/marcopogo81/mirto/releases).
 2. Open it and drag **Mirto** into the **Applications** folder.
 3. Start Mirto from Applications.
 
@@ -82,7 +82,7 @@ To install from source with Python see [Appendix B](#appendix-b-installing-from-
 ## 2b. Installing on Windows
 
 1. Download the installer (`Mirto-<version>-setup.exe`) from the
-   [Releases page](https://github.com/marcopogo81/Mirto/releases/latest).
+   [Releases page](https://github.com/marcopogo81/mirto/releases).
 2. Run it and follow the steps; Mirto appears in the Start menu.
 3. If Windows SmartScreen says the app is not recognised, choose **More info → Run anyway**.
 
@@ -889,8 +889,8 @@ a sandbox and may not see USB cameras.
 winget install --id Git.Git -e
 winget install --id Python.Python.3.12 -e
 # close and reopen PowerShell
-git clone https://github.com/marcopogo81/Mirto.git
-cd Mirto
+git clone https://github.com/marcopogo81/mirto.git
+cd mirto
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m mirto

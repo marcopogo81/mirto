@@ -18,48 +18,115 @@ it, and only towards the channels you configure.
 > 📖 User guide: [English](USER_GUIDE.md) · [Italiano](GUIDA_UTENTE.md). The app speaks English and Italian
 > (Settings → General → Language; automatic from the system).
 
-## Features
+## How it works
 
-| Area | What it does |
+1. **It watches.** Mirto opens every camera the computer can reach — built-in, USB, or RTSP on the
+   network — and looks for movement.
+2. **It checks, on your machine.** When something moves, a detection model runs locally and answers one
+   question: *is that a person?* No frame leaves the computer to be looked at by anyone else.
+3. **It tells you, and it can act.** Photo on Telegram within seconds, by email too, optionally by SMS.
+   And if you put a **node** outside — a Raspberry Pi, from an image you write to a microSD and pair with
+   a 6-digit PIN — it also has a camera out there, a siren, and lights.
+
+## What it does
+
+| | |
 |---|---|
-| Cameras | Stable camera IDs (AVFoundation on macOS, Media Foundation on Windows), hot-plug, automatic reconnection, RTSP/HTTP network cameras, automatic discovery via mDNS (`_rtsp._tcp`) |
-| Detection | Background subtraction (MOG2) on every frame, YOLOX Nano/S (ONNX Runtime, CoreML on macOS and DirectML on Windows, CPU otherwise) only on motion, multi-frame confirmation, 80 selectable COCO classes; bird groups (pigeons, corvids, gulls…) with a second iNaturalist model |
-| Sounds | YAMNet sound recognition from the Mac microphone and node USB microphones: glass breaking, smoke alarm, sirens, screaming, gunshots, dog barking, knocking, voices, bird calls; audio is never stored or sent |
-| Deterrents | Bird and animal deterrent sounds on the nodes (raptor, falcon, crow alarm, shot, gas cannon, your own WAV files), per species group or animal, always on, never for persons, rate-limited |
-| Recording (NVR) | Per-camera *events only* clips (10 s before → 20 s after), *continuous* recording or off; network cameras copied without re-encoding, local cameras encoded with the hardware H.264 encoder; 1-minute MP4 segments, retention by days and disk quota, clips sent to Telegram, `/clip` for the last seconds |
-| Alerts | Telegram bot (long polling, no open ports, buttons and commands), SMTP email with presets (Gmail app password by default), generic SMS providers, retry queue, anti-spam pause |
-| Protection | Arm/disarm from the app or Telegram, weekly schedules and date ranges, presence detection from household phones on Wi-Fi |
-| Nodes | Multiple external nodes, pinned TLS certificates, HMAC-SHA256 signed requests with replay protection, built-in node simulator |
-| Safety rules | Siren capped at 3 minutes (180 s every 30 min), every output switches off by itself, audio never automatic, intrusion actions only for persons (or chosen sounds) and only when armed, deterrents never for persons — except a *Prank* action while Prank mode is on on that node and the house is not armed — and max 2 minutes per hour, old Telegram commands ignored |
-| Privacy | All processing local, credentials in the OS keychain, automatic deletion of old events; optional usage statistics, off unless you say yes ([`PRIVACY.md`](PRIVACY.md)) |
+| **Cameras** | Every camera the computer can reach: built-in, USB and network cameras, which it finds by itself. Unplug one and plug it back in: it comes back on its own, with the same identity. |
+| **Person detection** | Movement wakes the detector; the detector decides whether it is a person. It runs on your Mac's Neural Engine or your Windows GPU, and nowhere else. It can watch for 80 other things too — a car, a dog, a parcel — and tell bird species apart if you want it to. |
+| **Sounds** | Breaking glass, a smoke alarm, a siren, screaming, a gunshot, a barking dog, knocking at the door. The audio is listened to and thrown away: never stored, never sent. |
+| **Alerts** | A photo on Telegram within seconds, with buttons to say *false alarm* or to silence it; the same by email, optionally by SMS. If a channel is down Mirto keeps trying instead of losing the event. |
+| **Recording** | Clips around each event (10 s before, 20 s after), or continuous recording, with a timeline to scrub through. Old footage deletes itself by age or when it hits the disk quota you set. |
+| **Physical actions** | A Raspberry Pi node gives Mirto a siren, lights, relays and sockets in the house. Every request is signed, and the node obeys only the computer it was paired with. |
+| **Deterrents** | Sounds that move animals on, not people: raptor calls, a crow alarm, a shot, or your own recordings — chosen per species, rate-limited, and never aimed at a person. |
+| **When it is armed** | Arm and disarm from the app or from Telegram, on a weekly schedule, on date ranges, or by themselves when the phones of the people who live there leave the Wi-Fi. |
+| **Limits you cannot switch off** | The siren stops after 3 minutes and cannot run more than 3 minutes in any 30. Every output switches itself off. Nothing unlocks anything. Deterrents never point at a person. These are enforced twice: in the app, and again in the node, which does not trust the app. |
+| **Privacy** | Everything happens on your computer. Passwords and tokens live in the system keychain, never in a file. Old events delete themselves. Usage statistics exist, and are off until you say yes ([`PRIVACY.md`](PRIVACY.md)). |
 
-## Why not Frigate, Blue Iris or Scrypted?
+<details>
+<summary>The same thing with the part numbers, for whoever wants them</summary>
+
+- **Cameras** — stable IDs across replugs (AVFoundation on macOS, Media Foundation on Windows),
+  hot-plug, automatic reconnection, RTSP/HTTP network cameras, discovery via mDNS (`_rtsp._tcp`).
+- **Detection** — background subtraction (MOG2) on every frame; YOLOX Nano/S through ONNX Runtime
+  (CoreML on macOS, DirectML on Windows, CPU otherwise) only on motion, with multi-frame
+  confirmation; 80 selectable COCO classes; bird groups through a second iNaturalist model.
+- **Sounds** — YAMNet, from the computer's microphone and from USB microphones on the nodes.
+- **Recording** — 1-minute MP4 segments; network cameras copied without re-encoding, local cameras
+  encoded with the hardware H.264 encoder; retention by days and by disk quota; clips to Telegram,
+  `/clip` for the last few seconds.
+- **Alerts** — Telegram bot over long polling (no open ports), SMTP with presets (Gmail app password
+  by default), generic SMS providers, retry queue, anti-spam pause.
+- **Nodes** — several at once, pinned TLS certificates, HMAC-SHA256 signed requests with replay
+  protection, and a node simulator that is also the reference implementation of the API.
+- **The *Prank* exception** — a deterrent may be aimed at a person only through a *Prank* action,
+  only while Prank mode is on on that node, only while the house is not armed, and for at most
+  2 minutes per hour.
+
+</details>
+
+## Why not Frigate, Fregata, SecuritySpy, Blue Iris or Scrypted?
 
 They are good programs, and for many people they are the right answer. Mirto exists for a different
-starting point: *you have a computer, a camera and no wish to run a server.*
+starting point: *you have a computer, a camera, and something outside you would like to make a noise at.*
 
-| | **Mirto** | **Frigate** | **Blue Iris** | **Scrypted** |
-|---|---|---|---|---|
-| What it is | a desktop app you open | a Docker container you host | a Windows NVR | a self-hosted hub with an NVR plugin |
-| Install | download, open, done | Docker Compose (or a Home Assistant app) | Windows installer | Docker / npm |
-| Runs on | macOS, Windows | Linux best; **Windows not officially supported**, VMs not recommended | Windows only | Linux, macOS, Windows (via Docker) |
-| Price | 0, Apache 2.0 | 0, open source; **Frigate+** $50/year for custom models | **$99.95** full, **$39.95** one camera, renewals from $44.95/year | open-source core, **paid NVR subscription** |
-| Extra hardware | none: it uses your Mac's Neural Engine or your GPU | an accelerator is "strongly recommended"; CPU detection is "for testing only" | a decent GPU for many cameras | depends on the plugins |
-| Interface | native window, Italian and English | web UI | Windows window + web | web UI + its own apps |
-| Remote | Telegram bot: no open ports, no account on anything | web/HA, usually behind a VPN or reverse proxy | web server, port or VPN | its own cloud |
-| Drives physical devices | **yes**: nodes with siren, lights, relays, sounds | through MQTT and your automations | relays via plugins | through the home-automation platform |
-| Faces, plates | **no** | yes, built in | plugins | plugins |
+| | **Mirto** | **Frigate** | **Fregata** | **SecuritySpy** | **Blue Iris** | **Scrypted** |
+|---|---|---|---|---|---|---|
+| What it is | a desktop app you open | a Docker container you host | a native macOS port of Frigate | a mature Mac NVR | a Windows NVR | a self-hosted hub with an NVR plugin |
+| Install | download, open, done | Docker Compose (or a Home Assistant app) | download, open, done | download, open, done | Windows installer | Docker / npm |
+| Runs on | macOS, Windows | Linux best; **Windows not officially supported** | **Apple Silicon only** (M1+, macOS 14+) | Mac only | Windows only | Linux, macOS, Windows (via Docker) |
+| Price | 0, Apache 2.0, no paid tier | 0, open source; **Frigate+** $50/year for custom models | **$10** once, a year of updates | from **£35.90** (1 camera) to **£739** (unlimited) | **$99.95** full, **$39.95** one camera, renewals from $44.95/year | open-source core, **paid NVR subscription** |
+| Open source | **yes, all of it** | yes | core is Frigate (MIT); **the macOS port is proprietary** | no | no | core yes, NVR no |
+| Extra hardware | none: your Mac's Neural Engine or your GPU | an accelerator is "strongly recommended" | none: Neural Engine | none | a decent GPU for many cameras | depends on the plugins |
+| Phone app | **on purpose, no** — Telegram is the remote, so there is no store account and no server of ours between you and your cameras | no | **yes**, free, with Apple Watch | yes | web | its own apps |
+| Drives physical devices | **yes**: nodes with siren, lights, relays, sounds | through MQTT and your automations | no | no | relays via plugins | through the home-automation platform |
+| Ready-made outdoor node | **yes**: write one image to a microSD, boot it, pair it with a 6-digit PIN. Camera, siren and lights in about ten minutes | — build it yourself | — | — | — | — |
+| Deterrent sounds for animals | **yes**, with limits in the code | no | no | no | no | no |
+| Faces, plates | **no** | yes, built in | through Frigate+ | faces | plugins | plugins |
+
+**Where each of them beats Mirto**, because this table is useless if it only flatters us: **Fregata** is
+the closest thing to Mirto on a Mac, and for $10 it also gives you a phone app and HomeKit — if you want
+notifications on a lock screen rather than in a chat, that is a real difference and it is theirs.
+**SecuritySpy** has fifteen years of maturity and runs hundreds of cameras. **Frigate** has the deepest
+detection stack and a real Home Assistant integration. **Blue Iris** handles more cameras on one Windows
+box than we intend to. **Scrypted** speaks to every ecosystem at once. If what you want is an NVR, several
+of these are better NVRs.
+
+**What Mirto has that none of them has.** Every program in that table is software you install on a machine
+you have already set up. Mirto comes with **the machine**: you write one image to a microSD, put it in a
+Raspberry Pi, and a few minutes later you have a camera outside with a siren and lights on it, paired to
+your computer with a 6-digit PIN — no terminal, no key to copy, and every copy of the image makes its own
+identity the first time it boots. The others can drive a relay if you bring MQTT, a broker, a home
+automation platform and the afternoon it takes to wire them together; none of them hands you the node.
+
+Around that: it runs on **macOS and Windows** from the same code; the safety limits on those outputs are
+written into **both** sides, so the node refuses an unsafe request even if the app asks for it; it carries
+**animal deterrents** that are forbidden to point at a person; and it is **entirely open source**, with no
+paid tier to grow into.
 
 **What Mirto does not do**, so nobody finds out after installing it: no face recognition and no licence
 plates (a deliberate choice: in Italy they turn a camera into something a private person usually may not
-run); no HomeKit, Home Assistant or MQTT integration; no web interface and no phone app — Telegram is the
-remote control; no multi-user accounts; it is not meant for twenty cameras on one machine; on Linux it runs,
-but only development and tests are supported there.
+run); no HomeKit, Home Assistant or MQTT integration; no web interface; no multi-user accounts; it is not
+meant for twenty cameras on one machine; on Linux it runs, but only development and tests are supported
+there.
 
-*Prices and claims checked on 18 October 2026 on the vendors' own pages
-([Frigate+](https://frigate.video/plus/), [Frigate docs](https://docs.frigate.video/frigate/installation),
-[Blue Iris](https://blueirissoftware.com/), [Scrypted](https://docs.scrypted.app/)); they change, and this
-table is only as honest as its date.*
+**And no phone app, which is a decision rather than a gap.** An app means a developer account in two
+stores, a review queue, and — for push notifications — a server of ours sitting between your cameras and
+your phone, which someone has to pay for and which would become the one place where your alerts could be
+read. Telegram does that job already: no ports opened on your network, no account on anything of ours,
+nothing of yours passing through us, and it works on every phone including the one you are not holding.
+What you give up is a lock-screen notification that carries our name on it. We think that is the better
+side of the trade; if you disagree, that is a fair reason to pick something else from the table above.
+
+And if what you have is a **Ring, Arlo or Nest**: those are easier than all of the above, and the video
+goes to somebody else's computer. That is the trade Mirto exists to refuse — it is the only claim here we
+would call a principle rather than a feature.
+
+*Prices and claims checked on 9 November 2026 for [Fregata](https://fregata.app/) and
+[SecuritySpy](https://bensoftware.com/securityspy/), and on 18 October 2026 for
+[Frigate+](https://frigate.video/plus/), [Frigate](https://docs.frigate.video/frigate/installation),
+[Blue Iris](https://blueirissoftware.com/) and [Scrypted](https://docs.scrypted.app/) — each on the
+vendor's own pages. They change, and this table is only as honest as its dates.*
 
 ## Requirements
 
@@ -69,8 +136,9 @@ table is only as honest as its date.*
 
 ## Quick start (macOS)
 
-Ready-made builds (`.dmg` for macOS, installer for Windows) are published on the
-[Releases page](https://github.com/marcopogo81/Mirto/releases/latest). To run from the sources:
+Ready-made builds — a `.dmg` for macOS and an installer for Windows — land on the
+[Releases page](https://github.com/marcopogo81/mirto/releases) starting with 0.2.0. **There is no
+release yet**, so today the way in is from the sources, which is four commands:
 
 > **While the `.dmg` is unsigned**, the first time you open it macOS says the app cannot be verified.
 > Drag Mirto to Applications, try to open it, then go to **System Settings → Privacy & Security**,
@@ -78,8 +146,8 @@ Ready-made builds (`.dmg` for macOS, installer for Windows) are published on the
 > (Up to macOS Sonoma a right-click on the app → *Open* was enough; from 15 it is not.)
 
 ```bash
-git clone https://github.com/marcopogo81/Mirto.git
-cd Mirto
+git clone https://github.com/marcopogo81/mirto.git
+cd mirto
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -101,8 +169,8 @@ produced most of the Windows fixes in 0.2.0.
 winget install --id Git.Git -e
 winget install --id Python.Python.3.12 -e     # then reopen PowerShell: PATH has changed
 
-git clone https://github.com/marcopogo81/Mirto.git
-cd Mirto
+git clone https://github.com/marcopogo81/mirto.git
+cd mirto
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
@@ -270,11 +338,15 @@ actually on. Nothing reaches `main` without him.
 
 Most of the code, the tests and this documentation are written by **Claude** (Anthropic), one task at a time
 against a written plan, with the full test suite green before each commit. Every commit says so in its own
-trailer:
+trailers, so `git log` tells you the same story this paragraph does:
 
 ```
-Assisted-By: Claude Opus 5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_...
 ```
+
+(If you contribute and you used an AI assistant, `CONTRIBUTING.md` asks for an `Assisted-By:` trailer —
+same intent, and it does not count against your change.)
 
 We write this down for two reasons. A security project that is coy about how it was built invites mistrust
 the day someone reads the commit history anyway. And it tells you where to look: what protects you here is
