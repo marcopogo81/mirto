@@ -32,10 +32,10 @@ it, and only towards the channels you configure.
 
 Four ordinary evenings. [Eight more →](docs/cards.md)
 
-| | |
-|---|---|
-| [<img src="docs/img/cards/02-night-visitor.svg" alt="The night visitor: a person at night, the node's siren sounds and the photo reaches Telegram" width="400">](docs/cards.md#2-the-night-visitor) | [<img src="docs/img/cards/01-cat.svg" alt="The cat and the flower pot: Mirto sees a cat, not a person, and the node plays a hawk call" width="400">](docs/cards.md#1-the-cat-and-the-flower-pot) |
-| [<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window" width="400">](docs/cards.md#9-what-happened-last-night) | [<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="400">](docs/cards.md#12-it-all-stays-home) |
+[<img src="docs/img/cards/02-night-visitor.svg" alt="The night visitor: a person at night, the node's siren sounds and the photo reaches Telegram" width="400">](docs/cards.md#2-the-night-visitor)
+[<img src="docs/img/cards/01-cat.svg" alt="The cat and the flower pot: Mirto sees a cat, not a person, and the node plays a hawk call" width="400">](docs/cards.md#1-the-cat-and-the-flower-pot)
+[<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window" width="400">](docs/cards.md#9-what-happened-last-night)
+[<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="400">](docs/cards.md#12-it-all-stays-home)
 
 ## What it does
 
