@@ -389,6 +389,76 @@ class ChiFaCosaTest(unittest.TestCase):
         self.assertIn("Claude", leggi("NOTICE"))
 
 
+class LIdentitaDelleCommitTest(unittest.TestCase):
+    """Chi firma una commit lo fa con l'indirizzo privato di GitHub (11/11).
+
+    L'11/11 cinque commit sono uscite con l'indirizzo personale del manutentore al posto di quello
+    privato di GitHub — in tre punti ciascuna: autore, committer e la riga `Signed-off-by`. Quattro
+    erano già pubbliche. Non si era rotto niente e nessuna prova se n'è accorta: un indirizzo vale
+    l'altro per git, e la storia pubblica non la guarda nessun guardiano.
+
+    Era una scelta presa apposta — `DATI_PERSONALI.md` dice «*nei nuovi commit: indirizzo privato
+    GitHub*» — e una scelta che nessuno controlla torna indietro da sola. Un indirizzo personale nella
+    storia di un repository pubblico non si toglie piu' senza riscrivere la storia e rispingere a
+    forza, e il costo cresce con ogni commit che gli arriva sopra: il giorno in cui qualcuno ha
+    clonato, non si toglie piu' per davvero.
+
+    **La prova e' scritta al positivo** — ogni indirizzo deve finire con `@users.noreply.github.com` —
+    per due motivi. Il primo e' che cosi' non nomina nessun indirizzo: scrivere qui quello sbagliato,
+    anche solo per vietarlo, vorrebbe dire metterlo in un file pubblico proprio mentre lo togliamo
+    dalla storia. Il secondo e' che prende anche gli indirizzi sbagliati che non abbiamo previsto.
+
+    Guarda solo le commit **dalla pubblicazione in poi**: prima di quella data c'e' il repository
+    privato, dove quell'indirizzo era usato di proposito e riscrivere non avrebbe senso.
+    Dependabot e gli altri automi restano fuori: hanno indirizzi loro, decisi da GitHub, e non c'e'
+    niente da proteggere. Si riconoscono dal `[bot]` nel nome, che e' come li marca GitHub stesso.
+    """
+
+    DALLA_PUBBLICAZIONE = "2026-11-08"
+    PRIVATO = "@users.noreply.github.com"
+
+    @staticmethod
+    def e_un_automa(riga: str) -> bool:
+        return "[bot]" in riga
+
+    def commit_recenti(self):
+        import subprocess
+
+        try:
+            uscita = subprocess.run(
+                ["git", "log", f"--since={self.DALLA_PUBBLICAZIONE}", "--format=%H%x00%an%x00%ae%x00%ce%x00%b%x01"],
+                cwd=ROOT, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as exc:   # pragma: no cover
+            self.skipTest(f"git non disponibile: {exc}")
+        if uscita.returncode != 0:
+            self.skipTest("niente storia git qui (archivio sorgente o clone senza .git)")
+        pezzi = [p for p in uscita.stdout.split("\x01") if p.strip()]
+        if not pezzi:
+            self.skipTest("nessuna commit dalla pubblicazione in questa copia della storia")
+        return [p.lstrip("\n").split("\x00") for p in pezzi]
+
+    def test_every_commit_since_the_launch_uses_the_private_github_address(self):
+        sbagliate = [f"{sha[:7]} «{nome}»"
+                     for sha, nome, autore, committer, _ in self.commit_recenti()
+                     if not self.e_un_automa(autore + committer + nome)
+                     and not (autore.endswith(self.PRIVATO) and committer.endswith(self.PRIVATO))]
+        self.assertEqual(sbagliate, [],
+                         "commit con un indirizzo che non e' quello privato di GitHub:\n  "
+                         + "\n  ".join(sbagliate))
+
+    def test_the_sign_off_line_uses_the_same_address(self):
+        """`git commit -s` copia l'identita' configurata: se sbaglia li', sbaglia anche qui."""
+        sbagliate = []
+        for sha, _, _, _, corpo in self.commit_recenti():
+            for riga in corpo.splitlines():
+                if (riga.startswith("Signed-off-by:") and self.PRIVATO not in riga
+                        and not self.e_un_automa(riga)):
+                    sbagliate.append(f"{sha[:7]} {riga.strip().split('<')[0].strip()}")
+        self.assertEqual(sbagliate, [],
+                         "righe Signed-off-by con un indirizzo che non e' quello privato:\n  "
+                         + "\n  ".join(sbagliate))
+
+
 class IDocumentiPubbliciSonoInIngleseTest(unittest.TestCase):
     """I documenti del repository sono in inglese e basta (7/11).
 
