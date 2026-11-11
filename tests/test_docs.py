@@ -389,6 +389,62 @@ class ChiFaCosaTest(unittest.TestCase):
         self.assertIn("Claude", leggi("NOTICE"))
 
 
+class IRimandiDelReadmeTest(unittest.TestCase):
+    """Un rimando a un file che non c'e' e' un vicolo cieco, e nessuno se ne accorge scrivendo (11/11).
+
+    L'11/11 il README era diventato lungo — piu' lungo di quello di Elasticsearch — e quattro sezioni
+    sono uscite in documenti loro: `RESPONSIBLE_USE.md`, `HOW_IT_IS_BUILT.md` e i rimandi ai documenti
+    che esistevano gia'. Spostare testo in file nuovi crea due modi nuovi di rompere la pagina: un
+    rimando a un file che non e' stato creato, e un ancora a una sezione che nel frattempo e' stata
+    rinominata. Tutti e due si vedono solo cliccando, e chi clicca per primo e' un estraneo.
+
+    Qui si controllano i rimandi **dentro il repository**. Gli indirizzi esterni no: un sito di terzi
+    che non risponde fa diventare rossa la CI per una cosa che non e' colpa nostra.
+    """
+
+    DOCUMENTI = ("README.md", "RESPONSIBLE_USE.md", "HOW_IT_IS_BUILT.md", "docs/cards.md")
+
+    @staticmethod
+    def rimandi(nome: str) -> list[str]:
+        import re
+
+        return re.findall(r"\]\(([^)\s]+)\)", (ROOT / nome).read_text(encoding="utf-8"))
+
+    def test_every_link_to_a_file_in_here_points_at_something_that_exists(self):
+        rotti = []
+        for nome in self.DOCUMENTI:
+            if not (ROOT / nome).exists():
+                continue
+            base = (ROOT / nome).parent
+            for rimando in self.rimandi(nome):
+                if rimando.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                percorso = rimando.split("#", 1)[0]
+                if percorso and not (base / percorso).resolve().exists():
+                    rotti.append(f"{nome} -> {rimando}")
+        self.assertEqual(rotti, [], "rimandi a file che non ci sono")
+
+    def test_every_jump_inside_the_readme_lands_on_a_heading(self):
+        import re
+
+        testo = leggi("README.md")
+        titoli = {re.sub(r"[^a-z0-9 -]", "", r[3:].strip().lower()).replace(" ", "-")
+                  for r in testo.splitlines() if r.startswith("## ")}
+        persi = [r for r in self.rimandi("README.md")
+                 if r.startswith("#") and r[1:] not in titoli]
+        self.assertEqual(persi, [], f"ancore che non trovano una sezione. Le sezioni sono: {sorted(titoli)}")
+
+    def test_the_download_box_names_the_version_that_is_really_out(self):
+        """Un numero di versione scritto a mano invecchia in silenzio, e invita a scaricare il nulla."""
+        import mirto
+
+        testo = leggi("README.md")
+        da = testo.index("\n## Download") + 1
+        dentro = testo[da:testo.index("\n## ", da + 1)]
+        self.assertIn(mirto.__version__, dentro,
+                      f"il riquadro di scaricamento non nomina la versione vera ({mirto.__version__})")
+
+
 class LIdentitaDelleCommitTest(unittest.TestCase):
     """Chi firma una commit lo fa con l'indirizzo privato di GitHub (11/11).
 
@@ -476,8 +532,25 @@ class IDocumentiPubbliciSonoInIngleseTest(unittest.TestCase):
     che sono scritti in italiano.
     """
 
-    SOLO_INGLESE = ("README.md", "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md", "ROADMAP.md",
-                    "PRIVACY.md", "CODE_OF_CONDUCT.md", "NOTICE")
+    NON_INGLESI = {"GUIDA_UTENTE.md", "CHANGELOG.md", "PRIVACY.it.md", "DATI_PERSONALI.md"}
+
+    @classmethod
+    def documenti(cls) -> list[str]:
+        """Tutti i documenti pubblici, trovati invece che elencati a mano (11/11).
+
+        Era un elenco scritto a mano, e un elenco scritto a mano copre i file che c'erano il giorno
+        in cui e' stato scritto: la stessa sera, la prova sul nome del repository aveva lasciato
+        fuori due file proprio cosi'. Un documento nuovo deve essere coperto dal giorno in cui nasce,
+        senza che nessuno si ricordi di aggiungerlo.
+        """
+        trovati = [p.name for p in ROOT.glob("*.md")] + ["NOTICE"]
+        trovati += [f"docs/{p.name}" for p in (ROOT / "docs").glob("*.md")]
+        return sorted(n for n in trovati
+                      if n.rsplit("/", 1)[-1] not in cls.NON_INGLESI and (ROOT / n).exists())
+
+    @property
+    def SOLO_INGLESE(self):   # noqa: N802  (il nome resta quello di prima)
+        return self.documenti()
 
     def test_no_italian_left_in_the_public_documents(self):
         import re

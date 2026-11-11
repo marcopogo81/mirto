@@ -12,8 +12,27 @@
 **Guiding principle:** no third-party cloud. Video stays on your computer; only the alert snapshots leave
 it, and only towards the channels you configure.
 
-> ⚠️ Please read [Responsible use](#responsible-use) before installing: video surveillance and deterrent
-> devices are regulated by law.
+## Download
+
+### **[⬇ Mirto 0.2.0 — macOS and Windows](https://github.com/marcopogo81/mirto/releases/latest)**
+
+| | File on the release page | |
+|---|---|---|
+| **macOS** | `Mirto-0.2.0-macos.dmg` | Apple Silicon |
+| **Windows** | `Mirto-0.2.0-setup.exe` | tested on Windows 11 |
+
+Every release is listed on the [Releases page](https://github.com/marcopogo81/mirto/releases), each with
+a `SHA256SUMS` file and a bill of materials. Or [build it from the sources](#quick-start-macos), which is
+four commands.
+
+> **Neither download is signed yet**, so the first time you open it your system warns you and the warning
+> looks like a broken file. It is not: press what the
+> [macOS](#quick-start-macos) and [Windows](#quick-start-windows) sections say. Signing is the first thing
+> [sponsorship](#support-the-project) pays for.
+
+> ⚠️ Please read [**Responsible use**](RESPONSIBLE_USE.md) before pointing a camera at anything: video
+> surveillance and deterrent devices are regulated by law, and the *Presence* feature knows when the people
+> you live with are at home.
 
 > 📖 User guide: [English](USER_GUIDE.md) · [Italiano](GUIDA_UTENTE.md). The app speaks English and Italian
 > (Settings → General → Language; automatic from the system).
@@ -303,19 +322,12 @@ python -m unittest discover -s tests -t .
 Tests using the real model need `MIRTO_MODELS_DIR` (folder with `yolox_nano.onnx`) and
 `MIRTO_TEST_IMAGES` (sample images from the YOLOX repository); otherwise they are skipped.
 
-## Responsible use
+## Before you point a camera at anything
 
-Mirto is a tool: whoever installs it is responsible for how it is used.
-
-- **Privacy (GDPR and local rules).** Point cameras only at your own property. If they cover shared or public
-  areas you need a notice sign and short retention. Tell the people living with you, including about the
-  *Presence* feature that uses their phones.
-- **Siren.** Mirto caps the siren at 3 minutes, but repeated false alarms may still break noise laws.
-- **Software only.** Mirto controls the nodes' outputs; what you connect to them is your choice and your
-  responsibility. Only connect devices that cannot hurt anyone or stop anyone from leaving. At first start
-  Mirto asks you to accept the terms of use.
-- **No warranty.** Mirto is not a certified alarm system and does not replace professional security. It is
-  provided "as is" (see the license).
+Video surveillance and deterrent devices are regulated by law, and *Presence* knows when the people you
+live with are at home. [**Responsible use**](RESPONSIBLE_USE.md) is one page, and it is the one page here
+worth reading before you install: where you may point a camera, what you may connect to a node, and what
+Mirto is not (a certified alarm system).
 
 ## Security
 
@@ -332,49 +344,34 @@ Donations do not change the licence and do not buy priority: the roadmap is in [
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to send a change, and [`GOVERNANCE.md`](GOVERNANCE.md) for
-who decides and what will not change. Where the project is going — and what it deliberately will not do —
-is in [`ROADMAP.md`](ROADMAP.md).
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is how to send a change, [`GOVERNANCE.md`](GOVERNANCE.md) is who
+decides and what will not change, and [`ROADMAP.md`](ROADMAP.md) is where the project is going — and what
+it deliberately will not do. There is **no CLA**: contributions are Apache 2.0 and each commit carries a
+`Signed-off-by` line (the [Developer Certificate of Origin](https://developercertificate.org/)), checked by
+CI on every pull request.
 
-There is **no CLA**: contributions are Apache 2.0 and each commit carries a `Signed-off-by` line (the
-[Developer Certificate of Origin](https://developercertificate.org/)), which CI checks on every pull
-request.
-
-**This project is worked on at weekends**, and it is better said than discovered: first answer within
-7 days, decision within 20. Weekday silence means nothing. One maintainer at weekends is enough to keep a
-program alive and not enough to make it grow, so **help is genuinely wanted** — Windows, Home Assistant
-and MQTT, interface tests, translations, other hardware. The list and the reasons are in
-[`GOVERNANCE.md`](GOVERNANCE.md).
+**This project is worked on at weekends**: first answer within 7 days, decision within 20, and weekday
+silence means nothing. That is enough to keep a program alive and not enough to make it grow, so **help is
+genuinely wanted** — Windows, Home Assistant and MQTT, interface tests, translations, other hardware.
 
 ## Who does what
 
-Mirto is designed, directed and reviewed by **Marco Dalicco**. His are the requirements and the order they
-are tackled in, the architecture and the security decisions, and the decisions about what Mirto will *not*
-do — no faces, no licence plates, no cloud, no device that could hurt someone. His too is every test on real
-hardware: cameras, Raspberry nodes, a Telegram bot, a Mac and a Windows PC, in a house where this thing is
-actually on. Nothing reaches `main` without him.
-
-Most of the code, the tests and this documentation are written by **Claude** (Anthropic), one task at a time
-against a written plan, with the full test suite green before each commit. Those commits say so in their own
-trailers, so `git log` tells you the same story this paragraph does:
+Mirto is designed, directed and reviewed by **Marco Dalicco**, who also runs every test on real hardware
+and without whom nothing reaches `main`. Most of the code, the tests and this documentation are written by
+**Claude** (Anthropic), against a written plan, with the suite green before each commit. Those commits say
+so in their own trailers, so `git log` tells you the same story this paragraph does:
 
 ```
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_...
 ```
 
-(If you contribute and you used an AI assistant, `CONTRIBUTING.md` asks for an `Assisted-By:` trailer —
-same intent, and it does not count against your change.)
-
-We write this down for two reasons. A security project that is coy about how it was built invites mistrust
-the day someone reads the commit history anyway. And it tells you where to look: what protects you here is
-what a person decided, reviewed and tried in a real house — not what was typed fastest.
+Why we say it, and how the work actually goes, is in [**How Mirto is built**](HOW_IT_IS_BUILT.md).
 
 ## License
 
 Copyright 2026 Marco Dalicco. Licensed under the **Apache License 2.0**: see [`LICENSE`](LICENSE) and
 [`NOTICE`](NOTICE). Third-party components keep their own licenses, listed in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). The "Mirto" name and logo are not licensed
-(Apache 2.0, section 6).
-
-Icons: [Lucide](https://lucide.dev) (ISC). Detection model: [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX) by Megvii (Apache 2.0).
+(Apache 2.0, section 6). Icons: [Lucide](https://lucide.dev) (ISC). Detection model:
+[YOLOX](https://github.com/Megvii-BaseDetection/YOLOX) by Megvii (Apache 2.0).
