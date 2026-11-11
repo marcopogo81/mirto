@@ -148,9 +148,10 @@ vendor's own pages. They change, and this table is only as honest as its dates.*
 
 ## Quick start (macOS)
 
-Ready-made builds — a `.dmg` for macOS and an installer for Windows — land on the
-[Releases page](https://github.com/marcopogo81/mirto/releases) with 0.2.0, which is being prepared.
-Until then the way in is from the sources, which is four commands:
+Ready-made builds — a `.dmg` for macOS and an installer for Windows — are on the
+[Releases page](https://github.com/marcopogo81/mirto/releases/latest), starting with 0.2.0. Each one
+has its SHA-256 in `SHA256SUMS` next to it, and a bill of materials listing everything inside.
+From the sources it is four commands instead:
 
 > **While the `.dmg` is unsigned**, the first time you open it macOS says the app cannot be verified.
 > Drag Mirto to Applications, try to open it, then go to **System Settings → Privacy & Security**,
@@ -176,6 +177,11 @@ python -m mirto                      # start the app
 
 Tested on **Windows 11 Pro** with Python 3.14, on the evening of 19 October 2026 — the same run that
 produced most of the Windows fixes in 0.2.0.
+
+> **While the installer is unsigned**, SmartScreen stops it with a blue *Windows protected your PC*
+> box that has no obvious way out. Press **More info**, then **Run anyway**. The file is the one built
+> by [the release workflow](.github/workflows/release.yml) on GitHub's own runners, and its SHA-256 is
+> in `SHA256SUMS` on the Releases page if you want to check it yourself.
 
 ```powershell
 winget install --id Git.Git -e

@@ -291,6 +291,19 @@ class LaPresentazioneTest(unittest.TestCase):
             self.assertIn(nome, readme, f"{nome} non è più nel README")
             self.assertIn(nome, detto, f"{nome} è nel README ma non nella presentazione")
 
+    def test_the_readme_warns_on_both_systems_while_the_builds_are_unsigned(self):
+        """Il primo doppio clic su un file non firmato sembra un file rotto, su tutti e due i sistemi.
+
+        macOS dice che l'app «non può essere verificata», Windows mostra una schermata blu di
+        SmartScreen senza una via d'uscita evidente. L'11/11, pubblicata la 0.2.0, l'avviso c'era solo
+        nella sezione macOS: finché non c'era un `.exe` da scaricare non serviva, dal primo rilascio sì.
+        Va tolto insieme alla frase della presentazione, il giorno che la firma arriva.
+        """
+        testo = leggi("README.md")
+        for parte, parola in (("macOS", "Open Anyway"), ("Windows", "Run anyway")):
+            self.assertIn(parola, testo,
+                          f"il README non dice come aprire il file non firmato su {parte}")
+
     def test_it_does_not_promise_a_signature_we_do_not_have(self):
         """Finché il flusso di rilascio avvisa che i file non sono firmati, la presentazione lo dice.
 
