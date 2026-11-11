@@ -252,6 +252,57 @@ class LeImmaginiCitateEsistonoTest(unittest.TestCase):
         self.assertEqual(sorted(citate), cartella, "la galleria non mostra tutte le carte che ci sono")
 
 
+class LaPresentazioneTest(unittest.TestCase):
+    """La presentazione dice le stesse cose del README, o è una seconda verità che invecchia da sola.
+
+    Il testo si tira fuori dal `.pptx` con `zipfile` e una regex: un `.pptx` è uno zip di XML, e così
+    la prova non aggiunge una dipendenza solo per leggersi una presentazione.
+    """
+
+    PPTX = ROOT / "docs" / "Mirto-presentation.pptx"
+    PDF = ROOT / "docs" / "Mirto-presentation.pdf"
+
+    @classmethod
+    def parole(cls) -> str:
+        import re
+        import zipfile
+
+        with zipfile.ZipFile(cls.PPTX) as z:
+            xml = "".join(z.read(n).decode("utf-8") for n in sorted(z.namelist())
+                          if n.startswith("ppt/slides/slide") and n.endswith(".xml"))
+        return " ".join(re.findall(r"<a:t>([^<]*)</a:t>", xml))
+
+    def test_both_files_are_there_and_the_readme_links_them(self):
+        for percorso in (self.PPTX, self.PDF):
+            self.assertTrue(percorso.exists(), f"manca {percorso.name}")
+        testo = leggi("README.md")
+        for nome in ("docs/Mirto-presentation.pdf", "docs/Mirto-presentation.pptx"):
+            self.assertIn(nome, testo, f"il README non porta a {nome}")
+
+    def test_it_compares_the_same_programs_as_the_readme(self):
+        """Il 11/11 la tabella delle diapositive ne aveva cinque e il README sei: mancava Fregata.
+
+        Togliere un concorrente dal confronto — il più vicino a noi sul Mac, per giunta — fa sembrare
+        la tabella scelta apposta. Se uno dei due elenchi cambia, deve cambiare anche l'altro.
+        """
+        detto = self.parole()
+        readme = leggi("README.md")
+        for nome in ("Frigate", "Fregata", "SecuritySpy", "Blue Iris", "Scrypted"):
+            self.assertIn(nome, readme, f"{nome} non è più nel README")
+            self.assertIn(nome, detto, f"{nome} è nel README ma non nella presentazione")
+
+    def test_it_does_not_promise_a_signature_we_do_not_have(self):
+        """Finché il flusso di rilascio avvisa che i file non sono firmati, la presentazione lo dice.
+
+        Il 11/11 prometteva «Signed downloads for macOS and Windows» mentre la CI stampava
+        «.dmg non firmato» e «installer non firmato»: chi scarica si sente dire da macOS che l'app
+        non può essere verificata e pensa che il file sia rotto. Il giorno in cui la firma c'è
+        davvero, questa prova va tolta **insieme** alla frase: è una sveglia, non un divieto.
+        """
+        self.assertIn("not signed yet", self.parole(),
+                      "la presentazione non dice che i file scaricabili non sono firmati")
+
+
 class ChiFaCosaTest(unittest.TestCase):
     """Come è costruito Mirto si dice, non si lascia indovinare."""
 

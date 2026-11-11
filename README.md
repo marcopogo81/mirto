@@ -37,6 +37,9 @@ Four ordinary evenings. [Eight more →](docs/cards.md)
 [<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window" width="400">](docs/cards.md#9-what-happened-last-night)
 [<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="400">](docs/cards.md#12-it-all-stays-home)
 
+The whole thing in fourteen slides: [presentation (PDF)](docs/Mirto-presentation.pdf), or the
+[editable deck](docs/Mirto-presentation.pptx) if you want to show it to someone yourself.
+
 ## What it does
 
 | | |
