@@ -198,6 +198,60 @@ class ConfrontoTest(unittest.TestCase):
         self.assertIn("does not do", self.EN)
 
 
+class LeImmaginiCitateEsistonoTest(unittest.TestCase):
+    """Ogni immagine citata nei documenti pubblici deve esserci, e stare nel repository.
+
+    Un riquadro rotto nel README si vede solo guardando la pagina su GitHub, e chi la guarda per
+    primo è un estraneo. Due regole, la stessa già scritta per gli screenshot: i file stanno in
+    `docs/img/`, e **nessun indirizzo esterno** — un'immagine su un sito di terzi un giorno non
+    risponde più, e quel giorno il README si rompe da solo senza che nessuno abbia toccato niente.
+    """
+
+    DOCUMENTI = ("README.md", "USER_GUIDE.md", "GUIDA_UTENTE.md", "docs/cards.md")
+
+    def immagini(self, nome: str) -> list[str]:
+        import re
+
+        testo = (ROOT / nome).read_text(encoding="utf-8")
+        return (re.findall(r"!\[[^\]]*\]\(([^)\s]+)", testo)
+                + re.findall(r"<img[^>]+src=\"([^\"]+)\"", testo))
+
+    def test_every_picture_named_in_the_docs_is_really_there(self):
+        mancanti = []
+        for nome in self.DOCUMENTI:
+            if not (ROOT / nome).exists():
+                continue
+            base = (ROOT / nome).parent
+            for src in self.immagini(nome):
+                if src.startswith(("http://", "https://", "data:")):
+                    continue
+                if not (base / src).resolve().exists():
+                    mancanti.append(f"{nome} → {src}")
+        self.assertEqual(mancanti, [], "immagini citate e non presenti")
+
+    def test_no_picture_comes_from_somewhere_else(self):
+        fuori = [f"{nome} → {src}"
+                 for nome in self.DOCUMENTI if (ROOT / nome).exists()
+                 for src in self.immagini(nome) if src.startswith(("http://", "https://"))]
+        self.assertEqual(fuori, [], "immagini prese da un indirizzo esterno: devono stare in docs/img/")
+
+    def test_every_card_has_words_for_whoever_cannot_see_it(self):
+        """Il testo alternativo non è una formalità: per chi usa un lettore di schermo è la carta."""
+        import re
+
+        for nome in ("README.md", "docs/cards.md"):
+            testo = (ROOT / nome).read_text(encoding="utf-8")
+            for alt in re.findall(r"!\[([^\]]*)\]\(docs?/?img/cards/", testo) + \
+                       re.findall(r"<img[^>]+alt=\"([^\"]*)\"[^>]*src=\"[^\"]*cards/", testo):
+                self.assertGreater(len(alt), 20, f"{nome}: testo alternativo troppo corto: «{alt}»")
+
+    def test_the_gallery_shows_all_twelve_cards(self):
+        cartella = sorted(p.name for p in (ROOT / "docs" / "img" / "cards").glob("*.svg"))
+        self.assertEqual(len(cartella), 12, f"nella cartella ce ne sono {len(cartella)}")
+        citate = {src.rsplit("/", 1)[-1] for src in self.immagini("docs/cards.md")}
+        self.assertEqual(sorted(citate), cartella, "la galleria non mostra tutte le carte che ci sono")
+
+
 class ChiFaCosaTest(unittest.TestCase):
     """Come è costruito Mirto si dice, non si lascia indovinare."""
 

@@ -28,12 +28,21 @@ it, and only towards the channels you configure.
    And if you put a **node** outside — a Raspberry Pi, from an image you write to a microSD and pair with
    a 6-digit PIN — it also has a camera out there, a siren, and lights.
 
+## What it is for
+
+Four ordinary evenings. [Eight more →](docs/cards.md)
+
+| | |
+|---|---|
+| [<img src="docs/img/cards/02-night-visitor.svg" alt="The night visitor: a person at night, the node's siren sounds and the photo reaches Telegram" width="400">](docs/cards.md#2-the-night-visitor) | [<img src="docs/img/cards/01-cat.svg" alt="The cat and the flower pot: Mirto sees a cat, not a person, and the node plays a hawk call" width="400">](docs/cards.md#1-the-cat-and-the-flower-pot) |
+| [<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window" width="400">](docs/cards.md#9-what-happened-last-night) | [<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="400">](docs/cards.md#12-it-all-stays-home) |
+
 ## What it does
 
 | | |
 |---|---|
 | **Cameras** | Every camera the computer can reach: built-in, USB and network cameras, which it finds by itself. Unplug one and plug it back in: it comes back on its own, with the same identity. |
-| **Person detection** | Movement wakes the detector; the detector decides whether it is a person. It runs on your Mac's Neural Engine or your Windows GPU, and nowhere else. It can watch for 80 other things too — a car, a dog, a parcel — and tell bird species apart if you want it to. |
+| **Person detection** | Movement wakes the detector; the detector decides whether it is a person. It runs on your Mac's Neural Engine or your Windows GPU, and nowhere else. It can watch for 80 other things too — a car, a dog, a suitcase — and tell bird species apart if you want it to. |
 | **Sounds** | Breaking glass, a smoke alarm, a siren, screaming, a gunshot, a barking dog, knocking at the door. The audio is listened to and thrown away: never stored, never sent. |
 | **Alerts** | A photo on Telegram within seconds, with buttons to say *false alarm* or to silence it; the same by email, optionally by SMS. If a channel is down Mirto keeps trying instead of losing the event. |
 | **Recording** | Clips around each event (10 s before, 20 s after), or continuous recording, with a timeline to scrub through. Old footage deletes itself by age or when it hits the disk quota you set. |
@@ -136,10 +145,9 @@ vendor's own pages. They change, and this table is only as honest as its dates.*
 
 ## Quick start (macOS)
 
-Ready-made builds — a `.dmg` for macOS and an installer for Windows — are on the
-[Releases page](https://github.com/marcopogo81/mirto/releases), starting with 0.2.0. Neither is signed
-yet: macOS will say the app cannot be verified and SmartScreen will warn you, and the release notes say
-how to get past both. Or run from the sources, which is four commands:
+Ready-made builds — a `.dmg` for macOS and an installer for Windows — land on the
+[Releases page](https://github.com/marcopogo81/mirto/releases) with 0.2.0, which is being prepared.
+Until then the way in is from the sources, which is four commands:
 
 > **While the `.dmg` is unsigned**, the first time you open it macOS says the app cannot be verified.
 > Drag Mirto to Applications, try to open it, then go to **System Settings → Privacy & Security**,
