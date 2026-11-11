@@ -2,8 +2,8 @@
 # Finché il progetto non ha un dominio proprio, il canale è la segnalazione privata di GitHub
 # e qui manca la riga «Canonical», che va scritta quando il dominio esiste (azione L-01).
 
-Contact: https://github.com/marcopogo81/Mirto/security/advisories/new
+Contact: https://github.com/marcopogo81/mirto/security/advisories/new
 Expires: 2027-06-30T00:00:00.000Z
 Preferred-Languages: it, en
-Policy: https://github.com/marcopogo81/Mirto/blob/main/SECURITY.md
-Acknowledgments: https://github.com/marcopogo81/Mirto/blob/main/CHANGELOG.md
+Policy: https://github.com/marcopogo81/mirto/blob/main/SECURITY.md
+Acknowledgments: https://github.com/marcopogo81/mirto/blob/main/CHANGELOG.md

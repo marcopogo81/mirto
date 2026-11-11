@@ -69,16 +69,32 @@ class ComunitaTest(unittest.TestCase):
         nei metadati del pacchetto e nella Release. Ma un `git clone` con la maiuscola crea una
         cartella `Mirto` e la riga dopo dice `cd mirto`: su Linux il comando che diamo noi fallisce.
         E un indirizzo che non è quello vero è la prima cosa che un visitatore copia.
+
+        L'11/11 ne sono saltati fuori altri due, perché questa prova aveva un **elenco di file scritto
+        a mano** e loro non c'erano: `.well-known/security.txt` (tre righe) e `packaging/mirto.iss`,
+        che è il peggiore — `AppPublisherURL` finisce dentro l'installer di Windows e si legge nelle
+        proprietà del programma installato. Un elenco da tenere aggiornato è il modo in cui una cosa
+        del genere sopravvive due volte: adesso la prova guarda **tutti** i file di testo del
+        repository, e un file nuovo è coperto dal giorno in cui nasce.
         """
         import re
 
+        ESTENSIONI = {".md", ".txt", ".toml", ".py", ".yml", ".yaml", ".iss", ".spec", ".json",
+                      ".cfg", ".sh", ".ps1", ".js", ".html", ".css"}
+        SALTA = {".git", "privato", ".venv", "node_modules", "__pycache__", "build", "dist"}
+
         sbagliati = []
-        for nome in ("README.md", "USER_GUIDE.md", "GUIDA_UTENTE.md", "pyproject.toml",
-                     "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md", "ROADMAP.md"):
-            for riga in re.findall(r"github\.com/marcopogo81/\w+", leggi(nome)):
-                if riga != "github.com/marcopogo81/mirto":
-                    sbagliati.append(f"{nome}: {riga}")
-        self.assertEqual(sbagliati, [], "il repository si chiama marcopogo81/mirto, minuscolo")
+        for percorso in ROOT.rglob("*"):
+            if not percorso.is_file() or percorso.suffix.lower() not in ESTENSIONI:
+                continue
+            if SALTA & set(percorso.relative_to(ROOT).parts):
+                continue
+            testo = percorso.read_text(encoding="utf-8", errors="replace")
+            for citato in re.findall(r"github\.com/marcopogo81/[\w.-]+", testo):
+                if not citato.startswith("github.com/marcopogo81/mirto"):
+                    sbagliati.append(f"{percorso.relative_to(ROOT)}: {citato}")
+        self.assertEqual(sorted(sbagliati), [],
+                         "il repository si chiama marcopogo81/mirto, minuscolo")
 
     def test_no_cla_anywhere_in_the_public_documents(self):
         """Il CLA è stato scartato con una ragione: non deve rientrare da un altro file."""
