@@ -371,3 +371,26 @@ class CasaFinta:
                 if self.su_cambio:
                     self.su_cambio(dispositivo, "comando")
                 return
+
+
+def accendi(porta: int = 0) -> tuple["CasaFinta | None", str]:
+    """Accende la casa finta. Se non ci riesce lo dice **in italiano**, non con una traccia di stack.
+
+    Il caso che capita davvero, e che è capitato: ne lanci un secondo mentre il primo è ancora
+    aperto, e la porta 1883 è occupata. Un ``OSError: Address already in use`` buttato addosso a chi
+    sta provando la domotica non dice né cos'è successo né cosa fare, e sembra che il simulatore sia
+    rotto. Restituisce ``(casa, "")`` oppure ``(None, perché)``.
+    """
+    casa = CasaFinta(porta=porta)
+    try:
+        casa.avvia()
+    except OSError as exc:
+        quale = porta or 1883
+        if getattr(exc, "errno", None) in (48, 98):      # «indirizzo già in uso», macOS e Linux
+            return None, (f"La porta {quale} è già occupata: probabilmente c'è un'altra casa finta "
+                          f"aperta, o un broker vero (Mosquitto).\n"
+                          f"Chiudi quella che c'è, oppure apri questa su una porta libera:\n"
+                          f"    python -m mirto --simulatore-smarthome --porta-broker 0\n"
+                          f"(la porta scelta viene stampata all'avvio, e va scritta in Mirto).")
+        return None, f"Non riesco ad aprire il broker sulla porta {quale}: {exc}"
+    return casa, ""

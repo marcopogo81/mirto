@@ -69,6 +69,7 @@ from ..actions.smarthome_finta import (
     ZIGBEE,
     CasaFinta,
     DispositivoFinto,
+    accendi,
 )
 
 log = logging.getLogger(__name__)
@@ -377,9 +378,14 @@ def apri_casa_finta(porta: int = 0) -> int:
     """Avvia la casa finta e la sua finestra. È quello che fa ``--simulatore-smarthome``."""
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
+    # Prima la casa, poi la finestra: se la porta è occupata si dice e si esce, senza aprire una
+    # finestra vuota e senza una traccia di stack addosso a chi stava solo provando.
+    casa, perche = accendi(porta)
+    if casa is None:
+        print(perche, file=sys.stderr, flush=True)
+        return 1
     app = QApplication.instance() or QApplication([])
     vesti_come_mirto(app)
-    casa = CasaFinta(porta=porta).avvia()
     finestra = FinestraCasaFinta(casa)
     finestra.show()
     print(f"Casa smart finta in piedi. Broker MQTT su 127.0.0.1:{casa.porta}")

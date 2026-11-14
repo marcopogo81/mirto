@@ -348,3 +348,31 @@ class LeParoleDeiComandiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LaPortaOccupataSiSpiegaTest(unittest.TestCase):
+    """Il caso del 14/11 sera: ne lanci un secondo mentre il primo è ancora aperto.
+
+    Un ``OSError: Address already in use`` buttato addosso a chi sta provando la domotica non dice
+    né cos'è successo né cosa fare, e sembra che il simulatore sia rotto. Sembrava rotto a Marco.
+    """
+
+    def test_la_porta_libera_va_bene(self):
+        from mirto.actions.smarthome_finta import accendi
+
+        casa, perche = accendi(0)
+        self.addCleanup(casa.ferma)
+        self.assertIsNotNone(casa)
+        self.assertEqual(perche, "")
+        self.assertGreater(casa.porta, 0)
+
+    def test_la_porta_occupata_lo_dice_e_suggerisce_cosa_fare(self):
+        from mirto.actions.smarthome_finta import accendi
+
+        prima, _ = accendi(0)
+        self.addCleanup(prima.ferma)
+        seconda, perche = accendi(prima.porta)
+        self.assertIsNone(seconda, "la seconda non può prendersi la stessa porta")
+        self.assertIn(str(prima.porta), perche, "va detto quale porta")
+        self.assertIn("--porta-broker 0", perche, "e va detto come uscirne")
+        self.assertNotIn("Traceback", perche)
