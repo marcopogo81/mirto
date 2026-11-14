@@ -1675,7 +1675,7 @@ class SettingsDialog(QDialog):
             _('Fatto questo li trovi nelle <b>Azioni</b>: come trigger (<i>se si accende la luce…</i>) '
               'e come uscite (<i>…allora accendi la luce</i>).'),
             _('Mirto si <b>collega</b> al broker, non apre nessuna porta: vale lo stesso di Telegram.'),
-        ], _('13. SmartHome: le luci, le prese e i sensori di casa'), self))
+        ], _('13. SmartHome: le luci, le prese e i sensori di casa'), self, piccolo=True))
         self.smarthome_pass = self._secret_field(SMARTHOME_PASSWORD)
         self.smarthome_pass.setPlaceholderText(_('password (se serve)'))
         self.smarthome_pass.setFixedWidth(150)

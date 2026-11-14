@@ -73,7 +73,7 @@ class SchedaSmartHome(QWidget):
         self._adottati = list(dati.get("adopted") or [])
 
         fuori = QVBoxLayout(self)
-        fuori.setSpacing(8)
+        fuori.setSpacing(6)
         self.acceso = QCheckBox(_('Usa la domotica di casa (MQTT)'))
         self.acceso.setChecked(bool(dati.get("enabled")))
         fuori.addWidget(self.acceso)
@@ -126,7 +126,7 @@ class SchedaSmartHome(QWidget):
         corpo.setSpacing(14)
         colonna = QVBoxLayout()
         colonna.setSpacing(6)
-        colonna.addWidget(self._titolo_colonna(_('IL BROKER DI CASA')))
+        colonna.addWidget(self._titolo_colonna(_('BROKER ABBINATI')))
         self.broker_cards = CardList(_('Nessun broker. Scrivi l\'indirizzo qui sopra e premi '
                                        '«Cerca i dispositivi di casa».'), selectable=False)
         colonna.addWidget(self.broker_cards)
@@ -140,11 +140,12 @@ class SchedaSmartHome(QWidget):
         destra = QVBoxLayout(self.dettaglio)
         destra.setContentsMargins(0, 0, 0, 4)
         destra.setSpacing(6)
-        destra.addWidget(self._titolo_colonna(_('QUELLO CHE CI HA TROVATO')))
+        destra.addWidget(self._titolo_colonna(_('DISPOSITIVI')))
         # «compatta»: il dettaglio accanto al nome invece che sotto. Righe basse, e sei dispositivi
         # stanno in una pagina invece di tre. È la stessa forma dei suoni di un nodo.
         self.schede = CardList(_('Niente, per ora.'), selectable=False, compatta=True)
         destra.addWidget(self._in_un_rotolo(self.schede), 1)
+        destra.addSpacing(10)
         self.ascolta_btn = QPushButton(_('Cerca anche quelli che non si presentano'))
         self.ascolta_btn.setToolTip(
             _('Certi dispositivi non dicono chi sono: non compaiono da soli. Con questo Mirto resta '
@@ -152,7 +153,12 @@ class SchedaSmartHome(QWidget):
               'riconoscere e dargli un nome.'))
         self.ascolta_btn.setCheckable(True)
         self.ascolta_btn.clicked.connect(self._ascolta)
-        destra.addWidget(self.ascolta_btn)
+        # Non a tutta larghezza: largo come l'elenco si confondeva con una sua riga, e Marco non lo
+        # trovava. Un pulsante che si cerca e non si trova vale meno di uno che non c'è.
+        sotto = QHBoxLayout()
+        sotto.addWidget(self.ascolta_btn, 0)
+        sotto.addStretch(1)
+        destra.addLayout(sotto)
         self.chi_parla = QLabel()
         self.chi_parla.setWordWrap(True)
         self.chi_parla.setStyleSheet(f"color:{T.FAINT}; font-size:{T.SIZE_SMALL}px;")
@@ -164,7 +170,7 @@ class SchedaSmartHome(QWidget):
         return corpo
 
     @staticmethod
-    def _in_un_rotolo(dentro: QWidget, minimo: int = 230) -> QWidget:
+    def _in_un_rotolo(dentro: QWidget, minimo: int = 270) -> QWidget:
         """Un elenco dentro un rotolo, con un'altezza minima sua.
 
         Senza, succede quello che Marco ha visto il 14/11: la scheda non ci sta in altezza — c'è
@@ -231,7 +237,9 @@ class SchedaSmartHome(QWidget):
         self.domotica.ascolta(self._cambiato)
         stato = self.domotica.stato()
         if stato["collegata"]:
-            self._mostra_stato(_('Collegato a {host}.', host=stato["host"]), T.ARMED)
+            # Niente «Collegato a…»: lo dice gia' la scheda del broker, col pallino verde. Due volte
+            # la stessa cosa e' una riga di rumore sopra l'elenco che si deve guardare.
+            self._mostra_stato("", T.MUTED)
         elif stato["attiva"]:
             self._mostra_stato(_('Configurato su {host}, ma il broker non risponde. '
                                  'Premi «Cerca i dispositivi di casa» per riprovare.',
@@ -270,8 +278,7 @@ class SchedaSmartHome(QWidget):
                                  exc=self.domotica.errore or host), T.ALARM)
             self._ridisegna()
             return False
-        self._mostra_stato(_('Collegato a {host} e salvato. Sto cercando i dispositivi…', host=host),
-                           T.ARMED)
+        self._mostra_stato("", T.MUTED)
         self.domotica.ascolta(self._cambiato)
         self._ridisegna()
         return True
@@ -297,6 +304,7 @@ class SchedaSmartHome(QWidget):
     def _mostra_stato(self, testo: str, colore: str) -> None:
         self.stato.setText(testo)
         self.stato.setStyleSheet(f"color:{colore};")
+        self.stato.setVisible(bool(testo))      # vuota non deve nemmeno prendersi la sua riga
 
     # --- disegnare ------------------------------------------------------------
     def _ridisegna(self) -> None:
@@ -330,13 +338,12 @@ class SchedaSmartHome(QWidget):
             colore, parola = T.ARMED, _('acceso')
         else:
             colore, parola = T.DISARMED, _('spento')
-        pezzi = [parola]
-        if d.adottato:
-            pezzi.append(_('preso a orecchio'))
-        elif d.marca and d.marca != SCONOSCIUTA:
-            pezzi.append(html.escape(d.marca))
-        if not d.comandabile:
-            pezzi.append(_('si guarda soltanto'))
+        # Marca e stato, e basta: corto, perché una scritta grigia che va a capo spezza la riga in
+        # due e l'elenco smette di sembrare un elenco. Quello che un dispositivo sa fare si vede dai
+        # pulsanti che ha accanto, non da una parola in più.
+        marca = _('generico') if d.adottato else (html.escape(d.marca) if d.marca != SCONOSCIUTA
+                                                  else _('generico'))
+        pezzi = [marca, parola]
         bottoni = []
         if d.comandabile:
             bottoni.append((_('Spegni') if d.acceso else _('Accendi'),

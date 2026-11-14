@@ -205,7 +205,6 @@ class LaSchedaTest(unittest.TestCase):
         self._aspetta_righe(3)
         self.assertEqual(self._bottoni_di("Movimento"), [],
                          "un sensore non si accende: niente pulsante")
-        self.assertTrue(any("guarda" in t for t in self._titoli()))
 
     # --- la riga «sei pronto» -------------------------------------------------
     def test_la_riga_sei_pronto_compare_solo_quando_c_e_qualcosa(self):
@@ -364,9 +363,48 @@ class LaSchedaTest(unittest.TestCase):
         self.scheda = riaperta
         self.assertNotIn("Non collegato", riaperta.stato.text(),
                          "il nucleo è collegato: dirlo scollegato è una bugia")
-        self.assertIn("Collegato", riaperta.stato.text())
         self.assertGreaterEqual(len(riaperta._scelti), 3,       # noqa: SLF001
                                 "e i dispositivi che il nucleo ha già trovato si devono vedere")
+        self.assertEqual(len(riaperta.broker_cards._cards), 1,  # noqa: SLF001
+                         "e il broker deve comparire fra quelli abbinati")
+
+    def test_collegata_non_lo_scrive_due_volte(self):
+        """Quando va bene, la riga sopra l'elenco non dice niente.
+
+        Lo stato del broker è già scritto nella sua scheda, col pallino verde. Ripeterlo in una
+        riga sopra è rumore proprio sopra la cosa che si deve guardare, e Marco l'ha tolta: «la
+        scritta verde collegato a 127.0.0.1 devi toglierla, si vede che il broker è collegato
+        dall'elenco». La riga resta per quando qualcosa non va, che è quando serve.
+        """
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        self.assertEqual(self.scheda.stato.text(), "")
+        self.assertFalse(self.scheda.stato.isVisibleTo(self.scheda),
+                         "e vuota non deve nemmeno prendersi la sua riga")
+
+    def test_il_sottotitolo_di_una_riga_sta_su_una_riga_sola(self):
+        """Marca e stato, e basta: una scritta grigia che va a capo spezza la riga in due.
+
+        Il limite è a occhio ma non è arbitrario: «zigbee2mqtt · spento» sono 21 caratteri, ed è il
+        caso peggiore che la casa finta produce. Oltre, nello spazio che quella colonna ha, si va a
+        capo — ed è quello che Marco ha visto.
+        """
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        for identificativo in self.scheda._scelti:              # noqa: SLF001
+            d = self.scheda.casa.dispositivo(identificativo)
+            sub = self.scheda._riga(d)["sub"]                   # noqa: SLF001
+            self.assertLessEqual(len(sub), 30, f"«{sub}» è troppo lungo: andrà a capo")
+            self.assertEqual(sub.count("·"), 1, f"«{sub}»: marca e stato, non tre cose")
+
+    def test_un_dispositivo_preso_a_orecchio_si_chiama_generico(self):
+        # «preso a orecchio» era una metafora mia; chi legge vuole una parola, non un'immagine
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        self.scheda.casa.adotta("tuya/luce_garage/dps", "Luce del garage")
+        self.scheda._ridisegna()                                # noqa: SLF001
+        d = self.scheda.casa.dispositivo("grezzo:tuya/luce_garage/dps")
+        self.assertIn("generico", self.scheda._riga(d)["sub"])  # noqa: SLF001
 
     def test_riaprendola_col_broker_spento_lo_dice_senza_fingere(self):
         from PySide6.QtWidgets import QLineEdit
