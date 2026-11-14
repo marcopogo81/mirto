@@ -129,6 +129,7 @@ jobs:
           name: macos
           path: dist/${{ steps.dati.outputs.dmg }}
           if-no-files-found: error
+          retention-days: 1
 
   windows:
     name: Installer per Windows
@@ -180,6 +181,7 @@ jobs:
           name: windows-non-firmato
           path: dist/${{ steps.dati.outputs.setup }}
           if-no-files-found: error
+          retention-days: 1
 
       - name: Sign the installer (SignPath Foundation)
         if: env.SIGNPATH_PRONTA == 'true'
@@ -204,6 +206,7 @@ jobs:
           name: windows
           path: dist/${{ steps.dati.outputs.setup }}
           if-no-files-found: error
+          retention-days: 1
 
   rilascio:
     name: Bozza di Release
