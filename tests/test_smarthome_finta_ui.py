@@ -35,6 +35,12 @@ class LaFinestraTest(unittest.TestCase):
             raise unittest.SkipTest(f"senza PySide6 non c'è finestra da provare ({exc})") from exc
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         cls.app = QApplication.instance() or QApplication([])
+        # Le prove girano con addosso il tema vero: il foglio di stile cambia riempimenti e
+        # larghezze, quindi una prova sulla larghezza di un campo senza tema non proverebbe
+        # quello che vede chi apre la finestra.
+        from mirto.gui.smarthome_finta_ui import vesti_come_mirto  # noqa: PLC0415
+
+        vesti_come_mirto(cls.app)
 
     def setUp(self):
         from mirto.gui.smarthome_finta_ui import FinestraCasaFinta
@@ -174,7 +180,95 @@ class LaFinestraTest(unittest.TestCase):
         self.finestra._aggiungi()       # noqa: SLF001
         self.assertIn("ascolto grezzo", self._diario())
 
+    # --- com'è vestita, e i tre difetti del 14/11 -----------------------------
+    def test_il_campo_del_nome_resta_largo_abbastanza_per_scriverci(self):
+        """Difetto 3 del 14/11: i menu lunghi avevano schiacciato il campo del nome a tre puntini.
+
+        Non ci si poteva scrivere, l'aggiunta si rifiutava in silenzio, e sembrava che «Aggiungi»
+        fosse rotto. Non lo era: era il campo che non c'era più.
+        """
+        from mirto.gui.smarthome_finta_ui import LARGHEZZA_MINIMA_NOME  # noqa: PLC0415
+
+        self.finestra.show()
+        self._macina(0.3)
+        self.assertGreaterEqual(
+            self.finestra.nome.width(), LARGHEZZA_MINIMA_NOME,
+            f"il campo del nome è largo {self.finestra.nome.width()} px: non ci si scrive")
+
+    def test_il_menu_delle_marche_non_si_mangia_la_riga(self):
+        # la spiegazione sta fuori dal menu: dentro gonfiava la voce fino a far sparire i vicini
+        voci = [self.finestra.marca.itemText(i) for i in range(self.finestra.marca.count())]
+        self.assertEqual(voci, [ESPHOME, ZIGBEE, MALEDUCATO])
+        for voce in voci:
+            self.assertLessEqual(len(voce), 16, f"la voce «{voce}» è troppo lunga per un menu")
+
+    def test_la_marca_scelta_si_spiega_sotto(self):
+        # quello che il menu non dice più, lo dice la riga sotto, e cambia con la scelta
+        for marca in (ESPHOME, ZIGBEE, MALEDUCATO):
+            indice = [self.finestra.marca.itemData(i)
+                      for i in range(self.finestra.marca.count())].index(marca)
+            self.finestra.marca.setCurrentIndex(indice)
+            self.assertIn(marca, self.finestra.spiegazione.text())
+            self.assertGreater(len(self.finestra.spiegazione.text()), len(marca) + 10,
+                               "deve dire cosa comporta, non ripetere il nome")
+
+    def test_aggiungere_senza_nome_lo_dice_invece_di_tacere(self):
+        # un rifiuto muto è indistinguibile da un pulsante rotto: era metà del difetto 3
+        self.finestra.nome.setText("   ")
+        self.finestra._aggiungi()       # noqa: SLF001
+        self.assertIn("nome", self.finestra.spiegazione.text().lower())
+
+    def test_nessun_riquadro_si_stila_per_tipo(self):
+        """Difetto 2 del 14/11: ``QLabel`` è una sottoclasse di ``QFrame``.
+
+        Un foglio di stile ``QFrame {…}`` si applica quindi a ogni etichetta dentro il riquadro, e
+        ognuna si ritrova fondo e bordo del pannello: la testa della finestra era una fila di
+        rettangoli azzurri. Si sceglie per nome, ``QFrame#testa {…}``.
+        """
+        from PySide6.QtWidgets import QFrame  # noqa: PLC0415
+
+        for riquadro in self.finestra.findChildren(QFrame):
+            foglio = riquadro.styleSheet()
+            if "QFrame" in foglio:
+                self.assertIn("QFrame#", foglio,
+                              f"questo foglio colpisce anche le etichette dentro: {foglio[:80]}")
+
+    def test_la_finestra_e_del_tipo_che_prende_il_fondo_scuro(self):
+        """Difetto 1 del 14/11: il foglio di stile di Mirto dà il fondo scuro a ``QMainWindow`` e
+        ``QDialog``, e a nient'altro. Una ``QWidget`` nuda resta chiara, con dentro i nostri
+        pannelli scuri: il peggio dei due mondi."""
+        from PySide6.QtWidgets import QDialog, QMainWindow  # noqa: PLC0415
+
+        from mirto.gui import theme as T  # noqa: PLC0415
+
+        self.assertIsInstance(self.finestra, (QDialog, QMainWindow))
+        self.assertIn("QMainWindow, QDialog", T.STYLE)
+
+    def test_vestirsi_mette_addosso_palette_e_foglio_di_stile(self):
+        from mirto.gui import theme as T  # noqa: PLC0415
+        from mirto.gui.smarthome_finta_ui import vesti_come_mirto  # noqa: PLC0415
+
+        vesti_come_mirto(self.app)
+        self.assertEqual(self.app.styleSheet(), T.STYLE)
+        self.assertEqual(self.app.applicationName(), "Mirto")
+
+    def test_c_e_il_logo_in_testa(self):
+        from PySide6.QtWidgets import QLabel  # noqa: PLC0415
+
+        con_immagine = [e for e in self.finestra.findChildren(QLabel)
+                        if e.pixmap() is not None and not e.pixmap().isNull()]
+        self.assertTrue(con_immagine, "in testa ci va il logo di Mirto")
+
     # --- chiudere --------------------------------------------------------------
+    def test_esc_spegne_la_casa_come_la_crocetta(self):
+        # una QDialog con Esc chiama reject(), che nasconde senza passare da closeEvent: la finestra
+        # sparirebbe e il broker resterebbe in piedi sulla porta, invisibile
+        porta = self.casa.porta
+        self.finestra.reject()
+        self._macina(0.3)
+        with self.assertRaises(mqtt.ErroreMqtt):
+            mqtt.Cliente("127.0.0.1", porta).collega(secondi=1.0)
+
     def test_chiudere_la_finestra_spegne_la_casa(self):
         # il broker sta dentro la finestra: se restasse in piedi, la porta resterebbe occupata
         porta = self.casa.porta
