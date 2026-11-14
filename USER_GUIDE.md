@@ -567,6 +567,11 @@ Connect the camera to the **CAMERA** socket with the Raspberry Pi switched off.
    alerts. The network name stays `mirto-node-XXXX.local`.
 4. Press **Pair**. The node's cameras appear within a few seconds; Mirto then offers to create the actions (see
    [13](#13-actions)).
+5. **If the node is on the network cable, Mirto asks whether to put it on Wi-Fi now** and opens the step
+   described in [12.4](#124-the-nodes-table). Say yes: once the node is on a pole the cable comes out, and a
+   node that has never seen your Wi-Fi disappears the moment you unplug it — and to configure Wi-Fi you have
+   to reach it, which you no longer can. The cable stays plugged in until Wi-Fi works, so a wrong password
+   costs you nothing. A node already on Wi-Fi is not asked.
 
 | Situation | Length of the pairing window |
 |---|---|

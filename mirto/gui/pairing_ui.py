@@ -103,11 +103,51 @@ def pair_node_dialog(parent, core, found: dict) -> str | None:
         return None
     QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
-        name = core.actions.pair_new_node(found, dlg.name.text().strip(), dlg.pin.text().strip())
+        nd = core.actions.pair_new_node(found, dlg.name.text().strip(), dlg.pin.text().strip())
     except Exception as exc:  # noqa: BLE001
         QApplication.restoreOverrideCursor()
         QMessageBox.warning(parent, _('Abbinamento non riuscito'),
                             _('{exc}\n\nSe il PIN è sbagliato o la finestra di abbinamento è scaduta, sul nodo: mirto-nodo abbina (mostra un PIN nuovo).', exc=exc))
         return None
     QApplication.restoreOverrideCursor()
-    return name
+    passo_del_wifi(parent, core, nd)
+    return nd["name"]
+
+
+def passo_del_wifi(parent, core, nd: dict) -> bool:
+    """Ultimo passo dell'abbinamento: il Wi-Fi, finché il cavo c'è ancora.
+
+    Sta qui e non nei due posti da cui si abbina — le Impostazioni e l'avviso «Nuovo nodo trovato» —
+    perché un passo offerto da una porta sola è lo stesso difetto che stiamo correggendo, solo
+    spostato. Chi abbinerà da un terzo posto, domani, se lo ritrova senza saperlo.
+
+    Non solleva mai: il nodo è già abbinato e funziona: se questo passo non riesce, l'abbinamento non
+    deve diventare un errore. Al peggio il Wi-Fi si mette dopo, da *Impostazioni → Nodi → Wi-Fi*, che
+    è dov'è sempre stato. Restituisce ``True`` se la finestra del Wi-Fi è stata aperta.
+    """
+    from ..actions.diagnosi import serve_mettere_il_wifi  # noqa: PLC0415
+
+    try:
+        client = (core.actions.clients or {}).get(str(nd["id"]))
+        if client is None or not serve_mettere_il_wifi(client.status().get("rete")):
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+    if QMessageBox.question(
+            parent, _('Ultimo passo: il Wi-Fi'),
+            _('{name} è collegato col cavo di rete. Se lo staccherai — e un nodo da esterno finisce su '
+              'un palo — sparirà, e per rimetterlo in rete servirà di nuovo il cavo.\n\n'
+              'Vuoi metterlo sul Wi-Fi adesso, finché è raggiungibile? Il cavo resta attaccato finché '
+              'il Wi-Fi non funziona.', name=nd["name"]),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
+        return False
+    try:
+        from .wifi_ui import ponte_del_nodo, wifi_dialog  # noqa: PLC0415
+
+        wifi_dialog(parent, ponte_del_nodo(client), nd.get("name") or str(nd["id"]))
+    except Exception as exc:  # noqa: BLE001
+        QMessageBox.information(parent, _('Wi-Fi'),
+                                _('Non riesco ad aprire il Wi-Fi del nodo adesso ({exc}). '
+                                  'Lo trovi in Impostazioni → Nodi → Wi-Fi.', exc=exc))
+    return True

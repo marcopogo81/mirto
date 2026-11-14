@@ -574,6 +574,12 @@ Collega la camera alla presa **CAMERA** a Raspberry spento.
    Mirto e negli avvisi. Il nome in rete resta `mirto-node-XXXX.local`.
 4. Premi **Abbina**. Le camere del nodo compaiono in pochi secondi; Mirto propone poi di creare le azioni
    (vedi [13](#13-azioni)).
+5. **Se il nodo è attaccato al cavo di rete, Mirto chiede se metterlo sul Wi-Fi adesso** e apre il passo
+   descritto in [12.4](#124-la-tabella-dei-nodi). Rispondi di sì: quando il nodo finisce su un palo il cavo
+   si stacca, e un nodo che non ha mai visto il tuo Wi-Fi sparisce nel momento in cui lo scolleghi — e per
+   configurargli il Wi-Fi bisogna raggiungerlo, cosa che non puoi più fare. Il cavo resta attaccato finché
+   il Wi-Fi non funziona, quindi una password sbagliata non costa niente. A un nodo già in Wi-Fi non si
+   chiede nulla.
 
 | Situazione | Durata della finestra di abbinamento |
 |---|---|

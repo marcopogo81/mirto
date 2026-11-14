@@ -2075,21 +2075,9 @@ class SettingsDialog(QDialog):
         if client is None:
             self._info(_('Il nodo non risponde: controlla che sia acceso e collegato alla rete.'))
             return
-        from ..system import portachiavi  # noqa: PLC0415
-        from .wifi_ui import wifi_dialog  # noqa: PLC0415
+        from .wifi_ui import ponte_del_nodo, wifi_dialog  # noqa: PLC0415
 
-        class Ponte:
-            """Quello che la finestra può chiedere: il nodo, e il portachiavi di questo computer."""
-
-            stato = staticmethod(client.wifi_state)
-            cerca = staticmethod(client.find_networks)
-            collega = staticmethod(client.join_wifi)
-            # la password del Wi-Fi di casa è già qui dentro: si chiede al sistema, si manda, si scorda
-            reti_del_computer = staticmethod(portachiavi.reti_conosciute)
-            password_del_computer = staticmethod(portachiavi.password_di)
-            perche_no = staticmethod(portachiavi.perche_no)
-
-        wifi_dialog(self, Ponte(), nd.get("name") or str(nd["id"]))
+        wifi_dialog(self, ponte_del_nodo(client), nd.get("name") or str(nd["id"]))
 
     def _open_disco_dialog(self) -> None:
         """Disco delle registrazioni del nodo: quale, i limiti dell'anello, e prepararne uno nuovo."""

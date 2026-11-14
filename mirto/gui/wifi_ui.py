@@ -266,6 +266,27 @@ class WifiDialog(QDialog):
                             andata == "ok")
 
 
+def ponte_del_nodo(client):
+    """Quello che la finestra può chiedere: il nodo, e il portachiavi di questo computer.
+
+    Sta qui e non in chi apre la finestra perché dal 14/11 i posti che la aprono sono due — le
+    impostazioni di un nodo e l'ultimo passo dell'abbinamento — e due copie di questo ponte sarebbero
+    due cose che divergono la prima volta che una delle due cambia.
+    """
+    from ..system import portachiavi  # noqa: PLC0415
+
+    class Ponte:
+        stato = staticmethod(client.wifi_state)
+        cerca = staticmethod(client.find_networks)
+        collega = staticmethod(client.join_wifi)
+        # la password del Wi-Fi di casa è già qui dentro: si chiede al sistema, si manda, si scorda
+        reti_del_computer = staticmethod(portachiavi.reti_conosciute)
+        password_del_computer = staticmethod(portachiavi.password_di)
+        perche_no = staticmethod(portachiavi.perche_no)
+
+    return Ponte()
+
+
 def wifi_dialog(parent, ponte, nome: str) -> bool:
     """Apre la finestra del Wi-Fi del nodo. True se la finestra si è aperta."""
     try:

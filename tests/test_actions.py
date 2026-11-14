@@ -889,6 +889,26 @@ class DiagnosiNodoTest(unittest.TestCase):
             self.assertEqual(rete_in_parole(niente), "",
                              "un nodo che non lo dice (fino alla 0.7.2) non deve sembrare guasto")
 
+    def test_a_node_on_the_cable_is_asked_about_wifi_while_it_can_still_be_reached(self):
+        """Il 14/11 un nodo senza Wi-Fi è sparito, e per riprenderlo è servito il cavo e un terminale.
+
+        La finestra del Wi-Fi c'era già ed era perfino scritta per questo caso, ma viveva dopo
+        l'abbinamento e si apriva solo su un nodo che risponde: il momento in cui serve era l'unico in
+        cui non si poteva più fare. Ora la domanda si fa alla fine dell'abbinamento, finché il cavo
+        c'è ancora.
+        """
+        from mirto.actions.diagnosi import serve_mettere_il_wifi
+
+        self.assertTrue(serve_mettere_il_wifi({"tipo": "cavo"}),
+                        "sul cavo si chiede: staccarlo farebbe sparire il nodo")
+        self.assertTrue(serve_mettere_il_wifi({"tipo": "cavo", "riserva": "wifi"}),
+                        "una scheda Wi-Fi accesa non vuol dire attaccata a una rete: si chiede lo stesso")
+        self.assertFalse(serve_mettere_il_wifi({"tipo": "wifi", "rete": "CasaMia", "segnale": 68}),
+                         "chi è già in Wi-Fi non deve vedere niente di nuovo")
+        for incerto in ({}, None, {"tipo": ""}, {"tipo": "sconosciuto"}, {"riserva": "wifi"}):
+            self.assertFalse(serve_mettere_il_wifi(incerto),
+                             "su un dato che non abbiamo non si assilla nessuno")
+
     def test_a_weak_wifi_is_a_warning_and_the_remedy_is_a_different_place(self):
         guai = self.guai(dict(self.STATO, rete={"tipo": "wifi", "rete": "CasaMia", "segnale": 22}))
         self.assertEqual([g["livello"] for g in guai], ["avviso"])

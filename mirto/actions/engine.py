@@ -450,8 +450,12 @@ class ActionEngine:
         self._hb_thread.start()
         self.pairing.start()
 
-    def pair_new_node(self, found: dict, name: str, pin: str = "") -> str:
-        """Abbina un nodo proposto da ``pairing`` (l'utente ha visto l'impronta e scritto il PIN)."""
+    def pair_new_node(self, found: dict, name: str, pin: str = "") -> dict:
+        """Abbina un nodo proposto da ``pairing`` (l'utente ha visto l'impronta e scritto il PIN).
+
+        Restituisce il nodo intero e non solo il nome: chi abbina ha bisogno anche dell'``id``, per
+        chiedere al nodo com'è attaccato alla rete e offrire il Wi-Fi finché il cavo c'è ancora.
+        """
         from .pairing import client_name, pair_found  # noqa: PLC0415
 
         node_id = pair_found(self.config, self.core.secrets, found, name, client_name(), pin)
@@ -460,7 +464,7 @@ class ActionEngine:
         self.refresh_nodes_soon()
         nd = next(n for n in self.config.get("actions.nodes") or [] if str(n["id"]) == node_id)
         self._audit(_('nodo abbinato: {name}', name=nd['name']))
-        return nd["name"]
+        return dict(nd)
 
     def stop(self) -> None:
         self._stop.set()

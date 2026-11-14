@@ -658,3 +658,72 @@ class AnnuncioDelNodoTest(unittest.TestCase):
         self.assertEqual(nodo["host_url"], "https://mirto-ingresso.local:8443")
         self.assertEqual(nodo["fingerprint"], "AA:BB:CC")
 
+
+
+class IlWifiSiChiedeDurantelAbbinamentoTest(unittest.TestCase):
+    """Chi abbina un nodo deve vedersi offrire il Wi-Fi, da qualunque porta sia entrato (14/11).
+
+    Questa è una prova sulla **forma del codice**, non sul comportamento, e la ragione è che il difetto
+    che corregge era di forma: la configurazione del Wi-Fi esisteva, funzionava ed era documentata, ma
+    si raggiungeva da un posto solo — le impostazioni di un nodo già abbinato e raggiungibile — cioè
+    dopo il momento in cui serviva.
+
+    Oggi si abbina da due posti, le Impostazioni e l'avviso «Nuovo nodo trovato». Se domani ne nasce un
+    terzo che chiama ``pair_new_node`` per conto suo, quel terzo non offrirà il Wi-Fi e nessuno se ne
+    accorgerà finché un nodo non sparirà da un palo. Qui si controlla che l'abbinamento resti una
+    strozzatura sola.
+    """
+
+    RADICE = Path(__file__).resolve().parents[1]
+
+    @classmethod
+    def chiama(cls, cosa: str) -> set[str]:
+        """I file di ``mirto/`` che **chiamano** ``cosa``, letti con ast e non col testo.
+
+        La prima stesura cercava ``cosa + "("`` nel sorgente, e passava anche quando la chiamata era
+        stata tolta: nel file c'era ancora la riga ``def passo_del_wifi(``. Un guardiano che non sa
+        fallire e' una decorazione, e questo e' il modo in cui se ne fabbricano.
+        """
+        import ast
+
+        trovati = set()
+        for percorso in (cls.RADICE / "mirto").rglob("*.py"):
+            albero = ast.parse(percorso.read_text(encoding="utf-8"))
+            for nodo in ast.walk(albero):
+                if isinstance(nodo, ast.Call) and getattr(nodo.func, "id", getattr(nodo.func, "attr", "")) == cosa:
+                    trovati.add(str(percorso.relative_to(cls.RADICE)))
+        return trovati
+
+    @classmethod
+    def chiamate_dentro(cls, file: str, funzione: str) -> set[str]:
+        """I nomi chiamati dentro a una funzione precisa."""
+        import ast
+
+        albero = ast.parse((cls.RADICE / file).read_text(encoding="utf-8"))
+        dentro = next(n for n in ast.walk(albero)
+                      if isinstance(n, ast.FunctionDef) and n.name == funzione)
+        return {getattr(c.func, "id", getattr(c.func, "attr", ""))
+                for c in ast.walk(dentro) if isinstance(c, ast.Call)}
+
+    def test_only_the_pairing_dialog_pairs_a_node(self):
+        self.assertEqual(self.chiama("pair_new_node"), {"mirto/gui/pairing_ui.py"},
+                         "chi abbina fuori da pair_node_dialog salta il passo del Wi-Fi")
+
+    def test_the_pairing_dialog_offers_the_wifi_step(self):
+        self.assertIn("passo_del_wifi",
+                      self.chiamate_dentro("mirto/gui/pairing_ui.py", "pair_node_dialog"),
+                      "dopo aver abbinato si offre il Wi-Fi, finche' il cavo c'e' ancora")
+
+    def test_both_doors_go_through_the_pairing_dialog(self):
+        porte = self.chiama("pair_node_dialog") - {"mirto/gui/pairing_ui.py"}
+        self.assertEqual(porte, {"mirto/gui/settings.py", "mirto/gui/app.py"},
+                         "le porte da cui si abbina sono due, e passano tutte di li'")
+
+    def test_the_wifi_window_is_opened_the_same_way_from_both_places(self):
+        """Due copie del ponte verso il nodo divergono la prima volta che una delle due cambia."""
+        for dove, funzione in (("mirto/gui/settings.py", "_open_wifi_dialog"),
+                               ("mirto/gui/pairing_ui.py", "passo_del_wifi")):
+            dentro = self.chiamate_dentro(dove, funzione)
+            self.assertIn("wifi_dialog", dentro, f"{dove} non apre la finestra del Wi-Fi")
+            self.assertIn("ponte_del_nodo", dentro,
+                          f"{dove} si costruisce un ponte suo invece di usare quello condiviso")

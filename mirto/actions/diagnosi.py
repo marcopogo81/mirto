@@ -161,6 +161,28 @@ def rete_debole(rete) -> int | None:
     return quanto if quanto < SEGNALE_DEBOLE else None
 
 
+def serve_mettere_il_wifi(rete) -> bool:
+    """Se questo nodo, appena abbinato, va messo sul Wi-Fi **adesso** che è ancora raggiungibile.
+
+    Un nodo da esterno finisce su un palo, e il cavo lo si stacca. Finché il traffico passa dal cavo,
+    staccarlo fa sparire il nodo — e a quel punto non c'è più modo di configurargli il Wi-Fi da Mirto,
+    perché per parlargli bisogna già raggiungerlo. È il morso della coda: il momento in cui serve è
+    l'unico in cui non si può più fare.
+
+    Il 14/11 è successo davvero: un nodo rimasto senza Wi-Fi dalla configurazione precedente è sparito
+    dalla rete, e per riprenderlo è servito il cavo e un terminale. La finestra del Wi-Fi c'era già, ed
+    era perfino scritta per questo caso («Il nodo resta attaccato al cavo finché il Wi-Fi non
+    funziona»), ma viveva in *Impostazioni → Nodi*, cioè dopo, e si apriva solo su un nodo che
+    risponde. Non mancava la funzione: mancava il momento in cui offrirla.
+
+    Si guarda ``tipo``, non ``riserva``: una scheda Wi-Fi accesa non vuol dire attaccata a una rete.
+    E su ``tipo`` vuoto non si chiede niente — succede per mezzo secondo mentre la radio sale dopo un
+    riavvio, e i nodi fino alla 0.7.2 non lo dicevano affatto: meglio tacere che assillare su un dato
+    che non abbiamo.
+    """
+    return str(dict(rete or {}).get("tipo") or "") == "cavo"
+
+
 def diagnosi(info: dict, stato: dict, camera: dict | None = None) -> list[dict]:
     """I problemi di un nodo, i più gravi per primi: ``[{"livello", "testo", "rimedio"}]``.
 
