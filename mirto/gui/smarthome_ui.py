@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -140,8 +141,10 @@ class SchedaSmartHome(QWidget):
         destra.setContentsMargins(0, 0, 0, 4)
         destra.setSpacing(6)
         destra.addWidget(self._titolo_colonna(_('QUELLO CHE CI HA TROVATO')))
-        self.schede = CardList(_('Niente, per ora.'), selectable=False)
-        destra.addWidget(self.schede)
+        # «compatta»: il dettaglio accanto al nome invece che sotto. Righe basse, e sei dispositivi
+        # stanno in una pagina invece di tre. È la stessa forma dei suoni di un nodo.
+        self.schede = CardList(_('Niente, per ora.'), selectable=False, compatta=True)
+        destra.addWidget(self._in_un_rotolo(self.schede), 1)
         self.ascolta_btn = QPushButton(_('Cerca anche quelli che non si presentano'))
         self.ascolta_btn.setToolTip(
             _('Certi dispositivi non dicono chi sono: non compaiono da soli. Con questo Mirto resta '
@@ -159,6 +162,31 @@ class SchedaSmartHome(QWidget):
         destra.addStretch(1)
         corpo.addWidget(self.dettaglio, 1)
         return corpo
+
+    @staticmethod
+    def _in_un_rotolo(dentro: QWidget, minimo: int = 230) -> QWidget:
+        """Un elenco dentro un rotolo, con un'altezza minima sua.
+
+        Senza, succede quello che Marco ha visto il 14/11: la scheda non ci sta in altezza — c'è
+        anche il riquadro «Come fare» in fondo — e Qt comprime l'elenco sotto l'altezza delle sue
+        righe, che si accavallano l'una sull'altra. Con un'altezza minima e un rotolo, le righe
+        restano alte quanto devono e, se sono tante, si scorre.
+        """
+        rotolo = QScrollArea()
+        rotolo.setWidgetResizable(True)
+        rotolo.setFrameShape(QFrame.Shape.NoFrame)
+        rotolo.setMinimumHeight(minimo)
+        rotolo.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        rotolo.setStyleSheet("QScrollArea { background: transparent; }")
+        ospite = QWidget()
+        ospite.setStyleSheet("background: transparent;")
+        dentro_lay = QVBoxLayout(ospite)
+        dentro_lay.setContentsMargins(0, 0, 6, 0)
+        dentro_lay.setSpacing(0)
+        dentro_lay.addWidget(dentro)
+        dentro_lay.addStretch(1)
+        rotolo.setWidget(ospite)
+        return rotolo
 
     @staticmethod
     def _titolo_colonna(testo: str) -> QLabel:
