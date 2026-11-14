@@ -426,6 +426,11 @@ class ReviewView(QWidget):
         self.folder_button = self._button(_("📁 Cartella"), _("Apre la cartella dei video di questo giorno"),
                                           self._open_folder)
         top.addWidget(self.folder_button)
+        self.wipe_button = self._button(_("Elimina…"),
+                                        _("Cancella tutte le registrazioni di questa camera"),
+                                        self._svuota_camera)
+        self.wipe_button.setObjectName("danger")
+        top.addWidget(self.wipe_button)
         top.addSpacing(10)
         self.info = QLabel()
         self.info.setStyleSheet(f"color:{T.MUTED};")
@@ -626,7 +631,13 @@ class ReviewView(QWidget):
         self.cam_combo.blockSignals(True)
         self.cam_combo.clear()
         for cid, name in cams:
-            self.cam_combo.addItem(names.get(cid, name), cid)
+            # «· solo eventi» sta nel nome e non in fondo alla riga: così si legge *mentre* scegli
+            # la camera, che è il momento in cui serve saperlo, invece che in coda a una riga di
+            # numeri all'altro capo della finestra (Marco, 14/11).
+            etichetta = names.get(cid, name)
+            if rec.mode_for(cid) == "events":
+                etichetta += " · " + _("solo eventi")
+            self.cam_combo.addItem(etichetta, cid)
         idx = self.cam_combo.findData(want)
         self.cam_combo.setCurrentIndex(max(0, idx))
         self.cam_combo.blockSignals(False)
@@ -713,10 +724,12 @@ class ReviewView(QWidget):
             text += " · " + _("{n} min solo sul nodo", n=self._remote_count)
         self.info.setToolTip("")
         if self.cam_id and self.core.recording.mode_for(self.cam_id) == "events":
-            text += " · " + _("solo eventi")
-            self.info.setToolTip(_("Modalità «solo eventi»: sulla barra ci sono le clip degli eventi e gli ultimi "
-                                   "minuti. Per rivedere tutta la giornata scegli «continua» in Impostazioni → "
-                                   "Registrazione."))
+            # la parola sta nel nome della camera, qui sopra: ripeterla in fondo era la terza volta
+            self.cam_combo.setToolTip(_("Modalità «solo eventi»: sulla barra ci sono le clip degli eventi e gli "
+                                        "ultimi minuti. Per rivedere tutta la giornata scegli «continua» in "
+                                        "Impostazioni → Registrazione."))
+        else:
+            self.cam_combo.setToolTip("")
         self.info.setText(text)
 
     def _load(self, start_at: float | None = None) -> None:
@@ -747,6 +760,45 @@ class ReviewView(QWidget):
         if start_at is None:  # oggi: l'ultimo minuto registrato; altri giorni: l'inizio
             start_at = (self.segments[-1].end - 60) if self.day == dt.date.today() else self.segments[0].start
         self.seek(start_at)
+
+    def _svuota_camera(self) -> None:
+        """Cancella tutte le registrazioni di questa camera, dopo averlo chiesto.
+
+        Serve perché finora non c'era modo di togliere di mezzo una camera che non c'è più: restava
+        nell'elenco per sempre, con dentro chissà che di chissà quando. Marco, 14/11: *«non so
+        neanche cosa ci sia salvato sotto bagno perché chissà di che giorni era»*.
+
+        La domanda dice **quanto** si cancella e che non si torna indietro, perché «sei sicuro?»
+        senza un numero non è una domanda: è un ostacolo da saltare.
+        """
+        from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+        if not self.cam_id:
+            return
+        nome = self.cam_combo.currentText()
+        store = self.core.recording.store
+        quanti, byte = store.misura_camera(self.cam_id)
+        if not quanti:
+            QMessageBox.information(self, _("Elimina le registrazioni"),
+                                    _("Di «{nome}» non c'è niente da cancellare.", nome=nome))
+            return
+        collegata = self.cam_id in dict(self.core.cameras.sources)
+        coda = (_("La camera è collegata, quindi ricomincerà a registrare da adesso.") if collegata
+                else _("La camera non è più collegata, quindi sparirà anche da questo elenco."))
+        if QMessageBox.question(
+                self, _("Elimina le registrazioni"),
+                _("Cancello tutte le registrazioni di «{nome}»?\n\n{quanti} file, {spazio}.\n"
+                  "Non si torna indietro: i file non vanno nel cestino.\n\n{coda}",
+                  nome=nome, quanti=quanti, spazio=_spazio(byte), coda=coda),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        guaio = store.rimuovi_camera(self.cam_id)
+        if guaio:
+            QMessageBox.warning(self, _("Elimina le registrazioni"),
+                                _("Non sono riuscito a cancellare tutto: {guaio}", guaio=guaio))
+        self._fill_cameras(None)
+        self._load()
 
     def _open_folder(self) -> None:
         """Cartella del giorno: per la registrazione continua quella della camera (un file al minuto, ora UTC nel
@@ -1049,6 +1101,15 @@ class ExportDialog(QDialog):
             return time.mktime(dt.datetime.combine(day, dt.time(q.hour(), q.minute(), q.second())).timetuple())
 
         return epoch(self.start), epoch(self.end)
+
+
+def _spazio(byte: int) -> str:
+    """Lo spazio in parole: chi legge deve capire se sono due foto o mezzo disco."""
+    if byte >= 1024 ** 3:
+        return _("{n} GB", n=f"{byte / 1024 ** 3:.1f}")
+    if byte >= 1024 ** 2:
+        return _("{n} MB", n=f"{byte / 1024 ** 2:.0f}")
+    return _("{n} kB", n=f"{max(1, byte // 1024)}")
 
 
 def _fmt_duration(seconds: float) -> str:

@@ -970,3 +970,84 @@ class PuntiniDegliEventiTest(unittest.TestCase):
         gruppi = TL.group_events(self.eventi(-500, 50, 5000), 1_000_000, 1_000_100, self.x_of)
         self.assertEqual(len(gruppi), 1, "solo quello dentro la finestra visibile")
 
+
+
+class CancellareUnaCameraTest(unittest.TestCase):
+    """Togliere di mezzo una camera che non c'è più, senza aprire il Finder.
+
+    Marco, 14/11: *«la combo in Rivedi mostra tutti i dispositivi che hanno registrato ma non c'è
+    modo di eliminare tutto dalla memoria; non so neanche cosa ci sia salvato sotto bagno perché
+    chissà di che giorni era»*. Una voce che resta per sempre, con dentro chissà che, è peggio di
+    una voce in meno: sembra un difetto e non si sa da che parte prenderla.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        from mirto.recording.store import RecordingStore
+
+        self.cartella = tempfile.TemporaryDirectory()
+        self.addCleanup(self.cartella.cleanup)
+        self.radice = Path(self.cartella.name)
+        self.store = RecordingStore(self.radice)
+        self.store.ensure()
+
+    def _camera(self, cam_id: str, nome: str, quanti: int = 3) -> None:
+        d = self.store.cam_dir(cam_id, nome)
+        for i in range(quanti):
+            (d / f"pezzo{i}.mp4").write_bytes(b"x" * 1024)
+
+    def test_misura_quello_che_c_e(self):
+        self._camera("bagno", "Bagno", quanti=4)
+        quanti, byte = self.store.misura_camera("bagno")
+        self.assertEqual(quanti, 4, "camera.json è il cartellino col nome, non una registrazione")
+        self.assertGreaterEqual(byte, 4 * 1024, "lo spazio invece si conta tutto: è quello che si libera")
+
+    def test_di_una_camera_che_non_ha_niente_non_misura_niente(self):
+        self.assertEqual(self.store.misura_camera("mai_vista"), (0, 0))
+
+    def test_cancellarla_la_toglie_dal_disco_e_dall_elenco(self):
+        self._camera("bagno", "Bagno")
+        self._camera("porta", "Porta")
+        self.assertIn("bagno", self.store.cameras())
+        self.assertEqual(self.store.rimuovi_camera("bagno"), "")
+        self.assertNotIn("bagno", self.store.cameras(),
+                         "senza camera.json la voce deve sparire dall'elenco di Rivedi")
+        self.assertFalse(self.store.cam_dir("bagno").exists())
+
+    def test_non_tocca_le_altre(self):
+        self._camera("bagno", "Bagno")
+        self._camera("porta", "Porta")
+        self.store.rimuovi_camera("bagno")
+        self.assertIn("porta", self.store.cameras())
+        self.assertEqual(self.store.misura_camera("porta")[0], 3)
+
+    def test_cancellare_una_che_non_c_e_non_e_un_errore(self):
+        self.assertEqual(self.store.rimuovi_camera("mai_vista"), "")
+
+    def test_la_prima_serratura_un_id_storto_non_esce_dalla_cartella(self):
+        """``safe_dir_name`` neutralizza i «..»: la cartella resta sotto la radice."""
+        d = self.store.cam_dir("../non_toccare")
+        self.assertTrue(d.resolve().is_relative_to(self.radice.resolve()), f"{d} è uscita")
+
+    def test_la_seconda_serratura_un_percorso_fuori_si_rifiuta(self):
+        """E se un giorno la prima venisse tolta, questa deve reggere da sola.
+
+        La prova di prima non bastava: passava anche togliendo il controllo, perché il «..» non
+        arrivava mai fin lì. Qui il percorso fuori si impone a mano — è l'unico modo di provare la
+        serratura invece di quella davanti — e con un ``rmtree`` dall'altra parte non è una
+        verifica che si possa lasciare a una sola.
+        """
+        import shutil
+        from pathlib import Path
+
+        fuori = Path(self.cartella.name).parent / "non_toccare"
+        fuori.mkdir(exist_ok=True)
+        (fuori / "importante.txt").write_text("non cancellarmi")
+        self.addCleanup(lambda: shutil.rmtree(fuori, ignore_errors=True))
+        self.store.cam_dir = lambda _cam_id, name=None: fuori      # la prima serratura non c'è più
+        guaio = self.store.rimuovi_camera("qualunque")
+        self.assertTrue(guaio, "doveva rifiutarsi e dire perché")
+        self.assertTrue((fuori / "importante.txt").exists(),
+                        "ha cancellato fuori dalla cartella delle registrazioni")
