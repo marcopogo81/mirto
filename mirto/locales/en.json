@@ -543,6 +543,7 @@
  "Hanno seguito il nome anche {quanti} fra camere e azioni che non ne avevano uno loro.": "{quanti} cameras and actions that had no name of their own followed it too.",
  "Ho letto e accetto le condizioni d'uso": "I have read and accept the terms of use",
  "I <b>tuoi</b> limiti, quelli che hai appena impostato: {quali}.": "<b>Your</b> limits, the ones you have just set: {quali}.",
+ "I dispositivi di casa (Impostazioni → SmartHome)": "Your home's devices (Settings → SmartHome)",
  "I pezzi che l'azione esegue, in fila: accendi una luce, aspetta, suona tre volte. Il «+» propone solo quello che i dispositivi collegati sanno fare davvero — ogni nodo con i suoi comandi e le sue casse — e il pulsante «Prova» la esegue adesso, prima di salvarla.": "The pieces the action runs, in a row: turn on a light, wait, play three times. The «+» only offers what the connected devices can really do — each node with its own commands and speakers — and «Test» runs it now, before you save it.",
  "I suoni che questo nodo sa emettere, e quelli che hai caricato tu.": "The sounds this node can play, and the ones you uploaded.",
  "I tuoi suoni si caricano in Impostazioni → Nodi → Suoni.": "Your own sounds are uploaded in Settings → Nodes → Sounds.",

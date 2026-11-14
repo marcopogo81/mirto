@@ -363,16 +363,18 @@ class MainWindow(QMainWindow):
         self.row_smart.setVisible(bool(stato["attiva"]))
         if not stato["attiva"]:
             return
+        aperto = self._aperta("smarthome")
         if not stato["collegata"]:
             self.row_smart.set(T.ALARM, _('SmartHome: broker non raggiungibile ({host})',
                                           host=stato["host"]),
-                               [_('Impostazioni → SmartHome per riprovare.')]
-                               + ([html.escape(stato["errore"])] if stato["errore"] else []))
+                               _('Impostazioni → SmartHome per riprovare.'),
+                               html.escape(stato["errore"]) if aperto and stato["errore"] else "",
+                               "smarthome", aperto, bool(stato["errore"]))
             return
         if not stato["quanti"]:
             self.row_smart.set(T.PAUSED, _('SmartHome: collegata, nessun dispositivo'),
-                               [_('Nessuno si è ancora fatto vedere. In Impostazioni → SmartHome '
-                                  'c\'è «Ascolta tutto» per chi non si annuncia.')])
+                               _('Nessuno si è ancora fatto vedere. In Impostazioni → SmartHome '
+                                 'c\'è «Ascolta tutto» per chi non si annuncia.'))
             return
         righe = []
         for d in domotica.dispositivi()[:12]:
@@ -380,7 +382,10 @@ class MainWindow(QMainWindow):
             righe.append(f"&nbsp;&nbsp;{html.escape(d.nome)} – "
                          + (quale if d.vivo else _('non risponde')))
         self.row_smart.set(T.INFO, _('SmartHome: {quanti} dispositivi, {accesi} accesi',
-                                     quanti=stato["quanti"], accesi=stato["accesi"]), righe)
+                                     quanti=stato["quanti"], accesi=stato["accesi"]),
+                           _('I dispositivi di casa (Impostazioni → SmartHome)'),
+                           "<br>".join(righe) if aperto else "",
+                           "smarthome", aperto, True)
 
     def _update_pair_card(self) -> None:
         found = self.core.actions.pairing.current() if self.core.actions else []

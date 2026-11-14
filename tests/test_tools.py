@@ -2179,3 +2179,90 @@ class UnFotogrammaNonSiConverteIntero(unittest.TestCase):
                           if k.arg == "interpolation" and isinstance(k.value, ast.Attribute)]
         self.assertEqual(interpolazioni, ["INTER_LINEAR"],
                          "AREA costa 7,6 ms contro 0,16: con quella Q-07 peggiora invece di migliorare")
+
+
+class LeRigheDelPannelloSiChiamanoComeSonoFatteTest(unittest.TestCase):
+    """``StatusRow.set`` ha sette parametri, e il terzo è un **tooltip**, non un elenco di righe.
+
+    Il 14/11 ho passato una lista al terzo posto: Qt l'ha rifiutata con un ``TypeError``, e Mirto
+    non si è aperto affatto — la riga del pannello si disegna nell'avvio della finestra principale.
+    Un errore in una riga di stato che impedisce al programma di partire è il tipo di cosa che una
+    prova deve prendere, e nessuna delle nostre lo prendeva: quella parte di interfaccia non si può
+    costruire senza Qt, che nel contenitore non c'è.
+
+    Questo guardiano non costruisce niente: **legge la firma dal codice e le chiamate dal codice**,
+    e pretende che combacino. Gira ovunque, anche senza Qt.
+    """
+
+    @staticmethod
+    def _firma() -> tuple[list[str], int]:
+        """``(nomi dei parametri, quanti sono obbligatori)`` di ``StatusRow.set``, letti da widgets.py."""
+        import ast  # noqa: PLC0415
+
+        albero = ast.parse((ROOT / "mirto" / "gui" / "widgets.py").read_text(encoding="utf-8"))
+        for classe in ast.walk(albero):
+            if not (isinstance(classe, ast.ClassDef) and classe.name == "StatusRow"):
+                continue
+            for metodo in classe.body:
+                if isinstance(metodo, ast.FunctionDef) and metodo.name == "set":
+                    nomi = [a.arg for a in metodo.args.args if a.arg != "self"]
+                    return nomi, len(nomi) - len(metodo.args.defaults)
+        raise AssertionError("StatusRow.set non si trova: il guardiano è cieco")
+
+    @staticmethod
+    def _chiamate() -> list:
+        import ast  # noqa: PLC0415
+
+        albero = ast.parse((ROOT / "mirto" / "gui" / "app.py").read_text(encoding="utf-8"))
+        fuori = []
+        for nodo in ast.walk(albero):
+            if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute)
+                    and nodo.func.attr == "set" and isinstance(nodo.func.value, ast.Attribute)
+                    and nodo.func.value.attr.startswith("row_")):
+                fuori.append(nodo)
+        return fuori
+
+    def test_il_guardiano_vede_le_righe(self):
+        self.assertGreater(len(self._chiamate()), 5, "nessuna chiamata trovata: qualcosa è cambiato")
+
+    def test_nessuna_chiamata_passa_piu_argomenti_di_quanti_ce_ne_siano(self):
+        nomi, obbligatori = self._firma()
+        for chiamata in self._chiamate():
+            self.assertLessEqual(len(chiamata.args), len(nomi),
+                                 f"riga {chiamata.lineno}: {len(chiamata.args)} argomenti per {len(nomi)} posti")
+            if not any(c.arg is None for c in chiamata.keywords):
+                self.assertGreaterEqual(len(chiamata.args) + len(chiamata.keywords), obbligatori,
+                                        f"riga {chiamata.lineno}: ne mancano")
+            for chiave in chiamata.keywords:
+                if chiave.arg is None:
+                    continue        # «**quanto»: cosa ci sia dentro non si vede da qui
+                self.assertIn(chiave.arg, nomi, f"riga {chiamata.lineno}: «{chiave.arg}» non esiste")
+
+    def test_nessuna_chiamata_passa_un_elenco_dove_ci_va_un_testo(self):
+        """Il difetto preciso del 14/11: una lista dove Qt vuole una stringa.
+
+        Si guardano le liste dichiarate sul posto, anche sommate fra loro — ``[a] + [b]`` —, perché
+        è così che era scritta la mia. Quello che arriva da una variabile non si può vedere da qui,
+        e per quello c'è la prova sopra, che almeno conta i posti.
+        """
+        import ast  # noqa: PLC0415
+
+        def e_un_elenco(nodo) -> bool:
+            if isinstance(nodo, ast.List):
+                return True
+            if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Add):
+                return e_un_elenco(nodo.left) or e_un_elenco(nodo.right)
+            if isinstance(nodo, ast.IfExp):
+                return e_un_elenco(nodo.body) or e_un_elenco(nodo.orelse)
+            return False
+
+        nomi, _ = self._firma()
+        for chiamata in self._chiamate():
+            for posto, arg in enumerate(chiamata.args):
+                self.assertFalse(e_un_elenco(arg),
+                                 f"riga {chiamata.lineno}: «{nomi[posto]}» vuole un testo, "
+                                 f"non un elenco (le righe si uniscono con «<br>».join)")
+            for chiave in chiamata.keywords:
+                if chiave.arg is not None:
+                    self.assertFalse(e_un_elenco(chiave.value),
+                                     f"riga {chiamata.lineno}: «{chiave.arg}» vuole un testo")
