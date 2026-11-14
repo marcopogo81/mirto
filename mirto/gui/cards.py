@@ -185,6 +185,17 @@ class CardList(QWidget):
         sub = QLabel(row.get("sub", ""))
         sub.setObjectName("cardSub")
         self._cresce(sub)
+        if self.compatta:
+            # In una riga compatta titolo e sottotitolo stanno **uno accanto all'altro**: lasciarli
+            # andare a capo vuol dire che ognuno dei due si accontenta della larghezza di una
+            # parola, e la riga diventa alta il doppio con due colonnine di testo spezzato. È quello
+            # che Marco ha visto il 14/11 nella scheda SmartHome: «zigbee2mqtt» a capo su «· spento»
+            # in una riga larga settecento pixel. Qui non si va a capo: se non ci sta, si taglia.
+            for etichetta in (title, sub):
+                etichetta.setWordWrap(False)
+                pol = etichetta.sizePolicy()
+                pol.setHeightForWidth(False)
+                etichetta.setSizePolicy(pol)
         sub.setTextFormat(Qt.TextFormat.RichText)
         sub.setVisible(bool(row.get("sub")) or "sub" in row)
         col.addWidget(title)

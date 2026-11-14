@@ -382,19 +382,33 @@ class LaSchedaTest(unittest.TestCase):
         self.assertFalse(self.scheda.stato.isVisibleTo(self.scheda),
                          "e vuota non deve nemmeno prendersi la sua riga")
 
-    def test_il_sottotitolo_di_una_riga_sta_su_una_riga_sola(self):
-        """Marca e stato, e basta: una scritta grigia che va a capo spezza la riga in due.
+    def test_in_una_riga_compatta_niente_va_a_capo(self):
+        """Il guardiano di prima contava i caratteri, e per questo non ha visto niente.
 
-        Il limite è a occhio ma non è arbitrario: «zigbee2mqtt · spento» sono 21 caratteri, ed è il
-        caso peggiore che la casa finta produce. Oltre, nello spazio che quella colonna ha, si va a
-        capo — ed è quello che Marco ha visto.
+        «zigbee2mqtt · spento» sono venti caratteri e andava a capo lo stesso, in una riga larga
+        settecento pixel: il motivo non è la lunghezza, è che titolo e sottotitolo stanno **uno
+        accanto all'altro** e, potendo andare a capo, ognuno dei due si accontenta della larghezza
+        di una parola. Quindi non si conta: si guarda la causa, cioè che nessuno dei due vada a
+        capo.
         """
+        from PySide6.QtWidgets import QLabel
+
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        etichette = [e for c in self.scheda.schede._cards                      # noqa: SLF001
+                     for e in c.findChildren(QLabel)
+                     if e.objectName() in ("cardTitle", "cardSub")]
+        self.assertTrue(etichette, "il guardiano è cieco: non ha trovato le etichette")
+        for e in etichette:
+            self.assertFalse(e.wordWrap(), f"«{e.text()}» può andare a capo, e lo farà")
+
+    def test_il_sottotitolo_di_una_riga_dice_due_cose_sole(self):
+        """Marca e stato, non tre cose: è quello che Marco ha chiesto di vederci."""
         self.assertTrue(self.scheda.collega())
         self._aspetta_righe(3)
         for identificativo in self.scheda._scelti:              # noqa: SLF001
             d = self.scheda.casa.dispositivo(identificativo)
             sub = self.scheda._riga(d)["sub"]                   # noqa: SLF001
-            self.assertLessEqual(len(sub), 30, f"«{sub}» è troppo lungo: andrà a capo")
             self.assertEqual(sub.count("·"), 1, f"«{sub}»: marca e stato, non tre cose")
 
     def test_un_dispositivo_preso_a_orecchio_si_chiama_generico(self):

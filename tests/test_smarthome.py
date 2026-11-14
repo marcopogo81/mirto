@@ -243,8 +243,14 @@ class IlMaleducatoSiPrendeAOrecchio(ConLaCasaFinta):
     def test_adottato_si_comanda(self):
         self.casa.ascolta_tutto(True)
         self.finta.cambia("luce_garage", True)
+        # Si aspetta il **valore**, non che il messaggio sia arrivato: iscrivendosi a «#» il primo
+        # che arriva è il ritenuto di prima, «spento», e aspettare solo la comparsa dell'argomento
+        # adottava il dispositivo con lo stato vecchio una volta su tante. È la regola del capitolo
+        # 28 del metodo, scritta oggi e sbagliata qui sotto il giorno stesso.
         fine = time.monotonic() + 3.0
-        while time.monotonic() < fine and not any("garage" in a for a, _ in self.casa.chi_parla()):
+        while time.monotonic() < fine and not any(
+                a == "tuya/luce_garage/dps" and b"true" in c
+                for a, c in self.casa.chi_parla()):
             time.sleep(0.02)
         d = self.casa.adotta("tuya/luce_garage/dps", "Luce del garage")
         self.assertTrue(d.adottato, "va detto che è un'ipotesi, non un annuncio")

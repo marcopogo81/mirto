@@ -433,7 +433,7 @@ class ReviewView(QWidget):
         self.info.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.info.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         top.addWidget(self.info, 1)
-        lay.addLayout(top)
+        # «top» non si aggiunge qui: va dentro il riquadro dei comandi, come prima riga. Vedi sotto.
 
         self.video_host = QWidget()
         self.video_host.setStyleSheet("background:#000; border-radius:10px;")
@@ -456,6 +456,18 @@ class ReviewView(QWidget):
         play = QVBoxLayout(panel)
         play.setContentsMargins(16, 12, 16, 14)
         play.setSpacing(6)
+        # La riga della ricerca — camera, giorno, «Oggi», «Cartella» — sta **qui dentro**, come
+        # prima riga dei comandi. Stava sopra il video, staccata da tutto il resto, e Marco il
+        # 14/11: *«tutta quella riga che fa parte della ricerca stia sotto dentro i controlli, in
+        # quanto fa parte dei controlli, inutile averla sopra»*. Ha ragione: scegliere la camera e
+        # scegliere il giorno sono lo stesso gesto di scegliere il minuto, e i gesti che fanno la
+        # stessa cosa stanno insieme. Sopra il video resta il video.
+        play.addLayout(top)
+        riga_sotto = QFrame()
+        riga_sotto.setFrameShape(QFrame.Shape.HLine)
+        riga_sotto.setStyleSheet(f"color:{T.LINE}; background:{T.LINE}; border:none; max-height:1px;")
+        play.addWidget(riga_sotto)
+        play.addSpacing(2)
         head = QHBoxLayout()
         howto = QLabel(_("<b>Rotellina</b>: ingrandisci · <b>Trascina</b>: scegli un intervallo · "
                          "<b>Clic</b>: vai a un'ora"))
