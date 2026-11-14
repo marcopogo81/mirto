@@ -2,18 +2,21 @@
 # Copyright 2026 Marco Dalicco
 """La scheda «SmartHome»: il broker di casa, e i dispositivi che ci si trovano dentro.
 
-**La regola che decide la forma di questa scheda: non si configura, si riconosce.** È lo stesso
-patto dei nodi Raspberry. Qui dentro non si scrive mai un «argomento MQTT» come primo passo: si
-preme un pulsante, e quello che c'è in casa compare con il suo nome e il suo stato, che si muove
-sotto gli occhi mentre guardi.
+**La forma è quella della scheda Nodi, e non è un vezzo.** Pulsantone in cima che cerca, elenco a
+sinistra in schede, dettaglio del selezionato a destra. Chi ha già abbinato un nodo sa già come si
+usa questa, e chi impara qui sa già usare quella. Il 14/11 l'avevo inventata diversa — una tabella
+tutta mia — e Marco l'ha fermata: *«guarda come è strutturata come layout, non ti inventare cose
+nuove ogni volta»*. Aveva ragione due volte: una perché l'utente non deve imparare due dialetti, e
+una perché una forma già fatta si scrive in meno tempo di una nuova.
 
-La scrittura a mano esiste — è l'ultima riga, per chi sa quello che fa — ma sta in fondo, dove va.
+**La regola che decide il resto: non si configura, si riconosce.** È lo stesso patto dei nodi. Qui
+dentro non si scrive mai un «argomento MQTT» come primo passo: si preme un pulsante, e quello che
+c'è in casa compare col suo nome e il suo stato, che si muove sotto gli occhi.
 
-**Tre vie, e si vedono tutte e tre.** Chi si annuncia compare da solo; chi parla solo la lingua
-della sua marca compare lo stesso; chi non fa né l'una né l'altra si prende con *Ascolta tutto*, che
-mostra chi sta parlando e lascia scegliere. L'ultima è brutta, e c'è perché senza di lei per
-qualcuno Mirto sarebbe un vicolo cieco — e un vicolo cieco è la sola cosa che non ci si può
-permettere a casa di un estraneo.
+**La scheda guarda, non possiede.** Il collegamento vive nel nucleo (``Domotica``), e questa scheda
+mostra quello che il nucleo **sta già** facendo. All'apertura non riparte da «non collegato»: era il
+difetto del 14/11, con il riquadro *Sistema* che elencava i dispositivi e la scheda che diceva di
+non aver trovato niente.
 
 **Il filo.** I cambiamenti arrivano dal filo che legge dal broker: passano da un segnale Qt, come
 gli avvisi dei nodi.
@@ -21,6 +24,7 @@ gli avvisi dei nodi.
 
 from __future__ import annotations
 
+import html
 import logging
 
 from PySide6.QtCore import QObject, Qt, Signal
@@ -33,13 +37,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from . import theme as T
+from .cards import CardList, primary_button
 from ..actions.smarthome import SCONOSCIUTA, Domotica
 from ..i18n import _
 
@@ -59,27 +63,31 @@ class SchedaSmartHome(QWidget):
         self.secrets = secrets
         self.password = campo_password
         # La domotica vive nel nucleo, non qui: questa scheda la configura e la guarda, non la
-        # possiede. Se ne possedesse una sua, chiudendo la finestra sparirebbe — che è esattamente
-        # il difetto trovato il 14/11.
+        # possiede. Se ne possedesse una sua, chiudendo la finestra sparirebbe.
         self.domotica = domotica if domotica is not None else Domotica(cfg, secrets)
         self._ponte = _Ponte()
         self._ponte.cambiato.connect(self._ridisegna)
+        self._scelti: list[str] = []          # identificativi, nello stesso ordine delle schede
         dati = cfg.get("smarthome") or {}
+        self._adottati = list(dati.get("adopted") or [])
 
         fuori = QVBoxLayout(self)
-        fuori.setSpacing(10)
+        fuori.setSpacing(8)
         self.acceso = QCheckBox(_('Usa la domotica di casa (MQTT)'))
         self.acceso.setChecked(bool(dati.get("enabled")))
         fuori.addWidget(self.acceso)
         fuori.addWidget(self._riga_del_broker(dati))
+        self.cerca_btn = primary_button(_('  Cerca i dispositivi di casa'))
+        self.cerca_btn.setIcon(T.icon("wifi", "#FFFFFF", 20))
+        self.cerca_btn.clicked.connect(self.collega)
+        fuori.addWidget(self.cerca_btn)
         self.stato = QLabel()
         self.stato.setWordWrap(True)
         fuori.addWidget(self.stato)
-        fuori.addWidget(self._elenco())
-        fuori.addWidget(self._pronto())
+        fuori.addLayout(self._corpo())
         fuori.addWidget(self._grezzo())
-        self._adottati = list(dati.get("adopted") or [])
-        self._mostra_stato(_('Non collegato. Premi «Collegati e cerca».'), T.MUTED)
+        fuori.addWidget(self._pronto())
+        self._mostra_adesso()
 
     # --- i pezzi --------------------------------------------------------------
     def _riga_del_broker(self, dati: dict) -> QWidget:
@@ -91,6 +99,7 @@ class SchedaSmartHome(QWidget):
         self.host = QLineEdit(str(dati.get("host") or ""))
         self.host.setPlaceholderText(_("indirizzo del broker, per esempio 192.168.1.10"))
         self.host.setMinimumWidth(220)
+        self.host.returnPressed.connect(self.collega)
         riga.addWidget(self.host, 1)
         self.porta = QSpinBox()
         self.porta.setRange(1, 65535)
@@ -102,23 +111,51 @@ class SchedaSmartHome(QWidget):
         self.utente.setFixedWidth(150)
         riga.addWidget(self.utente)
         riga.addWidget(self.password)
-        self.collega_btn = QPushButton(_('Collegati e cerca'))
-        self.collega_btn.setObjectName("primario")
-        self.collega_btn.clicked.connect(self.collega)
-        riga.addWidget(self.collega_btn)
         return scatola
 
-    def _elenco(self) -> QWidget:
-        rotolo = QScrollArea()
-        rotolo.setWidgetResizable(True)
-        rotolo.setMinimumHeight(190)
-        dentro = QWidget()
-        self.griglia = QGridLayout(dentro)
-        self.griglia.setHorizontalSpacing(12)
-        self.griglia.setVerticalSpacing(6)
-        self.griglia.setColumnStretch(0, 1)
-        rotolo.setWidget(dentro)
-        return rotolo
+    def _corpo(self) -> QHBoxLayout:
+        """Elenco a sinistra, dettaglio a destra: la stessa forma della scheda Nodi."""
+        corpo = QHBoxLayout()
+        corpo.setSpacing(14)
+        colonna = QVBoxLayout()
+        colonna.setSpacing(6)
+        testa = QLabel(_('DISPOSITIVI DI CASA'))
+        testa.setStyleSheet(f"color:{T.MUTED}; font-weight:800; font-size:11px; letter-spacing:1.4px; "
+                            f"padding:2px 0 6px 2px; border-bottom:1px solid {T.LINE}; margin-top:6px;")
+        colonna.addWidget(testa)
+        self.schede = CardList(_('Nessun dispositivo. Scrivi l\'indirizzo del broker e premi '
+                                 '«Cerca i dispositivi di casa».'))
+        self.schede.current_changed.connect(lambda _r: self._mostra_scelto())
+        colonna.addWidget(self.schede)
+        colonna.addStretch(1)
+        sinistra = QWidget()
+        sinistra.setLayout(colonna)
+        sinistra.setFixedWidth(300)
+        corpo.addWidget(sinistra)
+
+        self.dettaglio = QWidget()
+        destra = QVBoxLayout(self.dettaglio)
+        destra.setContentsMargins(0, 6, 0, 4)
+        destra.setSpacing(6)
+        self.d_nome = QLabel("")
+        self.d_nome.setStyleSheet("font-weight:700; font-size:15px;")
+        destra.addWidget(self.d_nome)
+        self.d_riga = QLabel("")
+        self.d_riga.setWordWrap(True)
+        self.d_riga.setTextFormat(Qt.TextFormat.RichText)
+        self.d_riga.setStyleSheet(f"color:{T.MUTED};")
+        destra.addWidget(self.d_riga)
+        self.d_gira = QPushButton("")
+        self.d_gira.clicked.connect(self._gira_scelto)
+        destra.addWidget(self.d_gira)
+        self.d_togli = QPushButton(_('Dimentica questo dispositivo'))
+        self.d_togli.setObjectName("danger")
+        self.d_togli.clicked.connect(self._dimentica_scelto)
+        destra.addWidget(self.d_togli)
+        destra.addStretch(1)
+        self.dettaglio.hide()
+        corpo.addWidget(self.dettaglio, 1)
+        return corpo
 
     def _pronto(self) -> QWidget:
         """La riga «sei pronto», con due esempi scritti.
@@ -130,7 +167,7 @@ class SchedaSmartHome(QWidget):
         self.scatola_pronto = QFrame()
         self.scatola_pronto.setObjectName("pronto")
         self.scatola_pronto.setStyleSheet(
-            f"QFrame#pronto {{ background: rgba(47,179,131,0.12); border-radius: 8px; }}")
+            "QFrame#pronto { background: rgba(47,179,131,0.12); border-radius: 8px; }")
         dentro = QVBoxLayout(self.scatola_pronto)
         dentro.setContentsMargins(12, 10, 12, 10)
         self.riga_pronto = QLabel()
@@ -164,13 +201,36 @@ class SchedaSmartHome(QWidget):
         return scatola
 
     # --- il collegamento ------------------------------------------------------
+    @property
+    def casa(self):
+        """La casa è quella del nucleo: la scheda la guarda, non la possiede."""
+        return self.domotica.casa
+
+    def _mostra_adesso(self) -> None:
+        """All'apertura: mostra quello che il nucleo **sta già** facendo.
+
+        Il difetto del 14/11: la scheda diceva «Non collegato» mentre il riquadro *Sistema*, a due
+        centimetri di distanza, elencava i dispositivi trovati. Una delle due mentiva, e chi guarda
+        non ha modo di sapere quale.
+        """
+        self.domotica.ascolta(self._cambiato)
+        stato = self.domotica.stato()
+        if stato["collegata"]:
+            self._mostra_stato(_('Collegato a {host}.', host=stato["host"]), T.ARMED)
+        elif stato["attiva"]:
+            self._mostra_stato(_('Configurato su {host}, ma il broker non risponde. '
+                                 'Premi «Cerca i dispositivi di casa» per riprovare.',
+                                 host=stato["host"]), T.ALARM)
+        else:
+            self._mostra_stato(_('Non collegato. Premi «Cerca i dispositivi di casa».'), T.MUTED)
+        self._ridisegna()
+
     def collega(self) -> bool:
         """Salva e si collega. **Salva prima**, e qui sta il punto.
 
         Il pulsante fa una cosa vera, quindi «Salva» sembra superfluo: chi lo preme, vede comparire
         le lampadine e chiude la finestra, se l'è persa tutta. È lo stesso difetto corretto sul
-        nodo — *niente più «Applica»: ogni gesto arriva quando lo fai* — ed è successo a Marco il
-        14/11, alla prima apertura della scheda.
+        nodo — *niente più «Applica»: ogni gesto arriva quando lo fai*.
         """
         from ..credentials import KEEP, SMARTHOME_PASSWORD  # noqa: PLC0415
 
@@ -196,7 +256,7 @@ class SchedaSmartHome(QWidget):
             self._ridisegna()
             return False
         self._mostra_stato(_('Collegato a {host} e salvato. Sto cercando i dispositivi…', host=host),
-                           T.INFO)
+                           T.ARMED)
         self.domotica.ascolta(self._cambiato)
         self._ridisegna()
         return True
@@ -204,13 +264,8 @@ class SchedaSmartHome(QWidget):
     def _cambiato(self, _d) -> None:
         self._ponte.cambiato.emit()
 
-    @property
-    def casa(self):
-        """La casa è quella del nucleo: la scheda la guarda, non la possiede."""
-        return self.domotica.casa
-
     def stacca(self) -> None:
-        """Smette di guardare. **Non** chiude il collegamento: quello deve sopravvivere alla finestra."""
+        """Smette di guardare. **Non** chiude il collegamento: quello sopravvive alla finestra."""
         self.domotica.non_ascoltare(self._cambiato)
         self.ascolta_btn.setChecked(False)
         if self.casa is not None:
@@ -230,37 +285,60 @@ class SchedaSmartHome(QWidget):
 
     # --- disegnare ------------------------------------------------------------
     def _ridisegna(self) -> None:
-        self._svuota(self.griglia)
-        dispositivi = self.casa.dispositivi() if self.casa else []
-        if not dispositivi:
-            vuoto = QLabel(_('Nessun dispositivo, per ora.') if self.casa
-                           else _('Collegati per vedere cosa c\'è in casa.'))
-            vuoto.setStyleSheet(f"color:{T.FAINT};")
-            self.griglia.addWidget(vuoto, 0, 0)
-        for r, d in enumerate(dispositivi):
-            nome = QLabel(d.nome if d.vivo else _('{nome} (non risponde)', nome=d.nome))
-            nome.setStyleSheet(f"color:{T.TEXT if d.vivo else T.FAINT};")
-            self.griglia.addWidget(nome, r, 0)
-            marca = QLabel(_('preso a orecchio') if d.adottato
-                           else (d.marca if d.marca != SCONOSCIUTA else ""))
-            marca.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
-            self.griglia.addWidget(marca, r, 1)
-            stato = QLabel(_('non lo so') if d.acceso is None
-                           else (_('acceso') if d.acceso else _('spento')))
-            stato.setStyleSheet(f"color:{T.ARMED if d.acceso else T.FAINT}; font-weight:600;")
-            self.griglia.addWidget(stato, r, 2)
-            if d.comandabile:
-                gira = QPushButton(_('Spegni') if d.acceso else _('Accendi'))
-                gira.setObjectName("small")
-                gira.clicked.connect(
-                    lambda _c=False, i=d.identificativo, a=not d.acceso: self._gira(i, a))
-                self.griglia.addWidget(gira, r, 3)
-            else:
-                solo = QLabel(_('si guarda'))
-                solo.setStyleSheet(f"color:{T.FAINT}; font-size:{T.SIZE_SMALL}px;")
-                self.griglia.addWidget(solo, r, 3)
+        dispositivi = self.domotica.dispositivi()
+        self._scelti = [d.identificativo for d in dispositivi]
+        self.schede.set_rows([self._riga(d) for d in dispositivi])
+        self._mostra_scelto()
         self._aggiorna_pronto(len(dispositivi))
         self._disegna_grezzi()
+
+    def _riga(self, d) -> dict:
+        """Una scheda dell'elenco, con la stessa forma delle schede dei nodi."""
+        if not d.vivo:
+            colore, parola = T.ALARM, _('non risponde')
+        elif d.acceso is None:
+            colore, parola = T.MUTED, _('non lo so')
+        elif d.acceso:
+            colore, parola = T.ARMED, _('acceso')
+        else:
+            colore, parola = T.DISARMED, _('spento')
+        marca = _('preso a orecchio') if d.adottato else (d.marca if d.marca != SCONOSCIUTA else "")
+        sub = parola + (f" · {html.escape(marca)}" if marca else "")
+        bottoni = []
+        if d.comandabile:
+            bottoni.append((_('Spegni') if d.acceso else _('Accendi'),
+                            lambda i=d.identificativo, a=not d.acceso: self._gira(i, a), False))
+        return {"title": d.nome, "sub": sub, "dot": colore, "buttons": bottoni}
+
+    def _scelto(self):
+        riga = self.schede.current_row()
+        if not 0 <= riga < len(self._scelti):
+            return None
+        return self.domotica.casa.dispositivo(self._scelti[riga]) if self.domotica.casa else None
+
+    def _mostra_scelto(self) -> None:
+        d = self._scelto()
+        self.dettaglio.setVisible(d is not None)
+        if d is None:
+            return
+        self.d_nome.setText(d.nome)
+        pezzi = []
+        if d.marca and d.marca != SCONOSCIUTA:
+            pezzi.append(_('Marca: {marca}', marca=html.escape(d.marca)))
+        if d.adottato:
+            pezzi.append(_('Preso a orecchio: quello che Mirto ne sa è un\'ipotesi, non un annuncio.'))
+        pezzi.append(_('Dice il suo stato su <code>{argomento}</code>',
+                       argomento=html.escape(d.argomento_stato)))
+        if d.comandabile:
+            pezzi.append(_('Ascolta i comandi su <code>{argomento}</code>',
+                           argomento=html.escape(d.argomento_comando)))
+        else:
+            pezzi.append(_('Si guarda soltanto: non è una cosa che si accende.'))
+        self.d_riga.setText("<br>".join(pezzi))
+        self.d_gira.setVisible(bool(d.comandabile))
+        if d.comandabile:
+            self.d_gira.setText(_('Spegni') if d.acceso else _('Accendi'))
+        self.d_togli.setVisible(bool(d.adottato))
 
     def _aggiorna_pronto(self, quanti: int) -> None:
         if not quanti:
@@ -274,7 +352,10 @@ class SchedaSmartHome(QWidget):
         self.scatola_pronto.show()
 
     def _disegna_grezzi(self) -> None:
-        self._svuota(self.grezzi)
+        while self.grezzi.count():
+            arnese = self.grezzi.takeAt(0).widget()
+            if arnese is not None:
+                arnese.deleteLater()
         if self.casa is None or not self.ascolta_btn.isChecked():
             self.chi_parla.setText("")
             return
@@ -294,17 +375,24 @@ class SchedaSmartHome(QWidget):
             prendi.clicked.connect(lambda _c=False, a=argomento: self._adotta(a))
             self.grezzi.addWidget(prendi, r, 1)
 
-    @staticmethod
-    def _svuota(griglia) -> None:
-        while griglia.count():
-            arnese = griglia.takeAt(0).widget()
-            if arnese is not None:
-                arnese.deleteLater()
-
     # --- quello che si può fare ----------------------------------------------
     def _gira(self, identificativo: str, acceso: bool) -> None:
-        if self.casa is not None and not self.casa.comanda(identificativo, acceso):
+        if not self.domotica.comanda(identificativo, acceso):
             self._mostra_stato(_('Il comando non è partito.'), T.ALARM)
+
+    def _gira_scelto(self) -> None:
+        d = self._scelto()
+        if d is not None:
+            self._gira(d.identificativo, not d.acceso)
+
+    def _dimentica_scelto(self) -> None:
+        d = self._scelto()
+        if d is None or self.casa is None:
+            return
+        self.casa.dimentica(d.identificativo)
+        self._adottati = [v for v in self._adottati if v.get("topic") != d.argomento_stato]
+        self._salva()
+        self._ridisegna()
 
     def _adotta(self, argomento: str) -> None:
         if self.casa is None:
@@ -317,7 +405,15 @@ class SchedaSmartHome(QWidget):
         self._adottati = [v for v in self._adottati if v.get("topic") != argomento]
         self._adottati.append({"topic": argomento, "name": nome.strip(),
                                "command_topic": d.argomento_comando})
+        self._salva()
         self._ridisegna()
+
+    def _salva(self) -> None:
+        self.cfg.set("smarthome", self.valori())
+        try:
+            self.cfg.save()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("smarthome: configurazione non salvata (%s)", exc)
 
     # --- salvare --------------------------------------------------------------
     def valori(self) -> dict:

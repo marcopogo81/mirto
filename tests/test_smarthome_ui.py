@@ -105,48 +105,38 @@ class LaSchedaTest(unittest.TestCase):
             time.sleep(0.02)
         self.app.processEvents()
 
-    def _righe(self) -> list[str]:
+    def _titoli(self) -> list[str]:
+        """I nomi scritti nelle schede dell'elenco, come li legge chi guarda."""
         from PySide6.QtWidgets import QLabel
 
-        fuori = []
-        for r in range(self.scheda.griglia.rowCount()):
-            voce = self.scheda.griglia.itemAtPosition(r, 0)
-            if voce is not None and isinstance(voce.widget(), QLabel):
-                fuori.append(voce.widget().text())
-        return fuori
+        return [e.text() for e in self.scheda.schede.findChildren(QLabel) if e.text()]
 
     def _aspetta_righe(self, quante: int, secondi: float = 4.0) -> list[str]:
-        self._macina(secondi, lambda: len([r for r in self._righe() if "Luce" in r or "Movimento" in r]) < quante)
-        righe = [r for r in self._righe() if "Luce" in r or "Movimento" in r]
-        self.assertGreaterEqual(len(righe), quante, f"viste solo: {righe}")
-        return righe
+        self._macina(secondi, lambda: len(self.scheda._scelti) < quante)      # noqa: SLF001
+        self.assertGreaterEqual(len(self.scheda._scelti), quante,             # noqa: SLF001
+                                f"viste solo: {self._titoli()}")
+        return self._titoli()
 
-    def _bottone_di(self, pezzo: str):
-        from PySide6.QtWidgets import QLabel, QPushButton
-
-        for r in range(self.scheda.griglia.rowCount()):
-            voce = self.scheda.griglia.itemAtPosition(r, 0)
-            if voce is None or not isinstance(voce.widget(), QLabel) or pezzo not in voce.widget().text():
-                continue
-            comando = self.scheda.griglia.itemAtPosition(r, 3)
-            return comando.widget() if comando and isinstance(comando.widget(), QPushButton) else None
-        raise AssertionError(f"«{pezzo}» non è nell'elenco: {self._righe()}")
+    def _scegli(self, pezzo: str):
+        """Seleziona la scheda di un dispositivo e restituisce il suo identificativo."""
+        for i, identificativo in enumerate(self.scheda._scelti):              # noqa: SLF001
+            d = self.scheda.casa.dispositivo(identificativo)
+            if d is not None and pezzo.lower() in d.nome.lower():
+                self.scheda.schede.set_current_row(i)
+                self.app.processEvents()
+                return identificativo
+        raise AssertionError(f"«{pezzo}» non è nell'elenco: {self._titoli()}")
 
     def _stato_di(self, pezzo: str) -> str:
-        from PySide6.QtWidgets import QLabel
-
-        for r in range(self.scheda.griglia.rowCount()):
-            voce = self.scheda.griglia.itemAtPosition(r, 0)
-            if voce is None or not isinstance(voce.widget(), QLabel) or pezzo not in voce.widget().text():
-                continue
-            return self.scheda.griglia.itemAtPosition(r, 2).widget().text()
-        raise AssertionError(f"«{pezzo}» non è nell'elenco: {self._righe()}")
+        identificativo = self._scegli(pezzo)
+        d = self.scheda.casa.dispositivo(identificativo)
+        return "acceso" if d.acceso else ("spento" if d.acceso is not None else "non lo so")
 
     # --- la promessa della scheda ---------------------------------------------
     def test_prima_di_collegarsi_lo_dice_invece_di_mostrare_un_vuoto(self):
         # un elenco vuoto senza spiegazione fa pensare «non ho niente in casa» invece di «non sei
         # ancora collegato»: sono due cose diverse e portano a due gesti diversi
-        self.assertIn("Collegati", "".join(self._righe()) + self.scheda.stato.text())
+        self.assertIn("Cerca", self.scheda.stato.text())
 
     def test_un_pulsante_e_i_dispositivi_compaiono(self):
         self.assertTrue(self.scheda.collega())
@@ -159,7 +149,7 @@ class LaSchedaTest(unittest.TestCase):
     def test_il_maleducato_non_compare_finche_non_si_ascolta(self):
         self.scheda.collega()
         self._aspetta_righe(3)
-        self.assertFalse(any("garage" in r for r in self._righe()))
+        self.assertFalse(any("garage" in t.lower() for t in self._titoli()))
 
     def test_senza_indirizzo_lo_dice_e_non_fa_finta_di_niente(self):
         self.scheda.host.setText("  ")
@@ -179,18 +169,22 @@ class LaSchedaTest(unittest.TestCase):
         self.finta.cambia("luce_scale", True)
         self._macina(3.0, lambda: self._stato_di("Luce delle scale") != "acceso")
         self.assertEqual(self._stato_di("Luce delle scale"), "acceso")
+        self.assertIn("Spegni", self.scheda.d_gira.text(),
+                      "il pulsante del dettaglio deve seguire lo stato")
 
     def test_il_pulsante_accende_davvero(self):
         self.scheda.collega()
         self._aspetta_righe(3)
-        self._bottone_di("Luce delle scale").click()
+        self._scegli("Luce delle scale")
+        self.scheda.d_gira.click()
         self._macina(3.0, lambda: not self.finta.dispositivi["luce_scale"].acceso)
         self.assertTrue(self.finta.dispositivi["luce_scale"].acceso)
 
     def test_uno_zigbee_si_comanda_nella_sua_lingua(self):
         self.scheda.collega()
         self._aspetta_righe(3)
-        self._bottone_di("Luce della cucina").click()
+        self._scegli("Luce della cucina")
+        self.scheda.d_gira.click()
         self._macina(3.0, lambda: not self.finta.dispositivi["luce_cucina"].acceso)
         self.assertTrue(self.finta.dispositivi["luce_cucina"].acceso)
 
@@ -198,7 +192,9 @@ class LaSchedaTest(unittest.TestCase):
         # un pulsante che non fa niente è peggio di nessun pulsante
         self.scheda.collega()
         self._aspetta_righe(3)
-        self.assertIsNone(self._bottone_di("Movimento"))
+        self._scegli("Movimento")
+        self.assertFalse(self.scheda.d_gira.isVisibleTo(self.scheda.dettaglio))
+        self.assertIn("guarda", self.scheda.d_riga.text())
 
     # --- la riga «sei pronto» -------------------------------------------------
     def test_la_riga_sei_pronto_compare_solo_quando_c_e_qualcosa(self):
@@ -232,8 +228,9 @@ class LaSchedaTest(unittest.TestCase):
         self._macina(3.0, lambda: not any("garage" in a for a, _ in self.scheda.casa.chi_parla()))
         self.scheda.casa.adotta("tuya/luce_garage/dps", "Luce del garage")
         self.scheda._ridisegna()    # noqa: SLF001
-        self.assertTrue(any("Luce del garage" in r for r in self._righe()))
-        self._bottone_di("Luce del garage").click()
+        self.assertTrue(any("Luce del garage" in t for t in self._titoli()))
+        self._scegli("Luce del garage")
+        self.scheda.d_gira.click()
         self._macina(3.0, lambda: self.finta.dispositivi["luce_garage"].acceso)
         self.assertFalse(self.finta.dispositivi["luce_garage"].acceso)
 
@@ -282,8 +279,8 @@ class LaSchedaTest(unittest.TestCase):
         scheda.porta.setValue(self.finta.porta)
         self.assertTrue(scheda.collega())
         self.scheda = scheda
-        righe = self._aspetta_righe(4)
-        self.assertTrue(any("Luce del garage" in r for r in righe),
+        titoli = self._aspetta_righe(4)
+        self.assertTrue(any("Luce del garage" in t for t in titoli),
                         "chi è stato preso a orecchio non si deve riprendere a ogni avvio")
 
     # --- la password -----------------------------------------------------------
@@ -331,6 +328,70 @@ class LaSchedaTest(unittest.TestCase):
         self.scheda.stacca()
         self.assertTrue(domotica.stato()["collegata"])
         self.assertGreaterEqual(len(domotica.dispositivi()), 3)
+
+
+    # --- il difetto del 14/11 sera --------------------------------------------
+    def test_riaprendo_la_scheda_mostra_quello_che_il_nucleo_sta_gia_facendo(self):
+        """Marco, guardando le due cose insieme: il riquadro «Sistema» elencava i dispositivi e la
+        scheda, a due centimetri, diceva «Non collegato».
+
+        Una delle due mentiva, e chi guarda non ha modo di sapere quale. La scheda guarda il nucleo:
+        all'apertura deve dire quello che il nucleo **sta già** facendo, non ripartire da zero.
+        """
+        from PySide6.QtWidgets import QLineEdit
+
+        from mirto.gui.smarthome_ui import SchedaSmartHome
+
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        domotica = self.scheda.domotica
+        self.addCleanup(domotica.stop)
+        self.scheda.stacca()                 # come chiudere le impostazioni
+
+        riaperta = SchedaSmartHome(self.cfg, self.segreti, QLineEdit(), domotica=domotica)
+        self.addCleanup(riaperta.stacca)
+        self.addCleanup(riaperta.deleteLater)
+        self.scheda = riaperta
+        self.assertNotIn("Non collegato", riaperta.stato.text(),
+                         "il nucleo è collegato: dirlo scollegato è una bugia")
+        self.assertIn("Collegato", riaperta.stato.text())
+        self.assertGreaterEqual(len(riaperta._scelti), 3,       # noqa: SLF001
+                                "e i dispositivi che il nucleo ha già trovato si devono vedere")
+
+    def test_riaprendola_col_broker_spento_lo_dice_senza_fingere(self):
+        from PySide6.QtWidgets import QLineEdit
+
+        from mirto.actions.smarthome import Domotica
+        from mirto.gui.smarthome_ui import SchedaSmartHome
+
+        self.cfg.set("smarthome", {"enabled": True, "host": "127.0.0.1", "port": 1})
+        domotica = Domotica(self.cfg, self.segreti)
+        self.addCleanup(domotica.stop)
+        domotica.start()
+        scheda = SchedaSmartHome(self.cfg, self.segreti, QLineEdit(), domotica=domotica)
+        self.addCleanup(scheda.stacca)
+        self.addCleanup(scheda.deleteLater)
+        self.assertIn("non risponde", scheda.stato.text())
+
+    def test_l_elenco_ha_la_forma_delle_schede_dei_nodi(self):
+        """Non è un vezzo: chi ha abbinato un nodo sa già usare questa, e viceversa.
+
+        Il 14/11 l'avevo inventata come una tabella tutta mia, e Marco l'ha fermata: «guarda come è
+        strutturata come layout, non ti inventare cose nuove ogni volta».
+        """
+        import ast
+        import pathlib as _p
+
+        from mirto.gui.cards import CardList
+
+        self.assertIsInstance(self.scheda.schede, CardList,
+                              "l'elenco è lo stesso arnese dei nodi, non una tabella nuova")
+        # e il pulsantone in cima è lo stesso: «primary_button», come «Cerca nodi in rete»
+        albero = ast.parse(_p.Path("mirto/gui/smarthome_ui.py").read_text(encoding="utf-8"))
+        chiamate = {n.func.id for n in ast.walk(albero)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        self.assertIn("primary_button", chiamate)
+        self.assertIn("CardList", chiamate)
 
 
 if __name__ == "__main__":

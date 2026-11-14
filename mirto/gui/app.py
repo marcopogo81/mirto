@@ -381,7 +381,10 @@ class MainWindow(QMainWindow):
             quale = _('acceso') if d.acceso else (_('spento') if d.acceso is not None else _('non lo so'))
             righe.append(f"&nbsp;&nbsp;{html.escape(d.nome)} – "
                          + (quale if d.vivo else _('non risponde')))
-        self.row_smart.set(T.INFO, _('SmartHome: {quanti} dispositivi, {accesi} accesi',
+        # Verde: collegata e con dispositivi, cioe' sta funzionando. Chiesto da Marco il 14/11
+        # guardando il riquadro — e ha ragione: in questa colonna il verde vuol dire «a posto», e
+        # l'azzurro e' il colore di un'informazione, non di uno stato sano.
+        self.row_smart.set(T.ARMED, _('SmartHome: {quanti} dispositivi, {accesi} accesi',
                                      quanti=stato["quanti"], accesi=stato["accesi"]),
                            _('I dispositivi di casa (Impostazioni → SmartHome)'),
                            "<br>".join(righe) if aperto else "",
