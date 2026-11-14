@@ -12,6 +12,10 @@
 **Guiding principle:** no third-party cloud. Video stays on your computer; only the alert snapshots leave
 it, and only towards the channels you configure.
 
+📄 **In a hurry?** The whole thing in fourteen slides:
+**[Mirto, the presentation (PDF)](docs/Mirto-presentation.pdf)** — or the
+[editable deck](docs/Mirto-presentation.pptx) if you want to show it to someone yourself.
+
 ## Download
 
 ### **[⬇ Mirto 0.2.0 — macOS and Windows](https://github.com/marcopogo81/mirto/releases/latest)**
@@ -49,15 +53,21 @@ four commands.
 
 ## What it is for
 
-Four ordinary evenings. [Eight more →](docs/cards.md)
+Twelve ordinary evenings, and what Mirto does about each one. Click any of them for the big
+version and the story in words: [all twelve, full size](docs/cards.md).
 
-[<img src="docs/img/cards/02-night-visitor.svg" alt="The night visitor: a person at night, the node's siren sounds and the photo reaches Telegram" width="400">](docs/cards.md#2-the-night-visitor)
-[<img src="docs/img/cards/01-cat.svg" alt="The cat and the flower pot: Mirto sees a cat, not a person, and the node plays a hawk call" width="400">](docs/cards.md#1-the-cat-and-the-flower-pot)
-[<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window" width="400">](docs/cards.md#9-what-happened-last-night)
-[<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="400">](docs/cards.md#12-it-all-stays-home)
-
-The whole thing in fourteen slides: [presentation (PDF)](docs/Mirto-presentation.pdf), or the
-[editable deck](docs/Mirto-presentation.pptx) if you want to show it to someone yourself.
+[<img src="docs/img/cards/01-cat.svg" alt="The cat and the flower pot: Mirto recognises a cat, not a person, and the node plays a hawk call" width="260">](docs/cards.md#1-the-cat-and-the-flower-pot)
+[<img src="docs/img/cards/02-night-visitor.svg" alt="The night visitor: a person at night, the node's siren sounds and the photo reaches Telegram" width="260">](docs/cards.md#2-the-night-visitor)
+[<img src="docs/img/cards/03-broken-glass.svg" alt="The broken window: Mirto hears glass break and raises the alarm even with nobody in frame" width="260">](docs/cards.md#3-the-broken-window)
+[<img src="docs/img/cards/04-smoke-alarm.svg" alt="The alarm nobody hears: the smoke alarm goes off in an empty house and Mirto tells you" width="260">](docs/cards.md#4-the-alarm-nobody-hears)
+[<img src="docs/img/cards/05-pigeons.svg" alt="The balcony squatters: pigeons on the balcony, and the node plays the deterrent chosen for them" width="260">](docs/cards.md#5-the-balcony-squatters)
+[<img src="docs/img/cards/06-car.svg" alt="The car in the driveway: Mirto can watch for a car, not just for people" width="260">](docs/cards.md#6-the-car-in-the-driveway)
+[<img src="docs/img/cards/07-everyone-out.svg" alt="Everybody's out: the phones leave the Wi-Fi and Mirto arms the house by itself" width="260">](docs/cards.md#7-everybodys-out)
+[<img src="docs/img/cards/08-false-alarm.svg" alt="False alarm: the photo arrives on Telegram and one tap marks it as a false alarm" width="260">](docs/cards.md#8-false-alarm)
+[<img src="docs/img/cards/09-last-night.svg" alt="What happened last night: scrubbing the timeline in the Review window to find the moment" width="260">](docs/cards.md#9-what-happened-last-night)
+[<img src="docs/img/cards/10-computer-off.svg" alt="The computer is off: the laptop sleeps and the node keeps recording to its own disk" width="260">](docs/cards.md#10-the-computer-is-off)
+[<img src="docs/img/cards/11-barking-dog.svg" alt="Rex has something to say: the dog barks and Mirto recognises the sound" width="260">](docs/cards.md#11-rex-has-something-to-say)
+[<img src="docs/img/cards/12-stays-home.svg" alt="It all stays home: the video never leaves the house, only the alert photo goes out" width="260">](docs/cards.md#12-it-all-stays-home)
 
 ## What it does
 
@@ -107,13 +117,13 @@ starting point: *you have a computer, a camera, and something outside you would 
 | Install | download, open, done | Docker Compose (or a Home Assistant app) | download, open, done | download, open, done | Windows installer | Docker / npm |
 | Runs on | macOS, Windows | Linux best; **Windows not officially supported** | **Apple Silicon only** (M1+, macOS 14+) | Mac only | Windows only | Linux, macOS, Windows (via Docker) |
 | Price | 0, Apache 2.0, no paid tier | 0, open source; **Frigate+** $50/year for custom models | **$10** once, a year of updates | from **£35.90** (1 camera) to **£739** (unlimited) | **$99.95** full, **$39.95** one camera, renewals from $44.95/year | open-source core, **paid NVR subscription** |
-| Open source | **yes, all of it** | yes | core is Frigate (MIT); **the macOS port is proprietary** | no | no | core yes, NVR no |
-| Extra hardware | none: your Mac's Neural Engine or your GPU | an accelerator is "strongly recommended" | none: Neural Engine | none | a decent GPU for many cameras | depends on the plugins |
-| Phone app | **on purpose, no** — Telegram is the remote, so there is no store account and no server of ours between you and your cameras | no | **yes**, free, with Apple Watch | yes | web | its own apps |
-| Drives physical devices | **yes**: nodes with siren, lights, relays, sounds | through MQTT and your automations | no | no | relays via plugins | through the home-automation platform |
-| Ready-made outdoor node | **yes**: write one image to a microSD, boot it, pair it with a 6-digit PIN. Camera, siren and lights in about ten minutes | — build it yourself | — | — | — | — |
-| Deterrent sounds for animals | **yes**, with limits in the code | no | no | no | no | no |
-| Faces, plates | **no** | yes, built in | through Frigate+ | faces | plugins | plugins |
+| Open source | ✅ **yes, all of it** | ✅ yes | ⚠️ core is Frigate (MIT); **the port is proprietary** | ❌ no | ❌ no | ⚠️ core yes, NVR no |
+| Extra hardware | ✅ none: your Mac's Neural Engine or your GPU | ⚠️ an accelerator is "strongly recommended" | ✅ none: Neural Engine | ✅ none | ⚠️ a decent GPU for many cameras | ⚠️ depends on the plugins |
+| Phone app | ❌ **no, on purpose** — Telegram is the remote ([why](#why-not-frigate-fregata-securityspy-blue-iris-or-scrypted)) | ❌ no | ✅ **yes**, free, with Apple Watch | ✅ yes | ⚠️ web | ✅ its own apps |
+| Drives physical devices | ✅ **yes**: nodes with siren, lights, relays, sounds | ⚠️ through MQTT and your automations | ❌ no | ❌ no | ⚠️ relays via plugins | ⚠️ through the home-automation platform |
+| Ready-made outdoor node | ✅ **yes**: one image on a microSD, boot, pair with a 6-digit PIN — ten minutes | ❌ build it yourself | ❌ | ❌ | ❌ | ❌ |
+| Deterrent sounds for animals | ✅ **yes**, with limits in the code | ❌ no | ❌ no | ❌ no | ❌ no | ❌ no |
+| Faces, plates | ❌ **no, by choice** | ✅ yes, built in | ⚠️ through Frigate+ | ✅ faces | ⚠️ plugins | ⚠️ plugins |
 
 **Where each of them beats Mirto**, because this table is useless if it only flatters us: **Fregata** is
 the closest thing to Mirto on a Mac, and for $10 it also gives you a phone app and HomeKit — if you want
