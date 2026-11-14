@@ -42,7 +42,14 @@ class ConfigFinta:
         return posto
 
     def set(self, chiave, valore):
-        self.dentro[chiave] = valore
+        posto = self.dentro
+        pezzi = chiave.split(".")
+        for pezzo in pezzi[:-1]:
+            posto = posto.setdefault(pezzo, {})
+        posto[pezzi[-1]] = valore
+
+    def save(self):
+        self.salvata = getattr(self, "salvata", 0) + 1
 
 
 class SegretiFinti:
@@ -86,6 +93,7 @@ class LaSchedaTest(unittest.TestCase):
         self.segreti = SegretiFinti()
         self.scheda = SchedaSmartHome(self.cfg, self.segreti, QLineEdit())
         self.addCleanup(self.scheda.stacca)
+        self.addCleanup(lambda: self.scheda.domotica.stop())
         self.addCleanup(self.scheda.deleteLater)
         self.scheda.host.setText("127.0.0.1")
         self.scheda.porta.setValue(self.finta.porta)
@@ -280,28 +288,49 @@ class LaSchedaTest(unittest.TestCase):
 
     # --- la password -----------------------------------------------------------
     def test_la_password_salvata_si_riusa_senza_mostrarla(self):
-        """Il campo mostra i pallini, non la password: collegandosi si prende quella vera dal portachiavi."""
+        """Il campo mostra i pallini, non la password: collegandosi si prende quella del portachiavi."""
         from PySide6.QtWidgets import QLineEdit
 
         from mirto.credentials import KEEP, SMARTHOME_PASSWORD
         from mirto.gui.smarthome_ui import SchedaSmartHome
 
         self.segreti.set(SMARTHOME_PASSWORD, "quella-vera")
-        campo = QLineEdit(KEEP)
-        viste = {}
-
-        def fabbrica(host, porta, **resto):
-            viste.update(resto)
-            from mirto.actions.smarthome import CasaSmart
-            return CasaSmart(host, porta, **resto)
-
-        scheda = SchedaSmartHome(self.cfg, self.segreti, campo, fabbrica=fabbrica)
+        scheda = SchedaSmartHome(self.cfg, self.segreti, QLineEdit(KEEP))
         self.addCleanup(scheda.stacca)
+        self.addCleanup(scheda.domotica.stop)
         self.addCleanup(scheda.deleteLater)
         scheda.host.setText("127.0.0.1")
         scheda.porta.setValue(self.finta.porta)
         self.assertTrue(scheda.collega())
-        self.assertEqual(viste.get("password"), "quella-vera")
+        self.assertEqual(self.segreti.get(SMARTHOME_PASSWORD), "quella-vera",
+                         "il segnaposto non deve sovrascrivere la password vera")
+        self.assertEqual(scheda.casa.password, "quella-vera")
+
+    def test_collegarsi_salva_subito(self):
+        """Il difetto del 14/11, visto da Marco alla prima apertura.
+
+        Il pulsante «Collegati e cerca» fa una cosa vera: compaiono le lampadine, e «Salva» sembra
+        superfluo. Chi chiude la finestra se l'è persa tutta. È lo stesso difetto corretto sul nodo
+        — *niente più «Applica»* — quindi collegarsi **è** salvare.
+        """
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        self.assertEqual(self.cfg.get("smarthome.host"), "127.0.0.1")
+        self.assertEqual(self.cfg.get("smarthome.port"), self.finta.porta)
+        self.assertTrue(self.cfg.get("smarthome.enabled"),
+                        "collegarsi è dire che la vuoi usare")
+        self.assertGreaterEqual(getattr(self.cfg, "salvata", 0), 1, "e il file va scritto")
+
+    def test_chiudere_la_scheda_non_stacca_la_casa(self):
+        # la scheda guarda, non possiede: chiudendo le impostazioni la domotica resta viva, se no
+        # il pannello «Sistema» la mostrerebbe spenta e le Azioni non potrebbero comandare niente
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        domotica = self.scheda.domotica
+        self.addCleanup(domotica.stop)
+        self.scheda.stacca()
+        self.assertTrue(domotica.stato()["collegata"])
+        self.assertGreaterEqual(len(domotica.dispositivi()), 3)
 
 
 if __name__ == "__main__":

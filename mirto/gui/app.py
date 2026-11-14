@@ -293,13 +293,14 @@ class MainWindow(QMainWindow):
         self.row_ai = StatusRow(mono=True)
         self.row_notify = StatusRow(mono=True)   # Notifiche: Telegram, Email, SMS sotto un'unica voce
         self.row_nodes = StatusRow(mono=True)
+        self.row_smart = StatusRow(mono=True)   # la domotica di casa, se c'è
         self.row_sched = StatusRow(mono=True)
         self.row_presence = StatusRow(mono=True)
         self.row_audio = StatusRow(mono=True)
         self.row_rec = StatusRow(mono=True)
         rows.addWidget(self._build_pair_card())
         for r in (self.row_boot, self.row_cams, self.row_ai, self.row_rec, self.row_audio, self.row_notify, self.row_nodes,
-                  self.row_sched, self.row_presence):
+                  self.row_smart, self.row_sched, self.row_presence):
             r.apri_chiudi.connect(self._sistema_apri_chiudi)
             rows.addWidget(r)
         rows.addStretch(1)
@@ -345,6 +346,41 @@ class MainWindow(QMainWindow):
         self.pair_card = card
         self._pair_found: dict | None = None
         return card
+
+    def _aggiorna_domotica(self, core) -> None:
+        """La riga «SmartHome» del riquadro Sistema: c'è solo se la domotica è configurata.
+
+        Una riga che dice «SmartHome: non configurata» a chi non ha un impianto smart sarebbe
+        rumore permanente in un pannello che si guarda per capire se qualcosa non va. Chi ce l'ha
+        invece deve vederla da qui, senza aprire le impostazioni: è il posto dove si guarda se la
+        casa sta funzionando.
+        """
+        domotica = getattr(core, "domotica", None)
+        if domotica is None:
+            self.row_smart.setVisible(False)
+            return
+        stato = domotica.stato()
+        self.row_smart.setVisible(bool(stato["attiva"]))
+        if not stato["attiva"]:
+            return
+        if not stato["collegata"]:
+            self.row_smart.set(T.ALARM, _('SmartHome: broker non raggiungibile ({host})',
+                                          host=stato["host"]),
+                               [_('Impostazioni → SmartHome per riprovare.')]
+                               + ([html.escape(stato["errore"])] if stato["errore"] else []))
+            return
+        if not stato["quanti"]:
+            self.row_smart.set(T.PAUSED, _('SmartHome: collegata, nessun dispositivo'),
+                               [_('Nessuno si è ancora fatto vedere. In Impostazioni → SmartHome '
+                                  'c\'è «Ascolta tutto» per chi non si annuncia.')])
+            return
+        righe = []
+        for d in domotica.dispositivi()[:12]:
+            quale = _('acceso') if d.acceso else (_('spento') if d.acceso is not None else _('non lo so'))
+            righe.append(f"&nbsp;&nbsp;{html.escape(d.nome)} – "
+                         + (quale if d.vivo else _('non risponde')))
+        self.row_smart.set(T.INFO, _('SmartHome: {quanti} dispositivi, {accesi} accesi',
+                                     quanti=stato["quanti"], accesi=stato["accesi"]), righe)
 
     def _update_pair_card(self) -> None:
         found = self.core.actions.pairing.current() if self.core.actions else []
@@ -1200,6 +1236,8 @@ class MainWindow(QMainWindow):
             self.tab_nodi.setVisible(False)
 
         self._update_pair_card()
+
+        self._aggiorna_domotica(core)
 
         pres = core.presence
         self.row_presence.setVisible(pres.enabled)

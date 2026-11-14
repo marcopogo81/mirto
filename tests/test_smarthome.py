@@ -409,3 +409,237 @@ class UnAnnuncioStortoTest(ConLaCasaFinta):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfigFinta:
+    """La configurazione, quanto basta: ``get`` a chiavi puntate, ``set`` e ``save``."""
+
+    def __init__(self, dentro=None):
+        self.dentro = dentro or {}
+        self.salvata = 0
+
+    def get(self, chiave, ripiego=None):
+        posto = self.dentro
+        for pezzo in chiave.split("."):
+            if not isinstance(posto, dict) or pezzo not in posto:
+                return ripiego
+            posto = posto[pezzo]
+        return posto
+
+    def set(self, chiave, valore):
+        posto = self.dentro
+        pezzi = chiave.split(".")
+        for pezzo in pezzi[:-1]:
+            posto = posto.setdefault(pezzo, {})
+        posto[pezzi[-1]] = valore
+
+    def save(self):
+        self.salvata += 1
+
+
+class SegretiFinti(dict):
+    def get(self, nome, ripiego=None):
+        return dict.get(self, nome, ripiego)
+
+    def set(self, nome, valore):
+        self[nome] = valore
+
+    def delete(self, nome):
+        self.pop(nome, None)
+
+
+class LaDomoticaRestaInPiediTest(unittest.TestCase):
+    """Il difetto del 14/11: si configurava, funzionava, si chiudeva la finestra e spariva tutto.
+
+    Il difetto non era il salvataggio: era il **posto**. Il collegamento viveva dentro la scheda
+    delle impostazioni, e una cosa che deve restare viva mentre Mirto lavora non può vivere dentro
+    una finestra — come non ci vivono i nodi né la presenza.
+    """
+
+    def setUp(self):
+        from mirto.actions.smarthome import Domotica
+
+        self.Domotica = Domotica
+        self.finta = CasaFinta([
+            DispositivoFinto("luce_scale", "Luce delle scale", LUCE, F_ESPHOME),
+            DispositivoFinto("luce_cucina", "Luce della cucina", LUCE, F_ZIGBEE),
+        ]).avvia()
+        self.addCleanup(self.finta.ferma)
+        self.cfg = ConfigFinta({"smarthome": {"enabled": True, "host": "127.0.0.1",
+                                              "port": self.finta.porta}})
+        self.segreti = SegretiFinti()
+
+    def _domotica(self):
+        d = self.Domotica(self.cfg, self.segreti)
+        self.addCleanup(d.stop)
+        return d
+
+    def _aspetta(self, domotica, quanti, secondi=4.0):
+        fine = time.monotonic() + secondi
+        while time.monotonic() < fine and len(domotica.dispositivi()) < quanti:
+            time.sleep(0.02)
+        self.assertGreaterEqual(len(domotica.dispositivi()), quanti,
+                                f"visti {[d.nome for d in domotica.dispositivi()]}")
+
+    def test_si_apre_da_sola_all_avvio(self):
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        self.assertTrue(d.stato()["collegata"])
+
+    def test_chiusa_la_finestra_resta_su(self):
+        """La prova del difetto: la scheda si stacca, la domotica no.
+
+        Si imita quello che fa la scheda chiudendosi — smettere di ascoltare — e si pretende che il
+        collegamento e i dispositivi siano ancora lì.
+        """
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        visto = []
+        d.ascolta(visto.append)
+        d.non_ascoltare(visto.append)          # è tutto quello che fa la scheda chiudendosi
+        self.assertTrue(d.stato()["collegata"], "chiudere la finestra non deve staccare niente")
+        self.assertEqual(len(d.dispositivi()), 2)
+        self.assertTrue(d.comanda(d.dispositivi()[0].identificativo, True),
+                        "e si deve ancora poter comandare")
+
+    def test_riaprendo_mirto_la_configurazione_c_e_ancora(self):
+        # la seconda metà dello stesso difetto: un altro avvio deve ritrovare tutto dalla
+        # configurazione, senza che nessuno ridigiti l'indirizzo
+        primo = self._domotica()
+        primo.start()
+        self._aspetta(primo, 2)
+        primo.stop()
+        secondo = self._domotica()
+        secondo.start()
+        self._aspetta(secondo, 2)
+        self.assertTrue(secondo.stato()["collegata"])
+
+    def test_senza_configurazione_non_fa_niente_e_non_si_lamenta(self):
+        self.cfg.set("smarthome.host", "")
+        d = self._domotica()
+        self.assertFalse(d.start() or d.stato()["attiva"])
+        self.assertEqual(d.dispositivi(), [])
+
+    def test_spenta_non_si_collega_anche_se_l_indirizzo_c_e(self):
+        self.cfg.set("smarthome.enabled", False)
+        d = self._domotica()
+        d.start()
+        self.assertFalse(d.stato()["collegata"])
+
+    def test_se_il_broker_e_spento_mirto_parte_lo_stesso_e_lo_dice(self):
+        # un broker di casa spento non deve impedire l'avvio: sarebbe «Mirto non si apre» per una
+        # lampadina
+        self.cfg.set("smarthome.port", 1)
+        d = self._domotica()
+        self.assertFalse(d.start() or False)
+        stato = d.stato()
+        self.assertTrue(stato["attiva"], "resta configurata: è il broker a non rispondere")
+        self.assertFalse(stato["collegata"])
+        self.assertTrue(stato["errore"], "e si deve poter dire perché")
+
+    def test_riapri_prende_le_impostazioni_nuove(self):
+        self.cfg.set("smarthome.port", 1)
+        d = self._domotica()
+        d.start()
+        self.assertFalse(d.stato()["collegata"])
+        self.cfg.set("smarthome.port", self.finta.porta)
+        self.assertTrue(d.riapri())
+        self._aspetta(d, 2)
+        self.assertEqual(d.stato()["errore"], "", "riuscendo, l'errore di prima va dimenticato")
+
+    def test_gli_adottati_tornano_da_soli(self):
+        self.cfg.set("smarthome.adopted", [{"topic": "tuya/x/dps", "name": "Presa strana",
+                                            "command_topic": "tuya/x/dps/set"}])
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 3)
+        self.assertIn("Presa strana", [x.nome for x in d.dispositivi()])
+
+    def test_chi_ascolta_viene_avvisato(self):
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        visti = []
+        d.ascolta(visti.append)
+        self.finta.cambia("luce_scale", True)
+        fine = time.monotonic() + 3.0
+        while time.monotonic() < fine and not visti:
+            time.sleep(0.02)
+        self.assertTrue(visti, "un cambio in casa deve arrivare a chi ascolta")
+
+    def test_un_ascoltatore_che_esplode_non_zittisce_gli_altri(self):
+        # le Azioni e l'interfaccia ascolteranno insieme: se una delle due esplode, l'altra non
+        # deve smettere di sapere cosa succede in casa
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        buoni = []
+
+        def cattivo(_x):
+            raise RuntimeError("io esplodo")
+
+        d.ascolta(cattivo)
+        d.ascolta(buoni.append)
+        self.finta.cambia("luce_scale", True)
+        fine = time.monotonic() + 3.0
+        while time.monotonic() < fine and not buoni:
+            time.sleep(0.02)
+        self.assertTrue(buoni)
+
+    def test_la_password_si_prende_dal_portachiavi(self):
+        from mirto.credentials import SMARTHOME_PASSWORD
+
+        self.segreti.set(SMARTHOME_PASSWORD, "parola")
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        self.assertEqual(d.casa.password, "parola",
+                         "la password sta nel portachiavi, non nella configurazione")
+        self.assertNotIn("parola", json.dumps(self.cfg.dentro),
+                         "e non deve mai finire nel file di configurazione")
+
+    def test_lo_stato_per_il_pannello_conta_quello_che_mostra(self):
+        d = self._domotica()
+        d.start()
+        self._aspetta(d, 2)
+        self.finta.cambia("luce_scale", True)
+        fine = time.monotonic() + 3.0
+        while time.monotonic() < fine and d.stato()["accesi"] < 1:
+            time.sleep(0.02)
+        stato = d.stato()
+        self.assertEqual(stato["quanti"], 2)
+        self.assertEqual(stato["accesi"], 1)
+        self.assertEqual(stato["host"], "127.0.0.1")
+
+
+class IlNucleoLaTieneLuiTest(unittest.TestCase):
+    """Che il nucleo apra e chiuda la domotica si legge nel codice, non si spera.
+
+    Si guardano i **nodi di chiamata**, non il testo: cercare «domotica.start» in un file passerebbe
+    anche trovando la riga che la definisce, ed è il modo in cui si scrivono guardiani ciechi.
+    """
+
+    @staticmethod
+    def _chiamate_dentro(nome_funzione: str) -> set[str]:
+        import ast
+        import pathlib
+
+        albero = ast.parse(pathlib.Path("mirto/core.py").read_text(encoding="utf-8"))
+        fuori = set()
+        for nodo in ast.walk(albero):
+            if not (isinstance(nodo, ast.FunctionDef) and nodo.name == nome_funzione):
+                continue
+            for dentro in ast.walk(nodo):
+                if isinstance(dentro, ast.Call) and isinstance(dentro.func, ast.Attribute):
+                    posto = dentro.func.value
+                    if isinstance(posto, ast.Attribute):
+                        fuori.add(f"{posto.attr}.{dentro.func.attr}")
+        return fuori
+
+    def test_il_nucleo_la_avvia(self):
+        self.assertIn("domotica.start", self._chiamate_dentro("start"))
+
+    def test_il_nucleo_la_ferma(self):
+        self.assertIn("domotica.stop", self._chiamate_dentro("stop"))

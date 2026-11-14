@@ -1679,7 +1679,8 @@ class SettingsDialog(QDialog):
         self.smarthome_pass = self._secret_field(SMARTHOME_PASSWORD)
         self.smarthome_pass.setPlaceholderText(_('password (se serve)'))
         self.smarthome_pass.setFixedWidth(150)
-        self.smarthome = SchedaSmartHome(self.cfg, self.secrets, self.smarthome_pass, self)
+        self.smarthome = SchedaSmartHome(self.cfg, self.secrets, self.smarthome_pass, self,
+                                         domotica=getattr(self.core, "domotica", None))
         lay.addWidget(self.smarthome, 1)
         return w
 
@@ -2862,6 +2863,8 @@ class SettingsDialog(QDialog):
         self._store_secret(TELEGRAM_TOKEN, self.tg_token)
         c.set("smarthome", self.smarthome.valori())
         self._store_secret(SMARTHOME_PASSWORD, self.smarthome_pass)
+        if getattr(self.core, "domotica", None) is not None:
+            self.core.domotica.riapri()   # se no resta collegata com'era prima del Salva
         c.set("notifications.email", {
             "enabled": self.em_enabled.isChecked(), "provider": self.em_provider.currentData(),
             "host": self.em_host.text().strip(), "port": self.em_port.value(), "security": "",

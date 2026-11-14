@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import theme as T
-from ..actions.smarthome import SCONOSCIUTA, CasaSmart
+from ..actions.smarthome import SCONOSCIUTA, Domotica
 from ..i18n import _
 
 log = logging.getLogger(__name__)
@@ -53,13 +53,15 @@ class _Ponte(QObject):
 class SchedaSmartHome(QWidget):
     """La scheda delle impostazioni. ``valori()`` dà quello che va salvato nella configurazione."""
 
-    def __init__(self, cfg, secrets, campo_password: QLineEdit, parent=None, fabbrica=None) -> None:
+    def __init__(self, cfg, secrets, campo_password: QLineEdit, parent=None, domotica=None) -> None:
         super().__init__(parent)
         self.cfg = cfg
         self.secrets = secrets
         self.password = campo_password
-        self._fabbrica = fabbrica or CasaSmart
-        self.casa: CasaSmart | None = None
+        # La domotica vive nel nucleo, non qui: questa scheda la configura e la guarda, non la
+        # possiede. Se ne possedesse una sua, chiudendo la finestra sparirebbe — che è esattamente
+        # il difetto trovato il 14/11.
+        self.domotica = domotica if domotica is not None else Domotica(cfg, secrets)
         self._ponte = _Ponte()
         self._ponte.cambiato.connect(self._ridisegna)
         dati = cfg.get("smarthome") or {}
@@ -163,42 +165,56 @@ class SchedaSmartHome(QWidget):
 
     # --- il collegamento ------------------------------------------------------
     def collega(self) -> bool:
-        """Si collega al broker e comincia a cercare. Dice sempre com'è andata, anche male."""
+        """Salva e si collega. **Salva prima**, e qui sta il punto.
+
+        Il pulsante fa una cosa vera, quindi «Salva» sembra superfluo: chi lo preme, vede comparire
+        le lampadine e chiude la finestra, se l'è persa tutta. È lo stesso difetto corretto sul
+        nodo — *niente più «Applica»: ogni gesto arriva quando lo fai* — ed è successo a Marco il
+        14/11, alla prima apertura della scheda.
+        """
         from ..credentials import KEEP, SMARTHOME_PASSWORD  # noqa: PLC0415
 
-        self.stacca()
         host = self.host.text().strip()
         if not host:
             self._mostra_stato(_("Scrivi prima l'indirizzo del broker."), T.PAUSED)
             self.host.setFocus()
             return False
         parola = self.password.text().strip()
-        if not parola or parola == KEEP:        # il campo mostra il segnaposto: la vera è nel portachiavi
-            parola = self.secrets.get(SMARTHOME_PASSWORD) or ""
+        if parola and parola != KEEP:           # il segnaposto vuol dire «lascia quella che c'è»
+            self.secrets.set(SMARTHOME_PASSWORD, parola)
+        elif not parola:
+            self.secrets.delete(SMARTHOME_PASSWORD)
+        self.acceso.setChecked(True)            # collegarsi *è* dire che la vuoi usare
+        self.cfg.set("smarthome", self.valori())
         try:
-            self.casa = self._fabbrica(
-                host, int(self.porta.value()), utente=self.utente.text().strip() or None,
-                password=parola or None, su_cambio=lambda _d: self._ponte.cambiato.emit())
-            self.casa.collega()
-        except Exception as exc:  # noqa: BLE001 - qualunque cosa vada storta, va detta qui
-            self.casa = None
-            self._mostra_stato(_('Non riesco a collegarmi: {exc}', exc=exc), T.ALARM)
+            self.cfg.save()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("smarthome: configurazione non salvata (%s)", exc)
+        if not self.domotica.riapri():
+            self._mostra_stato(_('Non riesco a collegarmi: {exc}',
+                                 exc=self.domotica.errore or host), T.ALARM)
+            self._ridisegna()
             return False
-        for voce in self._adottati:
-            try:
-                self.casa.adotta(str(voce.get("topic") or ""), str(voce.get("name") or ""),
-                                 voce.get("command_topic"))
-            except Exception:  # noqa: BLE001
-                log.exception("smarthome: non ho potuto riprendere %s", voce)
-        self._mostra_stato(_('Collegato a {host}. Sto cercando i dispositivi…', host=host), T.INFO)
+        self._mostra_stato(_('Collegato a {host} e salvato. Sto cercando i dispositivi…', host=host),
+                           T.INFO)
+        self.domotica.ascolta(self._cambiato)
         self._ridisegna()
         return True
 
+    def _cambiato(self, _d) -> None:
+        self._ponte.cambiato.emit()
+
+    @property
+    def casa(self):
+        """La casa è quella del nucleo: la scheda la guarda, non la possiede."""
+        return self.domotica.casa
+
     def stacca(self) -> None:
-        if self.casa is not None:
-            self.casa.chiudi()
-            self.casa = None
+        """Smette di guardare. **Non** chiude il collegamento: quello deve sopravvivere alla finestra."""
+        self.domotica.non_ascoltare(self._cambiato)
         self.ascolta_btn.setChecked(False)
+        if self.casa is not None:
+            self.casa.ascolta_tutto(False)
 
     def _ascolta(self) -> None:
         if self.casa is None:

@@ -419,3 +419,111 @@ class CasaSmart:
                 self.su_cambio(d)
             except Exception:  # noqa: BLE001 - chi ascolta non deve poter spegnere l'ascolto
                 log.exception("smarthome: su_cambio è esploso per %s", d.identificativo)
+
+
+class Domotica:
+    """Tiene in piedi il collegamento alla domotica per tutta la vita del programma.
+
+    **Perché esiste, e perché non sta nelle impostazioni.** Il collegamento era nato dentro la
+    scheda *SmartHome*: si configurava, funzionava, si chiudeva la finestra e spariva tutto. Il
+    difetto non era il salvataggio — era il posto. Una cosa che deve restare viva mentre Mirto
+    lavora non può vivere dentro una finestra, come non ci vivono i nodi né la presenza.
+
+    E non è solo per ricordarsene: dal pannello *Sistema* si deve vedere se la domotica c'è, e le
+    Azioni dovranno comandare le luci quando nessuna finestra è aperta.
+
+    Si riapre da sé quando le impostazioni cambiano: ``riapri()``. Non solleva mai — se il broker di
+    casa è spento, Mirto deve partire lo stesso, e dirlo.
+    """
+
+    def __init__(self, config, secrets) -> None:
+        self.config, self.secrets = config, secrets
+        self.casa: CasaSmart | None = None
+        self.errore = ""
+        self._lucchetto = threading.RLock()
+        self._ascoltatori: list[Callable[[Dispositivo], None]] = []
+
+    # --- vita -----------------------------------------------------------------
+    def start(self) -> None:
+        self.riapri()
+
+    def stop(self) -> None:
+        with self._lucchetto:
+            casa, self.casa = self.casa, None
+        if casa is not None:
+            casa.chiudi()
+
+    def riapri(self) -> bool:
+        """Richiude e riapre col quello che c'è scritto adesso nelle impostazioni."""
+        from ..credentials import SMARTHOME_PASSWORD  # noqa: PLC0415
+
+        self.stop()
+        self.errore = ""
+        dati = self.config.get("smarthome") or {}
+        host = str(dati.get("host") or "").strip()
+        if not dati.get("enabled") or not host:
+            return False
+        try:
+            casa = CasaSmart(host, int(dati.get("port") or 1883),
+                             utente=str(dati.get("username") or "") or None,
+                             password=self.secrets.get(SMARTHOME_PASSWORD) or None,
+                             tls=bool(dati.get("tls")),
+                             su_cambio=self._dillo_a_tutti).collega()
+        except Exception as exc:  # noqa: BLE001 - un broker spento non deve impedire l'avvio
+            self.errore = str(exc)
+            log.warning("domotica: non collegata a %s (%s)", host, exc)
+            return False
+        for voce in dati.get("adopted") or []:
+            try:
+                casa.adotta(str(voce.get("topic") or ""), str(voce.get("name") or ""),
+                            voce.get("command_topic"))
+            except Exception:  # noqa: BLE001
+                log.exception("domotica: non ho potuto riprendere %s", voce)
+        with self._lucchetto:
+            self.casa = casa
+        return True
+
+    # --- chi vuole saperlo ----------------------------------------------------
+    def ascolta(self, chi: Callable[[Dispositivo], None]) -> None:
+        """Si fa avvisare quando un dispositivo cambia. Serve alle Azioni e all'interfaccia."""
+        with self._lucchetto:
+            if chi not in self._ascoltatori:
+                self._ascoltatori.append(chi)
+
+    def non_ascoltare(self, chi) -> None:
+        with self._lucchetto:
+            if chi in self._ascoltatori:
+                self._ascoltatori.remove(chi)
+
+    def _dillo_a_tutti(self, d: Dispositivo) -> None:
+        with self._lucchetto:
+            chiunque = list(self._ascoltatori)
+        for chi in chiunque:
+            try:
+                chi(d)
+            except Exception:  # noqa: BLE001 - chi ascolta non deve poter spegnere l'ascolto
+                log.exception("domotica: un ascoltatore è esploso")
+
+    # --- per il pannello Sistema ----------------------------------------------
+    def dispositivi(self) -> list[Dispositivo]:
+        casa = self.casa
+        return casa.dispositivi() if casa is not None else []
+
+    def comanda(self, identificativo: str, acceso: bool) -> bool:
+        casa = self.casa
+        return bool(casa is not None and casa.comanda(identificativo, acceso))
+
+    def stato(self) -> dict:
+        """Quello che il riquadro «Sistema» deve mostrare, in una riga sola."""
+        dati = self.config.get("smarthome") or {}
+        casa = self.casa
+        dispositivi = casa.dispositivi() if casa is not None else []
+        return {
+            "attiva": bool(dati.get("enabled")) and bool(str(dati.get("host") or "").strip()),
+            "host": str(dati.get("host") or ""),
+            "collegata": bool(casa is not None and casa.collegata()),
+            "quanti": len(dispositivi),
+            "accesi": sum(1 for d in dispositivi if d.acceso),
+            "muti": sum(1 for d in dispositivi if not d.vivo),
+            "errore": self.errore,
+        }

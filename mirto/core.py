@@ -68,6 +68,12 @@ class MirtoCore:
 
         self.presence = PresenceMonitor(self.config, self.set_armed,
                                         lambda: bool(self.config.get("actions.armed", False)))
+        from .actions.smarthome import Domotica  # noqa: PLC0415
+
+        # La domotica sta qui e non dentro la finestra delle impostazioni: deve restare viva mentre
+        # Mirto lavora, perché il riquadro «Sistema» la mostra e le Azioni dovranno comandarla
+        # quando non c'è nessuna finestra aperta. Nata dentro la scheda, spariva chiudendola (14/11).
+        self.domotica = Domotica(self.config, self.secrets)
         self.notifier = NotificationDispatcher(self.config, self.secrets, self.store, self.handlers,
                                                **(dispatcher_kwargs or {}))
         from .recording.manager import RecordingManager  # noqa: PLC0415
@@ -713,6 +719,7 @@ class MirtoCore:
         self._maint_thread.start()
         self.scheduler.start()
         self.presence.start()
+        self.domotica.start()
         self.cameras.start(threaded_discovery=threaded_discovery)
         self.recording.start()
         self.telemetry.start()
@@ -730,6 +737,7 @@ class MirtoCore:
         self.telemetry.stop()
         self.scheduler.stop()
         self.presence.stop()
+        self.domotica.stop()
         with self._lock:
             pipes = list(self.pipelines.values())
             self.pipelines.clear()
