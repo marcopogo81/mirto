@@ -1667,11 +1667,11 @@ class SettingsDialog(QDialog):
         lay.addWidget(help_box([
             _('Se in casa hai lampadine, prese o sensori «smart» che passano da un <b>broker MQTT</b> '
               '(Home Assistant ne ha uno, oppure Mosquitto), Mirto può vederli e comandarli.'),
-            _('Scrivi l\'indirizzo del broker e premi <b>Collegati e cerca</b>: i dispositivi '
-              'compaiono da soli, con il loro stato che si muove mentre guardi. Non devi dichiarare '
+            _('Scrivi l\'indirizzo del broker e premi <b>Cerca i dispositivi di casa</b>: compaiono '
+              'da soli a destra, con il loro stato che si muove mentre guardi. Non devi dichiarare '
               'niente.'),
-            _('Chi non si annuncia si prende con <b>Ascolta tutto</b>: Mirto mostra chi sta parlando '
-              'e tu gli dai un nome.'),
+            _('Certi dispositivi non dicono chi sono: per quelli c\'è <b>Cerca anche quelli che non '
+              'si presentano</b>. Mirto sta a sentire e ti mostra chi parla, e tu gli dai un nome.'),
             _('Fatto questo li trovi nelle <b>Azioni</b>: come trigger (<i>se si accende la luce…</i>) '
               'e come uscite (<i>…allora accendi la luce</i>).'),
             _('Mirto si <b>collega</b> al broker, non apre nessuna porta: vale lo stesso di Telegram.'),

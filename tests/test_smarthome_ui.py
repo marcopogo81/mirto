@@ -117,15 +117,28 @@ class LaSchedaTest(unittest.TestCase):
                                 f"viste solo: {self._titoli()}")
         return self._titoli()
 
-    def _scegli(self, pezzo: str):
-        """Seleziona la scheda di un dispositivo e restituisce il suo identificativo."""
+    def _indice(self, pezzo: str) -> int:
         for i, identificativo in enumerate(self.scheda._scelti):              # noqa: SLF001
             d = self.scheda.casa.dispositivo(identificativo)
             if d is not None and pezzo.lower() in d.nome.lower():
-                self.scheda.schede.set_current_row(i)
-                self.app.processEvents()
-                return identificativo
+                return i
         raise AssertionError(f"«{pezzo}» non è nell'elenco: {self._titoli()}")
+
+    def _scegli(self, pezzo: str) -> str:
+        return self.scheda._scelti[self._indice(pezzo)]                       # noqa: SLF001
+
+    def _bottoni_di(self, pezzo: str) -> list:
+        """I pulsanti della riga di quel dispositivo, come li ha chi guarda."""
+        from PySide6.QtWidgets import QPushButton
+
+        scheda = self.scheda.schede._cards[self._indice(pezzo)]               # noqa: SLF001
+        return scheda.findChildren(QPushButton)
+
+    def _bottone_di(self, pezzo: str, testo: str):
+        for b in self._bottoni_di(pezzo):
+            if testo.lower() in b.text().lower():
+                return b
+        return None
 
     def _stato_di(self, pezzo: str) -> str:
         identificativo = self._scegli(pezzo)
@@ -169,22 +182,20 @@ class LaSchedaTest(unittest.TestCase):
         self.finta.cambia("luce_scale", True)
         self._macina(3.0, lambda: self._stato_di("Luce delle scale") != "acceso")
         self.assertEqual(self._stato_di("Luce delle scale"), "acceso")
-        self.assertIn("Spegni", self.scheda.d_gira.text(),
-                      "il pulsante del dettaglio deve seguire lo stato")
+        self.assertIsNotNone(self._bottone_di("Luce delle scale", "Spegni"),
+                             "il pulsante della riga deve seguire lo stato")
 
     def test_il_pulsante_accende_davvero(self):
         self.scheda.collega()
         self._aspetta_righe(3)
-        self._scegli("Luce delle scale")
-        self.scheda.d_gira.click()
+        self._bottone_di("Luce delle scale", "Accendi").click()
         self._macina(3.0, lambda: not self.finta.dispositivi["luce_scale"].acceso)
         self.assertTrue(self.finta.dispositivi["luce_scale"].acceso)
 
     def test_uno_zigbee_si_comanda_nella_sua_lingua(self):
         self.scheda.collega()
         self._aspetta_righe(3)
-        self._scegli("Luce della cucina")
-        self.scheda.d_gira.click()
+        self._bottone_di("Luce della cucina", "Accendi").click()
         self._macina(3.0, lambda: not self.finta.dispositivi["luce_cucina"].acceso)
         self.assertTrue(self.finta.dispositivi["luce_cucina"].acceso)
 
@@ -192,9 +203,9 @@ class LaSchedaTest(unittest.TestCase):
         # un pulsante che non fa niente è peggio di nessun pulsante
         self.scheda.collega()
         self._aspetta_righe(3)
-        self._scegli("Movimento")
-        self.assertFalse(self.scheda.d_gira.isVisibleTo(self.scheda.dettaglio))
-        self.assertIn("guarda", self.scheda.d_riga.text())
+        self.assertEqual(self._bottoni_di("Movimento"), [],
+                         "un sensore non si accende: niente pulsante")
+        self.assertTrue(any("guarda" in t for t in self._titoli()))
 
     # --- la riga «sei pronto» -------------------------------------------------
     def test_la_riga_sei_pronto_compare_solo_quando_c_e_qualcosa(self):
@@ -229,8 +240,7 @@ class LaSchedaTest(unittest.TestCase):
         self.scheda.casa.adotta("tuya/luce_garage/dps", "Luce del garage")
         self.scheda._ridisegna()    # noqa: SLF001
         self.assertTrue(any("Luce del garage" in t for t in self._titoli()))
-        self._scegli("Luce del garage")
-        self.scheda.d_gira.click()
+        self._bottone_di("Luce del garage", "Spegni").click()
         self._macina(3.0, lambda: self.finta.dispositivi["luce_garage"].acceso)
         self.assertFalse(self.finta.dispositivi["luce_garage"].acceso)
 
@@ -372,6 +382,27 @@ class LaSchedaTest(unittest.TestCase):
         self.addCleanup(scheda.stacca)
         self.addCleanup(scheda.deleteLater)
         self.assertIn("non risponde", scheda.stato.text())
+
+    def test_il_broker_sta_a_sinistra_e_i_dispositivi_a_destra(self):
+        """La forma dei Nodi, e non è una somiglianza: il broker **è** il nodo.
+
+        Nei Nodi a sinistra c'è la scatola a cui ti sei collegato e a destra quello che ha dentro.
+        Il 14/11 li avevo messi al contrario — i dispositivi a sinistra, stretti in trecento pixel
+        e sovrapposti — e Marco: «fai finta che il broker MQTT sia il nodo e i device che trova
+        sono a destra, perché hai messo i controlli a sinistra?».
+        """
+        self.assertTrue(self.scheda.collega())
+        self._aspetta_righe(3)
+        schede_broker = self.scheda.broker_cards._cards        # noqa: SLF001
+        self.assertEqual(len(schede_broker), 1, "a sinistra ci va il broker, e ce n'è uno")
+        from PySide6.QtWidgets import QLabel
+
+        scritte = [e.text() for e in schede_broker[0].findChildren(QLabel) if e.text()]
+        self.assertTrue(any("127.0.0.1" in t for t in scritte), f"visto: {scritte}")
+        self.assertTrue(any(str(self.finta.porta) in t for t in scritte),
+                        "e con la porta, se no non si sa a quale broker si è attaccato")
+        self.assertGreaterEqual(len(self.scheda.schede._cards), 3,   # noqa: SLF001
+                                "e a destra quello che ci ha trovato")
 
     def test_l_elenco_ha_la_forma_delle_schede_dei_nodi(self):
         """Non è un vezzo: chi ha abbinato un nodo sa già usare questa, e viceversa.
