@@ -73,6 +73,21 @@ class LaFinestraSiApreTest(unittest.TestCase):
         self.core.set_armed(False)
         win._update_status()            # noqa: SLF001
 
+    def test_la_striscia_degli_eventi_dice_che_si_apre_col_doppio_clic(self):
+        """Un gesto che non si vede non esiste.
+
+        Sopra la griglia il suggerimento del doppio clic c'era, sotto gli eventi no, e Marco il
+        14/11: *«gli eventi partono ma bisogna fare doppio click e manca l'indicazione, pensavo non
+        funzionasse»*. Chi non trova il gesto non conclude «si fa in un altro modo»: conclude che è
+        rotto. E il suggerimento dice **cosa** si apre, perché cambia con la vista scelta.
+        """
+        win = self._finestra()
+        self.assertIn("oppio clic", win.events_hint.text())
+        win._set_events_mode("videos")       # noqa: SLF001
+        self.assertIn("video", win.events_hint.text().lower())
+        win._set_events_mode("photos")       # noqa: SLF001
+        self.assertIn("foto", win.events_hint.text().lower())
+
     def test_senza_domotica_la_riga_non_c_e(self):
         # chi non ha un impianto smart non deve vedersi una riga «non configurata» per sempre
         win = self._finestra()

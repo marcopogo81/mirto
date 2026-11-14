@@ -616,6 +616,13 @@ class MainWindow(QMainWindow):
             b.clicked.connect(lambda _c=False, m=mode: self._set_events_mode(m))
             self.events_mode_group.addButton(b)
             head.addWidget(b)
+        head.addSpacing(12)
+        # Il suggerimento del doppio clic. Sopra la griglia c'era, qui no, e senza di esso un
+        # evento sembra non fare niente: Marco, 14/11, *«pensavo non funzionasse, invece era un
+        # problema di doppio click»*. Un gesto che non si vede non esiste, e chi non lo trova non
+        # conclude «si fa in un altro modo», conclude «è rotto».
+        self.events_hint = label(obj="faint")
+        head.addWidget(self.events_hint)
         head.addStretch(1)
         lay.addLayout(head)
 
@@ -635,6 +642,7 @@ class MainWindow(QMainWindow):
         self.events.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.events.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.events.itemDoubleClicked.connect(self._open_event)
+        self._aggiorna_suggerimento_eventi()
         self.events.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
         act_del = QAction(_('Elimina selezionati'), self.events)
         act_del.setShortcuts([QKeySequence(QKeySequence.StandardKey.Delete), QKeySequence(Qt.Key.Key_Backspace)])
@@ -1350,9 +1358,16 @@ class MainWindow(QMainWindow):
         item.setHidden(getattr(self, "events_mode", "photos") == "videos" and not has_clip)
         self._update_events_empty()
 
+    def _aggiorna_suggerimento_eventi(self) -> None:
+        """Il suggerimento dice **cosa** si apre, che cambia con la vista scelta."""
+        self.events_hint.setText(_('Doppio clic su un evento per guardare il video')
+                                 if self.events_mode == "videos"
+                                 else _('Doppio clic su un evento per aprire la foto'))
+
     def _set_events_mode(self, mode: str) -> None:
         """Striscia degli eventi: «photos» = tutti, «videos» = solo quelli con il video."""
         self.events_mode = mode
+        self._aggiorna_suggerimento_eventi()
         for i in range(self.events.count()):
             it = self.events.item(i)
             it.setHidden(mode == "videos" and not it.data(Qt.ItemDataRole.UserRole + 2))
