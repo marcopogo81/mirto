@@ -31,7 +31,7 @@ from ..i18n import N_, _
 from . import theme as T
 
 LEGAL_VERSION = 2
-GUIDE_HEADING = N_("17. Sicurezza, privacy e condizioni d'uso")
+GUIDE_HEADING = N_("18. Sicurezza, privacy e condizioni d'uso")
 
 
 def notice_items() -> list[tuple[str, str]]:

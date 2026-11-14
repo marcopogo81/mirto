@@ -99,6 +99,16 @@ DEFAULTS: dict[str, Any] = {
         "disarm_on_arrival": True,     # la disattiva quando rientra qualcuno
         "interval_seconds": 60,        # ogni quanto controllare
     },
+    "smarthome": {
+        "enabled": False,              # la domotica di casa, vista attraverso un broker MQTT
+        "host": "",                    # indirizzo del broker (cercato in rete o scritto a mano)
+        "port": 1883,
+        "username": "",                # la password sta nel portachiavi, mai qui
+        "tls": False,
+        # I dispositivi presi a orecchio: quelli che non si annunciano e non parlano nessuna lingua
+        # nota. Gli altri non si ricordano, perché si rifanno vedere da soli a ogni avvio.
+        "adopted": [],                 # [{topic, name, command_topic}]
+    },
     "notifications": {
         "cooldown_seconds": 120,       # pausa minima tra due avvisi della stessa camera
         "telegram": {

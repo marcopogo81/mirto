@@ -55,6 +55,7 @@ from ..credentials import (
     EMAIL_PASSWORD,
     SMS_HTTP_API_KEY,
     SMS_TWILIO_TOKEN,
+    SMARTHOME_PASSWORD,
     TELEGRAM_TOKEN,
 )
 from ..notify.email import PRESETS
@@ -65,7 +66,8 @@ from .testi import nodi_trovati, prova_si_sente
 from .widgets import ElencoDiSpunte, GrigliaDiBox, GrigliaDiSpunte
 from ..i18n import N_, _, questo_computer
 
-KEEP = "••••••••"  # segnaposto: credenziale già salvata, lasciare invariata
+# KEEP sta in credentials.py: è il segnaposto di una credenziale, non della finestra
+from ..credentials import KEEP  # noqa: E402
 
 
 def _split(text: str) -> list[str]:
@@ -137,6 +139,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(aiuto_in_fondo(self._tab_presence()), _("Presenza"))
         tabs.addTab(aiuto_in_fondo(self._tab_notifications()), _("Notifiche"))
         tabs.addTab(aiuto_in_fondo(self._tab_nodes_actions()), _("Nodi"))
+        tabs.addTab(aiuto_in_fondo(self._tab_smarthome()), _("SmartHome"))
         tabs.addTab(aiuto_in_fondo(self._tab_actions()), _("Azioni"))
         if self._tests:
             tabs.addTab(aiuto_in_fondo(self._tab_tests()), _("Prove"))
@@ -274,7 +277,7 @@ class SettingsDialog(QDialog):
             _('<b>Avviso di prova completo</b>: controlla in un colpo Telegram, email ed SMS (parte anche a protezione disattivata).'),
             _('<b>Foto da tutte le camere</b>: per verificare le inquadrature.'),
             _('<b>Test automatici</b>: dopo un aggiornamento, per controllare che tutto funzioni.'),
-        ], _("15. Prove e diagnostica"), self))
+        ], _("16. Prove e diagnostica"), self))
         for item in self._tests:
             if item is None:
                 lay.addSpacing(8)
@@ -372,7 +375,7 @@ class SettingsDialog(QDialog):
             _('Lascia attivo <b>Impedisci la sospensione</b> e tieni il coperchio aperto: un computer sospeso non sorveglia.'),
             _("<b>Statistiche d'uso</b>: aiutano a sapere quante installazioni sono attive; «Cosa viene inviato…» mostra il messaggio esatto. Non partono finché non le spunti."),
             _('Il <b>modello di riconoscimento</b> e le <b>soglie</b> stanno in <b>AI</b>; <b>per quanto tenere foto ed eventi</b> in <b>Registrazione</b>.'),
-        ], _('14. Impostazioni generali e funzionamento continuo'), self))
+        ], _('15. Impostazioni generali e funzionamento continuo'), self))
         return w
 
     def _tab_telegram(self) -> QWidget:
@@ -1654,6 +1657,32 @@ class SettingsDialog(QDialog):
 
     # --- la scheda delle azioni (24/10) ----------------------------------------
 
+    def _tab_smarthome(self) -> QWidget:
+        """La domotica di casa. Il grosso sta in «smarthome_ui»: qui c'è solo l'aiuto e il montaggio."""
+        from .smarthome_ui import SchedaSmartHome  # noqa: PLC0415
+
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setSpacing(8)
+        lay.addWidget(help_box([
+            _('Se in casa hai lampadine, prese o sensori «smart» che passano da un <b>broker MQTT</b> '
+              '(Home Assistant ne ha uno, oppure Mosquitto), Mirto può vederli e comandarli.'),
+            _('Scrivi l\'indirizzo del broker e premi <b>Collegati e cerca</b>: i dispositivi '
+              'compaiono da soli, con il loro stato che si muove mentre guardi. Non devi dichiarare '
+              'niente.'),
+            _('Chi non si annuncia si prende con <b>Ascolta tutto</b>: Mirto mostra chi sta parlando '
+              'e tu gli dai un nome.'),
+            _('Fatto questo li trovi nelle <b>Azioni</b>: come trigger (<i>se si accende la luce…</i>) '
+              'e come uscite (<i>…allora accendi la luce</i>).'),
+            _('Mirto si <b>collega</b> al broker, non apre nessuna porta: vale lo stesso di Telegram.'),
+        ], _('13. SmartHome: le luci, le prese e i sensori di casa'), self))
+        self.smarthome_pass = self._secret_field(SMARTHOME_PASSWORD)
+        self.smarthome_pass.setPlaceholderText(_('password (se serve)'))
+        self.smarthome_pass.setFixedWidth(150)
+        self.smarthome = SchedaSmartHome(self.cfg, self.secrets, self.smarthome_pass, self)
+        lay.addWidget(self.smarthome, 1)
+        return w
+
     def _tab_actions(self) -> QWidget:
         """Tutte le azioni, in una scheda loro.
 
@@ -1751,7 +1780,7 @@ class SettingsDialog(QDialog):
         # Niente riquadro «Come fare» qui: da quando in cima ci sono le quattro tipologie con le loro
         # regole, i suoi tre passi ripetevano con altre parole quello che si era appena letto. Resta
         # il collegamento alla guida, per chi vuole il capitolo intero.
-        lay.addWidget(guide_link(_('13. Azioni'), self), 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addWidget(guide_link(_('14. Azioni'), self), 0, Qt.AlignmentFlag.AlignLeft)
         self._refresh_azioni()
         from PySide6.QtWidgets import QScrollArea  # noqa: PLC0415
 
@@ -2831,6 +2860,8 @@ class SettingsDialog(QDialog):
         c.set("notifications.telegram", {"enabled": self.tg_enabled.isChecked(),
                                          "chat_id": self.tg_chat.text().strip(), "allowed_user_ids": users})
         self._store_secret(TELEGRAM_TOKEN, self.tg_token)
+        c.set("smarthome", self.smarthome.valori())
+        self._store_secret(SMARTHOME_PASSWORD, self.smarthome_pass)
         c.set("notifications.email", {
             "enabled": self.em_enabled.isChecked(), "provider": self.em_provider.currentData(),
             "host": self.em_host.text().strip(), "port": self.em_port.value(), "security": "",

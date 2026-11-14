@@ -27,11 +27,11 @@ Immagini e registrazioni restano sul computer: escono soltanto le foto e le clip
 - [10. Programmazione](#10-programmazione)
 - [11. Presenza](#11-presenza)
 - [12. Nodi](#12-nodi)
-- [13. Azioni](#13-azioni)
-- [14. Impostazioni generali e funzionamento continuo](#14-impostazioni-generali-e-funzionamento-continuo)
-- [15. Prove e diagnostica](#15-prove-e-diagnostica)
-- [16. Risoluzione dei problemi](#16-risoluzione-dei-problemi)
-- [17. Sicurezza, privacy e condizioni d'uso](#17-sicurezza-privacy-e-condizioni-duso)
+- [14. Azioni](#14-azioni)
+- [15. Impostazioni generali e funzionamento continuo](#15-impostazioni-generali-e-funzionamento-continuo)
+- [16. Prove e diagnostica](#16-prove-e-diagnostica)
+- [17. Risoluzione dei problemi](#17-risoluzione-dei-problemi)
+- [18. Sicurezza, privacy e condizioni d'uso](#18-sicurezza-privacy-e-condizioni-duso)
 - Appendici: [A. Comandi Telegram](#appendice-a-comandi-telegram) ·
 [B. Installazione dai sorgenti e riga di comando](#appendice-b-installazione-dai-sorgenti-e-riga-di-comando) ·
 [C. Comandi del nodo](#appendice-c-comandi-del-nodo) ·
@@ -98,7 +98,7 @@ Per installare dai sorgenti con Python vedi l'[Appendice B](#appendice-b-install
 | `~/Library/Application Support/Mirto/` | `%LOCALAPPDATA%\Mirto\`, cioè `C:\Users\<utente>\AppData\Local\Mirto\` |
 | Riconoscimento su Apple Neural Engine (CoreML) o CPU | Riconoscimento su **GPU (DirectML)** o CPU: lo indica la colonna *Sistema* |
 | Icona nella barra dei menu, in alto | Icona nell'**area di notifica**, in basso a destra |
-| Dopo un blocco Mirto riparte da solo | Dopo un blocco va riaperto a mano (vedi [14](#14-impostazioni-generali-e-funzionamento-continuo)) |
+| Dopo un blocco Mirto riparte da solo | Dopo un blocco va riaperto a mano (vedi [14](#15-impostazioni-generali-e-funzionamento-continuo)) |
 | ⌘Q per uscire, ⌘, per le Impostazioni | **Ctrl+Q** per uscire, **Ctrl+,** per le Impostazioni |
 
 L'installazione dai sorgenti su Windows è descritta nell'[Appendice B](#appendice-b-installazione-dai-sorgenti-e-riga-di-comando).
@@ -109,11 +109,11 @@ L'installazione dai sorgenti su Windows è descritta nell'[Appendice B](#appendi
 
 1. **Condizioni d'uso.** Leggile, spunta **Ho letto e accetto le condizioni d'uso** e premi **Accetto**.
    Senza accettarle Mirto si chiude. Restano consultabili in **Aiuto → Condizioni d'uso** (vedi
-   [17](#17-sicurezza-privacy-e-condizioni-duso)).
+   [17](#18-sicurezza-privacy-e-condizioni-duso)).
 2. **Statistiche d'uso.** Mirto chiede **«Aiuti a migliorare Mirto?»**. La risposta predefinita è
    **No, grazie**; con **Sì, invia le statistiche d'uso** parte una volta al giorno un breve messaggio anonimo.
    **Mostra cosa viene inviato** visualizza il messaggio esatto. La scelta si cambia in
-   [Impostazioni → Generale](#14-impostazioni-generali-e-funzionamento-continuo).
+   [Impostazioni → Generale](#15-impostazioni-generali-e-funzionamento-continuo).
 3. **Permesso della fotocamera.** Il sistema chiede l'accesso alla **Fotocamera**: rispondi **Consenti**. Su
    macOS il permesso si gestisce in *Impostazioni di Sistema → Privacy e sicurezza → Fotocamera*.
 4. **Avvio dei servizi.** Nella colonna *Sistema* le righe passano da ambra («collegamento…»,
@@ -123,7 +123,7 @@ L'installazione dai sorgenti su Windows è descritta nell'[Appendice B](#appendi
    [7.1](#71-telegram)).
 
 > **Immagine nera?** Chiudi Mirto del tutto (⌘Q / Ctrl+Q) e riaprilo: la prima volta, mentre il sistema
-> chiede il permesso, la camera può non accendersi. Se il problema resta vedi [16](#16-risoluzione-dei-problemi).
+> chiede il permesso, la camera può non accendersi. Se il problema resta vedi [16](#17-risoluzione-dei-problemi).
 
 ---
 ## 4. La finestra principale
@@ -181,7 +181,7 @@ Gli eventi più vecchi del periodo di conservazione (di serie 30 giorni) si canc
 | Menu | Voci |
 |---|---|
 | **Mirto** | **Impostazioni…** (⌘, / Ctrl+,), **Chiudi finestra (resta in background)** (⌘W / Ctrl+W), **Esci da Mirto** (⌘Q / Ctrl+Q) |
-| **Prove** | Le prove di [15](#15-prove-e-diagnostica) |
+| **Prove** | Le prove di [15](#16-prove-e-diagnostica) |
 | **Aiuto** | **Comandi Telegram**, **Guida utente**, **Apri la cartella dei log**, **Sostieni Mirto**, **Condizioni d'uso**, **Informazioni su Mirto** |
 
 Le conferme delle operazioni importanti (uscire, Ferma tutto, svuotare gli eventi, spegnere l'unica camera)
@@ -385,7 +385,7 @@ Comportamento per categoria:
 **Regolare la soglia persona.** Dopo qualche giorno di uso: se trovi eventi senza persone (tende, ombre,
 animali) alzala di 0,05 alla volta; se una persona non viene segnalata abbassala di 0,05 e verifica che ci sia
 luce sufficiente. Le soglie di questa scheda sono quelle di serie: un'azione può usarne una propria (vedi
-[13](#13-azioni)).
+[13](#14-azioni)).
 
 ### 8.2 Microfoni: i suoni
 
@@ -415,7 +415,7 @@ L'avviso arriva come quelli delle camere (es. «🪟 Suono: Vetro rotto») con l
 Ogni suono ha una pausa di 2 minuti per microfono. Mentre un nodo suona (sirena, dissuasore) e nei 10 secondi
 successivi i suoni vengono ignorati, tranne l'allarme fumo. **Silenzia** e **In pausa** valgono anche per i
 suoni. Per far **reagire** un nodo a un suono (es. vetro rotto → sirena) aggiungi il suono tra gli obiettivi
-di un'azione (vedi [13](#13-azioni)).
+di un'azione (vedi [13](#14-azioni)).
 
 > L'ascolto non viene registrato né inviato: l'audio resta in memoria pochi secondi, il tempo di riconoscere
 > il suono. Fa eccezione la registrazione dell'audio di un nodo, che si attiva esplicitamente (vedi [9](#9-registrazione-e-rivedi)).
@@ -573,7 +573,7 @@ Collega la camera alla presa **CAMERA** a Raspberry spento.
 3. Inserisci il **PIN di 6 cifre** e scegli il **nome** del nodo (es. *Garage*): è il nome con cui compare in
    Mirto e negli avvisi. Il nome in rete resta `mirto-node-XXXX.local`.
 4. Premi **Abbina**. Le camere del nodo compaiono in pochi secondi; Mirto propone poi di creare le azioni
-   (vedi [13](#13-azioni)).
+   (vedi [13](#14-azioni)).
 5. **Se il nodo è attaccato al cavo di rete, Mirto chiede se metterlo sul Wi-Fi adesso** e apre il passo
    descritto in [12.4](#124-la-tabella-dei-nodi). Rispondi di sì: quando il nodo finisce su un palo il cavo
    si stacca, e un nodo che non ha mai visto il tuo Wi-Fi sparisce nel momento in cui lo scolleghi — e per
@@ -606,7 +606,7 @@ rosso non risponde), **Rinomina il nodo** e **Rimuovi**. Selezionando un nodo si
 | **Audio** | **Uscita predefinita del nodo** con **Suono di prova**; schede **Jack**, **Bluetooth** (**Cerca casse…**, **Abbina**, **Dimentica**), **USB** e **Microfono** (**Usa questo microfono**, **Mirto ascolta questo microfono**, livello in tempo reale); volume e guadagno si applicano subito |
 | **Camera** | **Camera accesa**, **È il modello NoIR** (solo con illuminatori a infrarossi), **Risoluzione** (1280×720 basta per riconoscere una persona, 1920×1080 per leggere un volto o una targa) |
 | **Disco** | **Cerca dischi…** elenca SSD e chiavette collegati al nodo; **Registra qui** usa un disco già pronto, **Prepara il disco…** lo formatta (cancella tutto: va confermato riscrivendo il nome del dispositivo). Imposta la registrazione ad anello, lo spazio massimo, lo spazio da lasciare libero e **Registra anche l'audio del microfono del nodo** |
-| **Modalità Prank** | Accende per 10, 30, 60 o 120 minuti la modalità che toglie il budget orario ai dissuasori (vedi [13](#13-azioni)); **Spegni adesso** la chiude |
+| **Modalità Prank** | Accende per 10, 30, 60 o 120 minuti la modalità che toglie il budget orario ai dissuasori (vedi [13](#14-azioni)); **Spegni adesso** la chiude |
 | **Stato e diagnosi** | Cosa non va e come rimediare, poi versione, indirizzi, temperatura, registrazione, sirena e abbinamenti. **Rileggi**, **Aggiorna il nodo**, **Copia per l'assistenza** (testo senza password né PIN) |
 | **Wi-Fi** | **Cerca reti…** mostra le reti viste dal nodo con il segnale; inserisci la password o usa **Prendila da questo computer** (dal Portachiavi o dai profili Wi-Fi di Windows, come amministratore), poi **Collega**. Il nodo resta sul cavo finché il Wi-Fi non funziona |
 
@@ -639,7 +639,52 @@ invia il pacchetto firmato sul canale cifrato dell'abbinamento; il nodo si insta
 minuto, durante il quale non risponde). Configurazione, chiavi, abbinamenti e registrazioni restano.
 
 ---
-## 13. Azioni
+## 13. SmartHome: le luci, le prese e i sensori di casa
+
+Se in casa hai dispositivi «smart» che passano da un **broker MQTT** — ce l'ha Home Assistant, ed è
+quello che usano Zigbee2MQTT, ESPHome e Tasmota — Mirto può vederli e comandarli. Non è un'altra app
+da configurare: è lo stesso patto dei nodi, cioè **non dichiari niente, riconosci**.
+
+### 13.1 Collegarsi
+
+*Impostazioni → SmartHome.* Scrivi l'indirizzo del broker (per esempio `192.168.1.10`), la porta se
+non è quella solita, utente e password se il broker le chiede, e premi **Collegati e cerca**. La
+password finisce nel portachiavi del sistema, mai in un file.
+
+Mirto si **collega** al broker, in uscita, come fa con Telegram: non apre nessuna porta sulla tua rete.
+
+### 13.2 I dispositivi compaiono da soli
+
+Sotto compare l'elenco, con nome, marca e **lo stato di adesso**, che si muove mentre guardi. Non devi
+scrivere nessun «argomento»: Mirto li trova in tre modi, in quest'ordine.
+
+1. **Chi si annuncia.** Molti dispositivi pubblicano da sé una carta d'identità che dice come si
+   chiamano e dove ascoltano i comandi. Mirto la legge. ESPHome fa così.
+2. **Chi parla la lingua della sua marca.** Zigbee2MQTT di solito non si annuncia, ma pubblica sempre
+   l'elenco dei suoi dispositivi: Mirto lo riconosce e li prende da lì.
+3. **Chi non fa né l'una né l'altra.** Premi **Ascolta tutto per trovare il resto**: Mirto sta a
+   sentire quello che passa e ti mostra chi parla. Accendi e spegni il dispositivo dal suo
+   interruttore per farlo parlare, poi premi **Dagli un nome**. Questi restano segnati come «preso a
+   orecchio», perché quello che Mirto ne sa è un'ipotesi, non una dichiarazione.
+
+Accanto a ogni dispositivo c'è **Accendi** o **Spegni**. I sensori dicono «si guarda»: un sensore di
+movimento non si accende.
+
+### 13.3 Che cosa ci fai
+
+Una volta collegato, i dispositivi compaiono nelle **Azioni** in tutte e due i versi: come *trigger*
+(«si accende la luce delle scale → fai partire la musica di benvenuto dalla cassa del nodo») e come
+*uscite* («la camera riconosce il cane → accendi la luce delle scale»). È la cosa che nessun altro
+programma di videosorveglianza fa, perché nessuno degli altri ha sia le camere sia le uscite.
+
+### 13.4 Se non hai un impianto
+
+Ce n'è uno finto, con la sua finestra, fatto apposta per provare: `python -m mirto
+--simulatore-smarthome`. Apre un broker su `127.0.0.1:1883` con dentro cinque dispositivi di tre
+marche diverse, compresa quella scontrosa che si prende solo a orecchio. Scrivi quell'indirizzo qui e
+li vedi comparire.
+
+## 14. Azioni
 
 Un'**azione** è ciò che Mirto fa eseguire ai nodi quando riconosce qualcosa: suonare la sirena, accendere una
 luce, emettere un verso contro gli uccelli. Le azioni si gestiscono in **Impostazioni → Azioni** e possono
@@ -715,7 +760,7 @@ un'azione si accende o spegne anche con un clic sulla sua riga.
 
 ---
 
-## 14. Impostazioni generali e funzionamento continuo
+## 15. Impostazioni generali e funzionamento continuo
 
 **Impostazioni → Generale**:
 
@@ -746,7 +791,7 @@ la conservazione di foto ed eventi in **Registrazione** (vedi [9](#9-registrazio
 
 ---
 
-## 15. Prove e diagnostica
+## 16. Prove e diagnostica
 
 Le prove si trovano in **Impostazioni → Prove** e nel menu **Prove**:
 
@@ -767,7 +812,7 @@ Strumenti di diagnostica:
   camere, indirizzi, destinatari o token (vedi [Appendice B](#appendice-b-installazione-dai-sorgenti-e-riga-di-comando)).
 
 ---
-## 16. Risoluzione dei problemi
+## 17. Risoluzione dei problemi
 
 ### Camere e riconoscimento
 
@@ -818,7 +863,7 @@ Il registro dettagliato si apre da **Aiuto → Apri la cartella dei log**.
 
 ---
 
-## 17. Sicurezza, privacy e condizioni d'uso
+## 18. Sicurezza, privacy e condizioni d'uso
 
 ### Sicurezza
 
@@ -835,7 +880,7 @@ Il registro dettagliato si apre da **Aiuto → Apri la cartella dei log**.
 - Riconoscimento di immagini e suoni avviene sul computer. Le immagini escono solo come foto e clip degli
   avvisi; l'audio dell'ascolto non viene salvato né inviato.
 - La presenza legge solo gli indirizzi dei dispositivi sulla rete locale; nessun dato esce dal computer.
-- Le statistiche d'uso sono facoltative e anonime (vedi [14](#14-impostazioni-generali-e-funzionamento-continuo)
+- Le statistiche d'uso sono facoltative e anonime (vedi [14](#15-impostazioni-generali-e-funzionamento-continuo)
   e `PRIVACY.md`).
 - Informa familiari, ospiti e collaboratori domestici della presenza di camere, microfoni e del controllo dei
   telefoni.

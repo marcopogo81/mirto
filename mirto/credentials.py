@@ -34,6 +34,11 @@ ATTESA_DOPO_UN_NO = 300.0
 # Nomi delle credenziali usate dal programma
 TELEGRAM_TOKEN = "telegram_bot_token"
 EMAIL_PASSWORD = "email_password"          # per Gmail: la password per app
+SMARTHOME_PASSWORD = "smarthome_password"  # la password del broker MQTT di casa
+
+# Quello che si mostra al posto di una credenziale gia' salvata: chi apre le impostazioni non
+# deve vedere la password vera, e lasciando il campo com'e' non la cambia.
+KEEP = "\u2022" * 8
 SMS_TWILIO_TOKEN = "sms_twilio_auth_token"
 SMS_HTTP_API_KEY = "sms_http_api_key"
 

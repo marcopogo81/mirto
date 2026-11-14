@@ -27,11 +27,11 @@ Images and recordings stay on the computer: only the photos and clips of the ale
 - [10. Schedule](#10-schedule)
 - [11. Presence](#11-presence)
 - [12. Nodes](#12-nodes)
-- [13. Actions](#13-actions)
-- [14. General settings and continuous operation](#14-general-settings-and-continuous-operation)
-- [15. Tests and diagnostics](#15-tests-and-diagnostics)
-- [16. Troubleshooting](#16-troubleshooting)
-- [17. Security, privacy and terms of use](#17-security-privacy-and-terms-of-use)
+- [14. Actions](#14-actions)
+- [15. General settings and continuous operation](#15-general-settings-and-continuous-operation)
+- [16. Tests and diagnostics](#16-tests-and-diagnostics)
+- [17. Troubleshooting](#17-troubleshooting)
+- [18. Security, privacy and terms of use](#18-security-privacy-and-terms-of-use)
 - Appendices: [A. Telegram commands](#appendix-a-telegram-commands) ·
 [B. Installing from source and command line](#appendix-b-installing-from-source-and-command-line) ·
 [C. Node commands](#appendix-c-node-commands) ·
@@ -96,7 +96,7 @@ To install from source with Python see [Appendix B](#appendix-b-installing-from-
 | `~/Library/Application Support/Mirto/` | `%LOCALAPPDATA%\Mirto\`, i.e. `C:\Users\<user>\AppData\Local\Mirto\` |
 | Recognition on the Apple Neural Engine (CoreML) or CPU | Recognition on the **GPU (DirectML)** or CPU: the *System* column says which |
 | Icon in the menu bar, at the top | Icon in the **notification area**, bottom right |
-| After a crash Mirto restarts by itself | After a crash it has to be reopened by hand (see [14](#14-general-settings-and-continuous-operation)) |
+| After a crash Mirto restarts by itself | After a crash it has to be reopened by hand (see [14](#15-general-settings-and-continuous-operation)) |
 | ⌘Q to quit, ⌘, for Settings | **Ctrl+Q** to quit, **Ctrl+,** for Settings |
 
 Installing from source on Windows is described in [Appendix B](#appendix-b-installing-from-source-and-command-line).
@@ -107,11 +107,11 @@ Installing from source on Windows is described in [Appendix B](#appendix-b-insta
 
 1. **Terms of use.** Read them, tick **I have read and accept the terms of use** and press **I accept**.
    Without accepting them Mirto closes. They remain available in **Help → Terms of use** (see
-   [17](#17-security-privacy-and-terms-of-use)).
+   [17](#18-security-privacy-and-terms-of-use)).
 2. **Usage statistics.** Mirto asks **"Will you help improve Mirto?"**. The default answer is **No, thanks**;
    with **Yes, send usage statistics** a short anonymous message is sent once a day. **Show what is sent**
    displays the exact message. You can change your choice in
-   [Settings → General](#14-general-settings-and-continuous-operation).
+   [Settings → General](#15-general-settings-and-continuous-operation).
 3. **Camera permission.** The system asks for access to the **Camera**: answer **Allow**. On macOS the
    permission is managed in *System Settings → Privacy & Security → Camera*.
 4. **Services start.** In the *System* column the rows go from amber ("connecting…", "loading…") to green
@@ -121,7 +121,7 @@ Installing from source on Windows is described in [Appendix B](#appendix-b-insta
    [7.1](#71-telegram)).
 
 > **Black picture?** Quit Mirto completely (⌘Q / Ctrl+Q) and open it again: the first time, while the system
-> asks for permission, the camera may not switch on. If the problem persists see [16](#16-troubleshooting).
+> asks for permission, the camera may not switch on. If the problem persists see [16](#17-troubleshooting).
 
 ---
 ## 4. The main window
@@ -178,7 +178,7 @@ Events older than the retention period (30 days by default) are deleted automati
 | Menu | Items |
 |---|---|
 | **Mirto** | **Settings…** (⌘, / Ctrl+,), **Close window (keeps running in background)** (⌘W / Ctrl+W), **Quit Mirto** (⌘Q / Ctrl+Q) |
-| **Tests** | The tests in [15](#15-tests-and-diagnostics) |
+| **Tests** | The tests in [15](#16-tests-and-diagnostics) |
 | **Help** | **Telegram commands**, **User guide**, **Open logs folder**, **Support Mirto**, **Terms of use**, **About Mirto** |
 
 Confirmations of important operations (quitting, Stop all, clearing events, switching off the only camera)
@@ -381,7 +381,7 @@ Behaviour by category:
 
 **Tuning the person threshold.** After a few days of use: if you find events without people (curtains, shadows,
 animals) raise it by 0.05 at a time; if a person is not reported lower it by 0.05 and check there is enough
-light. The thresholds in this tab are the defaults: an action can use its own (see [13](#13-actions)).
+light. The thresholds in this tab are the defaults: an action can use its own (see [13](#14-actions)).
 
 ### 8.2 Microphones: sounds
 
@@ -411,7 +411,7 @@ The alert arrives like the camera alerts (e.g. "🪟 Sound: Glass breaking") wit
 camera. Each sound has a 2-minute pause per microphone. While a node is playing (siren, deterrent) and for the
 10 seconds after, sounds are ignored, except the smoke alarm. **Mute** and **Paused** also apply to sounds. To make
 a node **react** to a sound (e.g. glass breaking → siren) add the sound to the targets of an action (see
-[13](#13-actions)).
+[13](#14-actions)).
 
 > Listening is neither recorded nor sent: the audio stays in memory for a few seconds, just long enough to
 > recognise the sound. The exception is recording a node's audio, which must be turned on explicitly (see
@@ -566,7 +566,7 @@ Connect the camera to the **CAMERA** socket with the Raspberry Pi switched off.
 3. Enter the **6-digit PIN** and choose the node's **name** (e.g. *Garage*): it is the name shown in Mirto and in
    alerts. The network name stays `mirto-node-XXXX.local`.
 4. Press **Pair**. The node's cameras appear within a few seconds; Mirto then offers to create the actions (see
-   [13](#13-actions)).
+   [13](#14-actions)).
 5. **If the node is on the network cable, Mirto asks whether to put it on Wi-Fi now** and opens the step
    described in [12.4](#124-the-nodes-table). Say yes: once the node is on a pole the cable comes out, and a
    node that has never seen your Wi-Fi disappears the moment you unplug it — and to configure Wi-Fi you have
@@ -598,7 +598,7 @@ responding), **Rename the node** and **Remove**. Selecting a node opens three su
 | **Audio** | **The node's default output** with **Test sound**; **Jack**, **Bluetooth** (**Find speakers…**, **Pair**, **Forget**), **USB** and **Microphone** tabs (**Use this microphone**, **Mirto listens to this microphone**, live level); volume and gain apply immediately |
 | **Camera** | **Camera on**, **It is the NoIR model** (only with infrared illuminators), **Resolution** (1280×720 is enough to recognise a person, 1920×1080 to read a face or a number plate) |
 | **Disk** | **Scan for disks…** lists the SSDs and USB sticks connected to the node; **Record here** uses a disk that is already prepared, **Prepare the disk…** formats it (erases everything: confirm by retyping the device name). Sets ring-buffer recording, maximum space, space to keep free and **Also record the node's microphone** |
-| **Prank mode** | Turns on for 10, 30, 60 or 120 minutes the mode that removes the hourly budget of the deterrents (see [13](#13-actions)); **Switch off now** ends it |
+| **Prank mode** | Turns on for 10, 30, 60 or 120 minutes the mode that removes the hourly budget of the deterrents (see [13](#14-actions)); **Switch off now** ends it |
 | **Status & diagnosis** | What is wrong and how to fix it, then version, addresses, temperature, recording, siren and pairings. **Read again**, **Update the node**, **Copy for support** (text without passwords or PIN) |
 | **Wi-Fi** | **Scan for networks…** shows the networks the node sees, with signal strength; type the password or use **Take it from this computer** (from the Keychain or the Windows Wi-Fi profiles, as administrator), then **Connect**. The node stays on the cable until Wi-Fi works |
 
@@ -631,7 +631,52 @@ package over the encrypted pairing channel; the node installs it and restarts (a
 does not respond). Configuration, keys, pairings and recordings are kept.
 
 ---
-## 13. Actions
+## 13. SmartHome: your home's lights, plugs and sensors
+
+If your home has smart devices that talk to an **MQTT broker** — Home Assistant has one, and it is
+what Zigbee2MQTT, ESPHome and Tasmota use — Mirto can see them and switch them. It isn't another app
+to configure: it's the same deal as with nodes, which is that **you declare nothing, you recognise**.
+
+### 13.1 Connecting
+
+*Settings → SmartHome.* Type the broker's address (for example `192.168.1.10`), the port if it isn't
+the usual one, and a user and password if the broker asks for them, then press **Connect and look**.
+The password goes into the system keychain, never into a file.
+
+Mirto **connects out** to the broker, as it does with Telegram: it opens no port on your network.
+
+### 13.2 The devices show up on their own
+
+The list appears below, with name, brand and **the state right now**, which moves as you watch. You
+don't type any "topic": Mirto finds them in three ways, in this order.
+
+1. **Those that announce themselves.** Many devices publish an identity card of their own saying what
+   they are called and where they listen for commands. Mirto reads it. ESPHome works this way.
+2. **Those that speak their brand's language.** Zigbee2MQTT usually doesn't announce itself, but it
+   always publishes the list of its devices: Mirto recognises it and takes them from there.
+3. **Those that do neither.** Press **Listen to everything to find the rest**: Mirto listens to what
+   goes past and shows you who is talking. Switch the device on and off at its own switch to make it
+   speak, then press **Give it a name**. These stay marked "caught by ear", because what Mirto knows
+   about them is a guess, not a declaration.
+
+Next to each device there's **Turn on** or **Turn off**. Sensors say "watch only": a motion sensor
+isn't something you switch on.
+
+### 13.3 What it's for
+
+Once connected, the devices appear in **Actions** both ways round: as *triggers* ("the stairs light
+comes on → play the welcome music from the node's speaker") and as *outputs* ("the camera recognises
+the dog → turn on the stairs light"). It's the thing no other video-surveillance program does,
+because none of the others has both the cameras and the outputs.
+
+### 13.4 If you don't have a smart home
+
+There's a fake one, with a window of its own, built for trying this out: `python -m mirto
+--smarthome-simulator`. It opens a broker on `127.0.0.1:1883` holding five devices of three different
+brands, including the awkward kind you can only catch by ear. Type that address here and watch them
+appear.
+
+## 14. Actions
 
 An **action** is what Mirto has the nodes do when it recognises something: sound the siren, switch on a light,
 play a call against birds. Actions are managed in **Settings → Actions** and can involve several nodes (for
@@ -706,7 +751,7 @@ also be switched on or off with a click on its row.
 
 ---
 
-## 14. General settings and continuous operation
+## 15. General settings and continuous operation
 
 **Settings → General**:
 
@@ -737,7 +782,7 @@ New settings apply as soon as you press **Save**. Model and thresholds are in **
 
 ---
 
-## 15. Tests and diagnostics
+## 16. Tests and diagnostics
 
 The tests are in **Settings → Tests** and in the **Tests** menu:
 
@@ -758,7 +803,7 @@ Diagnostic tools:
   addresses, recipients or tokens (see [Appendix B](#appendix-b-installing-from-source-and-command-line)).
 
 ---
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### Cameras and recognition
 
@@ -809,7 +854,7 @@ The detailed log opens from **Help → Open logs folder**.
 
 ---
 
-## 17. Security, privacy and terms of use
+## 18. Security, privacy and terms of use
 
 ### Security
 
@@ -825,7 +870,7 @@ The detailed log opens from **Help → Open logs folder**.
 - Image and sound recognition runs on the computer. Images leave it only as alert photos and clips; the audio
   being listened to is neither saved nor sent.
 - Presence reads only the addresses of the devices on the local network; no data leaves the computer.
-- Usage statistics are optional and anonymous (see [14](#14-general-settings-and-continuous-operation) and
+- Usage statistics are optional and anonymous (see [14](#15-general-settings-and-continuous-operation) and
   `PRIVACY.md`).
 - Tell family, guests and domestic staff about the cameras, microphones and phone-based presence.
 
