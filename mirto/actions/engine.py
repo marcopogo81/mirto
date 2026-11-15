@@ -63,6 +63,11 @@ META_EVERY_SECONDS = 600  # ogni quanto rileggere la "carta d'identità" dei nod
 # dispositivo che risponde piano, e abbastanza stretti perché qualcuno che tocca l'interruttore
 # subito dopo venga comunque sentito.
 ECO_NOSTRO = 5.0
+# Quanto resta accesa un'uscita di un nodo accesa **a mano** da Telegram, se non si dice per quanto.
+# Un relè di un nodo non può restare accesso per sempre — il nodo conta i suoi secondi e si spegne —
+# quindi una durata ci vuole sempre, e un minuto è il tempo in cui uno va a vedere cos'ha acceso.
+# I tetti del tipo (tre minuti la sirena, trenta secondi il dissuasore) restano sopra questo.
+DURATA_A_MANO = 60.0
 KINDS = {"siren", "light", "audio", "generic", "deterrent"}
 # Tipi delle versioni precedenti: diventano uscite generiche, sempre su conferma da Telegram (Mirto è solo
 # software: che cosa è collegato a un'uscita lo decide chi installa, e ne risponde).
@@ -967,17 +972,190 @@ class ActionEngine:
             if not sirena and spec.kind == "siren" and spec.action not in tipi:
                 sirena = duration
             if sirena:
-                self._siren_log = [(t, d) for t, d in self._siren_log if now - t < SIREN_WINDOW_SECONDS]
-                used = sum(d for _t, d in self._siren_log)
-                concesso = min(sirena, SIREN_MAX_SECONDS - used)
+                concesso = self._concedi_sirena(sirena, now)
                 if concesso < 1:
                     return 0.0
-                self._siren_log.append((now, concesso))
                 # Se il budget taglia la sirena, taglia l'azione: tenerla «in corso» più a lungo di
                 # quanto le è concesso suonare vorrebbe dire bloccare il prossimo scatto per niente.
                 duration = min(duration, duration - sirena + concesso)
             self._active_until[spec.name] = now + duration
             return duration
+
+    # --- le uscite, comandate a mano (passo 4) --------------------------------
+    def uscite(self) -> list[dict]:
+        """Tutto quello che si può accendere e spegnere a mano: i relè dei nodi e le luci di casa.
+
+        Una cosa sola per chi guarda, due mondi dietro. Ogni voce:
+        ``{chiave, nome, dove, tipo, acceso, restano}`` — ``acceso`` a ``None`` vuol dire «non lo
+        so», che è diverso da «spento» e non si mostra come spento (un relè di un nodo, finché il
+        nodo non dice che è attivo, non lo sappiamo).
+        """
+        fuori: list[dict] = []
+        for nd in self.config.get("actions.nodes") or []:
+            nid = str(nd.get("id") or "")
+            if not nid:
+                continue
+            dove = str(nd.get("name") or nid)
+            info = dict(self.node_info.get(nid) or {})
+            attive = {str(k): float(v) for k, v in (info.get("attive") or {}).items()}
+            eta = self.clock() - float(info.get("_at", self.clock()))
+            for nome, tipo in (self.node_commands.get(nid) or {}).items():
+                restano = max(0.0, attive.get(nome, 0.0) - eta)
+                fuori.append({"chiave": f"nodo:{nid}|{nome}", "nome": str(nome), "dove": dove,
+                              "tipo": str(tipo or "generic"),
+                              "acceso": bool(restano) if attive else None,
+                              "restano": restano})
+        casa = self._domotica()
+        for d in (casa.dispositivi() if casa is not None else []):
+            if not getattr(d, "comandabile", False):
+                continue
+            fuori.append({"chiave": chiave_smart(d.identificativo),
+                          "nome": d.nome or d.identificativo, "dove": _('casa'),
+                          "tipo": "light" if d.tipo == "luce" else "generic",
+                          "acceso": d.acceso, "restano": 0.0})
+        return fuori
+
+    def uscite_testo(self) -> str:
+        """L'elenco delle uscite in parole, per Telegram. Dice anche com'è adesso ciascuna."""
+        voci = self.uscite()
+        if not voci:
+            return _('Non c\'è niente da accendere: nessun nodo abbinato e nessun dispositivo di casa.')
+        righe = [_('Cosa posso accendere o spegnere:')]
+        for v in voci:
+            # «non lo so» non si scrive «spento»: chi legge «spento» ci crede, e magari è accesa.
+            stato = ("🟢 " + _('accesa') if v["acceso"] else
+                     ("⚪️ " + _('spenta') if v["acceso"] is False else "❔ " + _('non lo so')))
+            resta = _(' ({n:.0f} s)', n=v["restano"]) if v["restano"] >= 1 else ""
+            righe.append(f"• {v['nome']} – {v['dove']} – {stato}{resta}")
+        righe.append(_('Scrivi per esempio: /accendi {nome}', nome=voci[0]["nome"]))
+        return "\n".join(righe)
+
+    def cerca_uscita(self, testo: str) -> tuple[dict | None, str]:
+        """L'uscita che quel testo nomina, oppure ``(None, perché no)``.
+
+        **Qui non si indovina.** Cercare una camera per fare una foto può ripiegare sulla prima che
+        c'è: se sbaglia, viene una foto della stanza sbagliata. Un'uscita no — se sbaglia, accende la
+        sirena invece della luce del portico, alle tre di notte. Quindi: niente corrispondenza o più
+        di una, e non si fa niente, dicendo quali sono.
+        """
+        voci = self.uscite()
+        q = " ".join(str(testo or "").strip().lower().split())
+        if not q:
+            return None, self.uscite_testo()
+        esatte = [v for v in voci if q == v["nome"].strip().lower()]
+        quali = esatte or [v for v in voci if q in v["nome"].strip().lower()]
+        if len(quali) == 1:
+            return quali[0], ""
+        if not quali:
+            return None, _('Non trovo «{q}».', q=testo.strip()) + "\n" + self.uscite_testo()
+        return None, _('«{q}» può essere più di una cosa: {join}. Scrivi il nome intero.',
+                       q=testo.strip(), join=', '.join(v["nome"] for v in quali))
+
+    def comanda_uscita(self, testo: str, acceso: bool, secondi: float = 0) -> str:
+        """Accende o spegne un'uscita, da Telegram. Torna la frase da mandare in risposta.
+
+        **La serratura è quella di Telegram**, cioè la nostra: chi arriva fin qui è un ID in un
+        elenco esplicito. Non si apre niente di nuovo — le uscite si comandavano già, solo dentro
+        un'azione — e per questo i limiti che valgono per un'azione valgono anche qui: una sirena
+        accesa a mano **consuma gli stessi tre minuti ogni mezz'ora**, e se il budget è finito non
+        suona. Senza questa riga, il telefono sarebbe la porta di servizio dei limiti di legge.
+        """
+        quale, perche = self.cerca_uscita(testo)
+        if quale is None:
+            return perche
+        if not acceso:
+            return self._spegni_uscita(quale)
+        return self._accendi_uscita(quale, secondi)
+
+    def _accendi_uscita(self, quale: dict, secondi: float) -> str:
+        tipo, dove, nome = quale["tipo"], quale["dove"], quale["nome"]
+        tetto = LIMITI_PER_TIPO.get(tipo, GENERIC_MAX_SECONDS)
+        if dispositivo_di(quale["chiave"])[0] == SMART:
+            # Una luce di casa può restare accesa: è quello che fa un interruttore, ed è quello che
+            # si aspetta chi scrive «accendi la luce del portico» dal telefono. Un relè di un nodo
+            # no — il nodo conta i suoi secondi e si spegne — quindi lì una durata ci vuole sempre.
+            durata = min(float(secondi or 0), tetto) if secondi else 0.0
+            if not self._comanda_smart(quale["chiave"], True):
+                return _('Non ho potuto accendere {nome}: la domotica non risponde.', nome=nome)
+            if durata:
+                self._schedule(durata, self._spegni_smart, dispositivo_di(quale["chiave"])[1])
+                return _('💡 {nome} accesa per {n:.0f} s.', nome=nome, n=durata)
+            return _('💡 {nome} accesa. Scrivi /spegni {nome} quando vuoi.', nome=nome)
+        durata = min(float(secondi) if secondi else DURATA_A_MANO, tetto)
+        if tipo in LIMITI_PER_TIPO:
+            with self._lock:
+                concesso = self._concedi_sirena(durata, self.clock()) if tipo == "siren" else durata
+            if concesso < 1:
+                return _('🔇 {nome} non parte: i tre minuti ogni mezz\'ora sono esauriti.', nome=nome)
+            durata = concesso
+        client = self._client_di(quale["chiave"].split("|")[0])
+        if client is None:
+            return _('Non ho potuto accendere {nome}: {dove} non risponde.', nome=nome, dove=dove)
+        comando = quale["chiave"].split("|", 1)[1]
+        try:
+            client.activate(comando, durata, "", "")
+        except Exception as exc:  # noqa: BLE001
+            self._audit("errore", comando=comando, errore=str(exc), da="telegram")
+            return _('Non ho potuto accendere {nome}: {exc}', nome=nome, exc=exc)
+        self._audit("acceso-a-mano", uscita=quale["chiave"], secondi=durata, da="telegram")
+        return _('🔛 {nome} ({dove}) per {n:.0f} s.', nome=nome, dove=dove, n=durata)
+
+    def _spegni_uscita(self, quale: dict) -> str:
+        nome = quale["nome"]
+        if dispositivo_di(quale["chiave"])[0] == SMART:
+            if not self._comanda_smart(quale["chiave"], False):
+                return _('Non ho potuto spegnere {nome}: la domotica non risponde.', nome=nome)
+            return _('⚪️ {nome} spenta.', nome=nome)
+        client = self._client_di(quale["chiave"].split("|")[0])
+        if client is None:
+            return _('Non ho potuto spegnere {nome}: {dove} non risponde.',
+                     nome=nome, dove=quale["dove"])
+        try:
+            client.stop_all()
+        except Exception as exc:  # noqa: BLE001
+            return _('Non ho potuto spegnere {nome}: {exc}', nome=nome, exc=exc)
+        self._audit("spento-a-mano", uscita=quale["chiave"], da="telegram")
+        return _('⛔ {nome} ({dove}) spenta.', nome=nome, dove=quale["dove"])
+
+    def _comanda_smart(self, chiave: str, acceso: bool) -> bool:
+        """Comanda un dispositivo di casa e **timbra che l'abbiamo fatto noi**.
+
+        Il timbro non è un dettaglio di questa funzione: senza, un'azione che ascolta «quando si
+        accende quella luce» partirebbe perché l'ha accesa Mirto da Telegram (passo 3). Per questo
+        il comando a mano passa da qui e non direttamente dalla domotica.
+        """
+        casa = self._domotica()
+        _tipo, quale = dispositivo_di(chiave)
+        if casa is None or not quale:
+            return False
+        with self._lock:
+            self._smart_nostri[chiave] = self.clock()
+            if acceso:
+                self._smart_accesi.add(quale)
+            else:
+                self._smart_accesi.discard(quale)
+        try:
+            return bool(casa.comanda(quale, acceso))
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: comando a mano su %s non riuscito", quale)
+            return False
+
+    def _concedi_sirena(self, sirena: float, now: float) -> float:
+        """Quanti di questi secondi di sirena il budget concede, e se ne prende nota. **Vuole il lucchetto.**
+
+        Tre minuti ogni mezz'ora, ed è una promessa che sta in ``GOVERNANCE.md`` fra le cose che non
+        cambiano. Stava dentro il calcolo della durata di un'azione, dove è nata; da qui in poi la
+        chiede anche chi accende una sirena **a mano da Telegram** (passo 4 del piano domotica), e due
+        conti separati sullo stesso budget vorrebbero dire che una delle due strade non lo consuma.
+        Il giorno che quella strada esiste e nessuno se n'è accorto, i tre minuti non sono più tre.
+        """
+        self._siren_log = [(t, d) for t, d in self._siren_log if now - t < SIREN_WINDOW_SECONDS]
+        used = sum(d for _t, d in self._siren_log)
+        concesso = min(sirena, SIREN_MAX_SECONDS - used)
+        if concesso < 1:
+            return 0.0
+        self._siren_log.append((now, concesso))
+        return concesso
 
     def _esegui_passo(self, spec: ActionSpec, ev, catena: list[dict], i: int,
                       suono_predefinito: str = "") -> bool:

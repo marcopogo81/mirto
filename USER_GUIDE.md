@@ -943,11 +943,35 @@ They are the same accepted at the first launch and available in **Help → Terms
 | `/schedule [pause\|resume]` | `/programma` | Shows, suspends or resumes the automatic schedule |
 | `/listen [seconds]` | `/ascolta` | Records from the node's microphone and sends the audio to the group |
 | `/video [camera] [seconds]` | `/clip` | Video of the last seconds (30 by default, at most 120) from a camera that records |
+| `/on [name] [seconds]` | `/accendi` | Turns on a home light or a node output. **With no name it lists** what can be turned on, with each one's state right now |
+| `/off [name]` | `/spegni` | Turns it off |
 | `/id` | — | Shows the chat and user IDs |
 | `/help` | `/aiuto` | List of commands |
 
 A **voice message** sent to the bot is played by the node's speaker. The list is also available in **Help →
 Telegram commands**.
+
+### Turning things on and off from your phone
+
+Type `/on` by itself and Mirto lists what you can turn on — your home's lights and plugs, and the
+outputs of the nodes you've paired — with each one's current state beside it. Then `/on porch light`.
+
+Four things to know, because they're choices and not details:
+
+- **the target is never guessed.** If the name matches nothing, or matches two things, Mirto turns
+  nothing on and tells you which they are. Getting a photo wrong means a photo of the wrong room;
+  getting an output wrong means the siren instead of the porch light, at three in the morning;
+- **a home light stays on** until you turn it off, the way a switch does. A node output always has a
+  duration instead — the node counts its own seconds and stops by itself — one minute by default,
+  and you can say it yourself: `/on lights 10`;
+- **the limits apply from your phone too.** A siren turned on by hand uses up the same three minutes
+  every half hour as the actions do, and when they're gone it won't sound; a deterrent stays capped
+  at its thirty seconds a time. Your phone is not a back door;
+- **what you turn on doesn't set off the actions** that listen to that device: you turned it on, and
+  "when it comes on" means "when it comes on by itself".
+
+Who can type these commands is whoever is already in the bot's list of authorised users: nothing
+changes about who commands Mirto, only about what they can ask it.
 
 ---
 

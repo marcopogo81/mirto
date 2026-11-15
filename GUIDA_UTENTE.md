@@ -956,11 +956,35 @@ Sono le stesse accettate al primo avvio e consultabili in **Aiuto → Condizioni
 | `/programma [sospendi\|riattiva]` | `/schedule` | Mostra, sospende o riattiva gli orari automatici |
 | `/ascolta [secondi]` | `/listen` | Registra dal microfono del nodo e invia l'audio nel gruppo |
 | `/clip [camera] [secondi]` | `/video` | Video degli ultimi secondi (di serie 30, massimo 120) di una camera che registra |
+| `/accendi [nome] [secondi]` | `/on` | Accende una luce di casa o un'uscita di un nodo. **Senza nome mostra l'elenco** di quello che si può accendere, con lo stato di adesso |
+| `/spegni [nome]` | `/off` | Spegne |
 | `/id` | — | Mostra gli ID di chat e utente |
 | `/aiuto` | `/help` | Elenco dei comandi |
 
 Un **messaggio vocale** inviato al bot viene riprodotto dalla cassa del nodo. L'elenco è disponibile anche in
 **Aiuto → Comandi Telegram**.
+
+### Accendere e spegnere dal telefono
+
+Scrivi `/accendi` da solo e Mirto ti elenca cosa puoi accendere — le luci e le prese di casa e le
+uscite dei nodi abbinati — con accanto com'è adesso ciascuna. Poi `/accendi luce del portico`.
+
+Quattro cose da sapere, perché sono scelte e non dettagli:
+
+- **non si indovina mai il bersaglio.** Se il nome non corrisponde a niente, o corrisponde a due
+  cose, Mirto non accende niente e ti dice quali sono. Sbagliare una foto è una foto storta;
+  sbagliare un'uscita vuol dire la sirena invece della luce del portico, alle tre di notte;
+- **una luce di casa resta accesa** finché non la spegni, come fa un interruttore. Un'uscita di un
+  nodo invece ha sempre una durata — il nodo conta i suoi secondi e si spegne da sé — di serie un
+  minuto, e puoi dirla tu: `/accendi luci 10`;
+- **i limiti valgono anche dal telefono.** Una sirena accesa a mano consuma gli stessi tre minuti
+  ogni mezz'ora delle azioni, e quando sono finiti non suona; un dissuasore resta tagliato ai suoi
+  trenta secondi per volta. Il telefono non è una porta di servizio;
+- **quello che accendi tu non fa scattare le azioni** che ascoltano quel dispositivo: l'hai accesa
+  tu, e «quando si accende» vuol dire «quando si accende da sé».
+
+Chi può scrivere questi comandi è chi è già nell'elenco degli utenti autorizzati del bot: non cambia
+niente di chi comanda Mirto, cambia solo cosa può chiedergli.
 
 ---
 

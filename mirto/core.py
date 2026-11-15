@@ -897,6 +897,12 @@ class CoreHandlers(BotHandlers):
     def confirm_action(self, token: str, user: str) -> str:
         return self._act("confirm", token, user)
 
+    def uscite(self) -> str:
+        return self._act("uscite_testo")
+
+    def comanda_uscita(self, nome: str, acceso: bool, secondi: float = 0) -> str:
+        return self._act("comanda_uscita", nome, acceso, secondi)
+
     def listen(self, seconds: int):
         return self.core.actions.listen(seconds) if self.core.actions else None
 

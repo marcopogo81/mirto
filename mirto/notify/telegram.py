@@ -28,7 +28,7 @@ VIDEO_MAX_BYTES = 45_000_000  # limite dei bot Telegram: 50 MB per file
 MAX_MESSAGE_AGE = 60  # secondi: i comandi più vecchi vengono ignorati (es. inviati a Mac spento)
 
 HELP = (
-    N_("Comandi Mirto:\n/stato – camere, nodi e stato della protezione\n/foto [camera] – foto istantanea\n/pausa [minuti] – sospende gli avvisi (default 60)\n/riprendi – riattiva gli avvisi\n/attiva, /disattiva – attiva o disattiva la protezione (anche /inserisci, /disinserisci)\n/ferma – spegne subito tutte le azioni attive\n/programma – orari automatici (/programma sospendi, /programma riattiva)\n/ascolta [secondi] – registra l'audio dal nodo\n/clip [camera] [secondi] – video degli ultimi secondi (default 30)\n/id – mostra gli ID di chat e utente (per la configurazione)\nUn messaggio vocale viene riprodotto dall'altoparlante del nodo.")
+    N_("Comandi Mirto:\n/stato – camere, nodi e stato della protezione\n/foto [camera] – foto istantanea\n/pausa [minuti] – sospende gli avvisi (default 60)\n/riprendi – riattiva gli avvisi\n/attiva, /disattiva – attiva o disattiva la protezione (anche /inserisci, /disinserisci)\n/ferma – spegne subito tutte le azioni attive\n/programma – orari automatici (/programma sospendi, /programma riattiva)\n/ascolta [secondi] – registra l'audio dal nodo\n/accendi [nome] [secondi] – accende una luce o un'uscita; senza nome mostra l'elenco\n/spegni [nome] – spegne\n/clip [camera] [secondi] – video degli ultimi secondi (default 30)\n/id – mostra gli ID di chat e utente (per la configurazione)\nUn messaggio vocale viene riprodotto dall'altoparlante del nodo.")
 )
 
 
@@ -38,6 +38,7 @@ ALIASES = {
     "/arm": "/attiva", "/disarm": "/disattiva", "/stop": "/ferma", "/schedule": "/programma",
     "/listen": "/ascolta",
     "/video": "/clip",
+    "/on": "/accendi", "/off": "/spegni", "/outputs": "/accendi",
 }
 
 # Menu dei comandi impostato dal bot stesso (niente /setcommands in BotFather):
@@ -48,7 +49,10 @@ COMMANDS_IT = [
     ("pausa", "Sospende gli avvisi (minuti, default 60)"), ("riprendi", "Riattiva gli avvisi"),
     ("ferma", "Ferma tutto e disinserisce"), ("programma", "Orari automatici (sospendi / riattiva)"),
     ("ascolta", "Audio dal nodo (secondi)"),
-    ("clip", "Video degli ultimi secondi (es. /clip ingresso 30)"), ("id", "Mostra gli ID di chat e utente"), ("aiuto", "Elenco comandi"),
+    ("clip", "Video degli ultimi secondi (es. /clip ingresso 30)"),
+    ("accendi", "Accende una luce o un'uscita (senza nome: l'elenco)"),
+    ("spegni", "Spegne una luce o un'uscita"),
+    ("id", "Mostra gli ID di chat e utente"), ("aiuto", "Elenco comandi"),
 ]
 COMMANDS_EN = [
     ("status", "Cameras, nodes and protection status"), ("photo", "Instant photo (e.g. /photo entrance)"),
@@ -56,7 +60,10 @@ COMMANDS_EN = [
     ("pause", "Pause alerts (minutes, default 60)"), ("resume", "Resume alerts"),
     ("stop", "Stop everything and disarm"), ("schedule", "Automatic times (pause / resume)"),
     ("listen", "Audio from the node (seconds)"),
-    ("video", "Video of the last seconds (e.g. /video entrance 30)"), ("id", "Show chat and user IDs"), ("help", "List of commands"),
+    ("video", "Video of the last seconds (e.g. /video entrance 30)"),
+    ("on", "Turn a light or output on (no name: the list)"),
+    ("off", "Turn a light or output off"),
+    ("id", "Show chat and user IDs"), ("help", "List of commands"),
 ]
 
 
@@ -137,6 +144,8 @@ class BotHandlers:
     def mute_event_camera(self, event_id: str, seconds: float) -> str: return _('Non disponibile.')
     def confirm_action(self, token: str, user: str) -> str: return _('Non disponibile.')
     def schedule(self, arg: str) -> str: return _('Programmazione non disponibile.')
+    def uscite(self) -> str: return _('Azioni non configurate.')
+    def comanda_uscita(self, nome: str, acceso: bool, secondi: float = 0) -> str: return _('Azioni non configurate.')
     def clip(self, camera_query: str, seconds: int) -> tuple[bytes, str, str] | str: return _('Registrazione non disponibile.')
 
 
@@ -463,6 +472,18 @@ class TelegramBot:
                 self.send_video(chat_id, data, name, caption)
             else:
                 self._reply(chat_id, res or _('Video non disponibile.'))
+        elif cmd in ("/accendi", "/spegni"):
+            # **Senza nome non si indovina: si mostra l'elenco.** Un comando che accende qualcosa non
+            # deve avere un bersaglio predefinito — «/accendi» da solo che accende la prima cosa che
+            # capita è il modo di far suonare la sirena a chi voleva la luce del portico. E l'elenco
+            # arriva proprio quando serve, senza un secondo comando da imparare.
+            parole = arg.split()
+            secondi = float(parole.pop()) if parole and parole[-1].isdigit() else 0
+            nome = " ".join(parole)
+            if not nome:
+                self._reply(chat_id, h.uscite())
+            else:
+                self._reply(chat_id, h.comanda_uscita(nome, cmd == "/accendi", secondi))
         elif text.startswith("/"):
             self._reply(chat_id, _('Comando sconosciuto. Scrivi /aiuto.'))
 
