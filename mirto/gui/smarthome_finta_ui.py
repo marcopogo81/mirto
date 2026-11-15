@@ -90,6 +90,21 @@ def descrizione_marca(marca: str) -> str:
     }.get(marca, "")
 
 
+def cosa_deve_fare_mirto(marca: str) -> str:
+    """Cosa Mirto **deve fare adesso** con un dispositivo di quella marca, per chi sta provando.
+
+    Non è `descrizione_marca`, e il 15/11 le ho unificate sbagliando. Quella dice *cos'è* la marca,
+    e sta accanto alla tendina mentre scegli. Questa dice *cosa guardare adesso che l'hai aggiunto*,
+    e va nel diario: chi prova e non lo sa resta a chiedersi perché Mirto non lo trova. Si somigliano
+    e servono a due momenti diversi, e tenerne una sola vuol dire perdere quella che aiuta.
+    """
+    return {
+        ESPHOME: _("Si annuncia: Mirto lo deve trovare da solo."),
+        ZIGBEE: _("Non si annuncia, ma sta nell'elenco della sua marca: Mirto lo deve trovare da lì."),
+    }.get(marca, _("Maleducato: non si annuncia e non parla nessuna lingua nota, "
+                   "Mirto lo trova solo con l'ascolto grezzo."))
+
+
 def etichetta_tipo(tipo: str) -> str:
     """Il tipo in parole. Si traduce qui e non in una tabella: una tabella di stringhe fatta
     all'import resterebbe nella lingua di quando e' partito il programma."""
@@ -348,7 +363,7 @@ class FinestraCasaFinta(QDialog):
         self.nome.clear()
         self._spiega_la_marca()
         self._scrivi(_("Aggiunto «{nome}» ({marca}). {cosa}", nome=nome, marca=d.marca,
-                       cosa=descrizione_marca(d.marca)))
+                       cosa=cosa_deve_fare_mirto(d.marca)))
         self._ridisegna()
 
     def _identificativo_per(self, nome: str) -> str:

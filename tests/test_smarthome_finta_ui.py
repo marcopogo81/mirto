@@ -180,6 +180,25 @@ class LaFinestraTest(unittest.TestCase):
         self.finestra._aggiungi()       # noqa: SLF001
         self.assertIn("ascolto grezzo", self._diario())
 
+    def test_il_diario_e_la_tendina_non_dicono_la_stessa_cosa(self):
+        """Due frasi che si somigliano e servono a due momenti diversi. Il 15/11 le ho unificate.
+
+        Traducendo i simulatori ho sostituito le frasi del diario con quelle della tendina, perché
+        parlavano delle stesse tre marche. Ma la tendina dice **cos'è** la marca, mentre scegli, e il
+        diario dice **cosa guardare adesso che l'hai aggiunto** — «Mirto lo deve trovare da solo» è
+        un'istruzione a chi prova, non una descrizione. Tenerne una sola non era semplificare: era
+        buttare via quella che aiuta. Se n'è accorta questa prova, lanciata da Marco sul Mac, perché
+        nel contenitore Qt non c'è: è l'unica rete che copre questa finestra.
+        """
+        from mirto.gui.smarthome_finta_ui import cosa_deve_fare_mirto, descrizione_marca  # noqa: PLC0415
+
+        for marca in (ESPHOME, ZIGBEE, MALEDUCATO):
+            istruzione, descrizione = cosa_deve_fare_mirto(marca), descrizione_marca(marca)
+            self.assertTrue(istruzione.strip(), f"{marca}: il diario non direbbe niente")
+            self.assertTrue(descrizione.strip(), f"{marca}: la tendina non direbbe niente")
+            self.assertNotEqual(istruzione, descrizione,
+                                f"{marca}: diario e tendina sono tornati la stessa frase")
+
     # --- com'è vestita, e i tre difetti del 14/11 -----------------------------
     def test_il_campo_del_nome_resta_largo_abbastanza_per_scriverci(self):
         """Difetto 3 del 14/11: i menu lunghi avevano schiacciato il campo del nome a tre puntini.
