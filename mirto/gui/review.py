@@ -762,40 +762,55 @@ class ReviewView(QWidget):
         self.seek(start_at)
 
     def _svuota_camera(self) -> None:
-        """Cancella tutte le registrazioni di questa camera, dopo averlo chiesto.
+        """Toglie di mezzo questa camera: le registrazioni che ha, e la sua voce nell'elenco.
 
-        Serve perché finora non c'era modo di togliere di mezzo una camera che non c'è più: restava
-        nell'elenco per sempre, con dentro chissà che di chissà quando. Marco, 14/11: *«non so
-        neanche cosa ci sia salvato sotto bagno perché chissà di che giorni era»*.
+        Serve perché una camera che non c'è più restava nell'elenco per sempre. Marco, 14/11: *«non
+        so neanche cosa ci sia salvato sotto bagno perché chissà di che giorni era»*.
 
-        La domanda dice **quanto** si cancella e che non si torna indietro, perché «sei sicuro?»
-        senza un numero non è una domanda: è un ostacolo da saltare.
+        **Il caso che la prima stesura sbagliava, il 15/11.** Una camera può essere nell'elenco
+        *senza* avere registrazioni: a farla comparire è il cartellino col nome (``camera.json``),
+        che resta anche quando i video sono stati cancellati da sé per vecchiaia o per spazio. Io
+        contavo i file, trovavo zero, dicevo «niente da cancellare» e non toccavo niente — cioè mi
+        rifiutavo di fare l'unica cosa che serviva, togliere la voce. Non era un caso raro: è il
+        caso normale di una camera smessa da un po'.
+
+        Quindi la domanda cambia con quello che c'è davvero, e in tutti i casi fa qualcosa.
         """
         from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
 
         if not self.cam_id:
             return
+        titolo = _("Elimina le registrazioni")
         nome = self.cam_combo.currentText()
         store = self.core.recording.store
         quanti, byte = store.misura_camera(self.cam_id)
-        if not quanti:
-            QMessageBox.information(self, _("Elimina le registrazioni"),
-                                    _("Di «{nome}» non c'è niente da cancellare.", nome=nome))
-            return
+        nell_elenco = self.cam_id in store.cameras()
         collegata = self.cam_id in dict(self.core.cameras.sources)
+
+        if not nell_elenco and not quanti:
+            # non ha cartella: è nell'elenco solo perché la camera esiste adesso
+            QMessageBox.information(self, titolo, _(
+                "«{nome}» non ha registrazioni salvate. È in questo elenco perché la camera è "
+                "collegata adesso, non per via di quello che ha registrato.", nome=nome))
+            return
+
         coda = (_("La camera è collegata, quindi ricomincerà a registrare da adesso.") if collegata
                 else _("La camera non è più collegata, quindi sparirà anche da questo elenco."))
-        if QMessageBox.question(
-                self, _("Elimina le registrazioni"),
-                _("Cancello tutte le registrazioni di «{nome}»?\n\n{quanti} file, {spazio}.\n"
-                  "Non si torna indietro: i file non vanno nel cestino.\n\n{coda}",
-                  nome=nome, quanti=quanti, spazio=_spazio(byte), coda=coda),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+        if quanti:
+            domanda = _("Cancello tutte le registrazioni di «{nome}»?\n\n{quanti} file, {spazio}.\n"
+                        "Non si torna indietro: i file non vanno nel cestino.\n\n{coda}",
+                        nome=nome, quanti=quanti, spazio=_spazio(byte), coda=coda)
+        else:
+            domanda = _("«{nome}» non ha più registrazioni: sono già state cancellate per "
+                        "vecchiaia o per fare spazio.\n\nResta nell'elenco perché Mirto ne "
+                        "conserva il nome. Lo tolgo?\n\n{coda}", nome=nome, coda=coda)
+        if QMessageBox.question(self, titolo, domanda,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         guaio = store.rimuovi_camera(self.cam_id)
         if guaio:
-            QMessageBox.warning(self, _("Elimina le registrazioni"),
+            QMessageBox.warning(self, titolo,
                                 _("Non sono riuscito a cancellare tutto: {guaio}", guaio=guaio))
         self._fill_cameras(None)
         self._load()

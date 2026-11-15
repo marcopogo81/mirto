@@ -166,6 +166,35 @@ class LaPaginaRivediTest(unittest.TestCase):
         self.addCleanup(vista.deleteLater)
         return vista
 
+    def test_eliminare_una_camera_senza_registrazioni_la_toglie_davvero(self):
+        """Il difetto del 15/11, visto da Marco: «dice che non c'è niente da cancellare in bagno e
+        lascia tutto lì com'è senza fare niente».
+
+        Una camera che ha smesso di registrare da un po' è nell'elenco per via del suo cartellino,
+        non dei video — che intanto sono stati cancellati da sé. Contare i file e fermarsi a zero
+        voleva dire rifiutarsi di fare l'unica cosa che serviva. Qui si preme il pulsante per
+        davvero, con la risposta «sì» già data, e si pretende che la voce sparisca.
+        """
+        from PySide6.QtWidgets import QMessageBox
+
+        vista = self._vista()
+        store = vista.core.recording.store
+        store.cam_dir("bagno", "Bagno")          # solo il cartellino, nessun video
+        vista._fill_cameras("bagno")             # noqa: SLF001
+        self.assertIn("bagno", store.cameras())
+        self.assertEqual(vista.cam_id, "bagno", "la camera di prova deve essere quella scelta")
+
+        chiesto = []
+        originale = QMessageBox.question
+        QMessageBox.question = lambda *a, **k: (chiesto.append(a[2] if len(a) > 2 else ""),
+                                                QMessageBox.StandardButton.Yes)[1]
+        try:
+            vista._svuota_camera()               # noqa: SLF001
+        finally:
+            QMessageBox.question = originale
+        self.assertTrue(chiesto, "deve chiedere prima di cancellare, non fare in silenzio")
+        self.assertNotIn("bagno", store.cameras(), "e dopo il sì la voce deve sparire")
+
     def test_il_riquadro_dei_comandi_contiene_la_ricerca(self):
         from PySide6.QtWidgets import QFrame
 

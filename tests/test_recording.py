@@ -1051,3 +1051,23 @@ class CancellareUnaCameraTest(unittest.TestCase):
         self.assertTrue(guaio, "doveva rifiutarsi e dire perché")
         self.assertTrue((fuori / "importante.txt").exists(),
                         "ha cancellato fuori dalla cartella delle registrazioni")
+
+    def test_una_camera_senza_registrazioni_sta_comunque_nell_elenco(self):
+        """Il caso che il pulsante «Elimina» sbagliava il 15/11.
+
+        A far comparire una camera in *Rivedi* è ``camera.json``, non i video: quando i video sono
+        stati cancellati da sé per vecchiaia o per spazio, la voce resta e dentro non c'è niente.
+        È il caso normale di una camera smessa da un po', non un caso limite — ed è quello in cui
+        «non c'è niente da cancellare» era la risposta più inutile possibile, perché togliere la
+        voce era proprio quello che serviva.
+        """
+        self.store.cam_dir("bagno", "Bagno")        # solo il cartellino, nessun video
+        quanti, byte = self.store.misura_camera("bagno")
+        self.assertEqual(quanti, 0, "nessuna registrazione")
+        self.assertGreater(byte, 0, "ma la cartella c'è, col cartellino dentro")
+        self.assertIn("bagno", self.store.cameras(), "senza video resta comunque nell'elenco")
+
+    def test_toglierla_funziona_anche_quando_non_ha_registrazioni(self):
+        self.store.cam_dir("bagno", "Bagno")
+        self.assertEqual(self.store.rimuovi_camera("bagno"), "")
+        self.assertNotIn("bagno", self.store.cameras())
