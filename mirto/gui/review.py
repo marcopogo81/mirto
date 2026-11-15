@@ -762,19 +762,19 @@ class ReviewView(QWidget):
         self.seek(start_at)
 
     def _svuota_camera(self) -> None:
-        """Toglie di mezzo questa camera: le registrazioni che ha, e la sua voce nell'elenco.
+        """Cancella tutto di questa camera: i video **e** il cartellino col nome.
 
-        Serve perché una camera che non c'è più restava nell'elenco per sempre. Marco, 14/11: *«non
-        so neanche cosa ci sia salvato sotto bagno perché chissà di che giorni era»*.
+        Una regola sola, e vale sempre: si chiede, e poi si cancella tutto. Niente casi speciali.
 
-        **Il caso che la prima stesura sbagliava, il 15/11.** Una camera può essere nell'elenco
-        *senza* avere registrazioni: a farla comparire è il cartellino col nome (``camera.json``),
-        che resta anche quando i video sono stati cancellati da sé per vecchiaia o per spazio. Io
-        contavo i file, trovavo zero, dicevo «niente da cancellare» e non toccavo niente — cioè mi
-        rifiutavo di fare l'unica cosa che serviva, togliere la voce. Non era un caso raro: è il
-        caso normale di una camera smessa da un po'.
+        Il cartellino (``camera.json``) va via con il resto perché è lui a far comparire la camera
+        in questo elenco: lasciandolo resterebbe una voce che apre il vuoto. E se la camera c'è
+        ancora, chi registra la cartella se la rifà da solo al primo video — quindi l'elenco finisce
+        per mostrare quello che esiste davvero, che è il punto.
 
-        Quindi la domanda cambia con quello che c'è davvero, e in tutti i casi fa qualcosa.
+        La prima stesura faceva tre casi diversi e in uno non cancellava niente. Marco, 15/11:
+        *«stai facendo troppi problemi: se una camera non ha una cartella il processo deve crearla;
+        se uno chiede di eliminare, te elimini tutto, anche il segnaposto cartella, in modo da far
+        vedere solo ciò che esiste»*.
         """
         from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
 
@@ -784,29 +784,17 @@ class ReviewView(QWidget):
         nome = self.cam_combo.currentText()
         store = self.core.recording.store
         quanti, byte = store.misura_camera(self.cam_id)
-        nell_elenco = self.cam_id in store.cameras()
-        collegata = self.cam_id in dict(self.core.cameras.sources)
-
-        if not nell_elenco and not quanti:
-            # non ha cartella: è nell'elenco solo perché la camera esiste adesso
-            QMessageBox.information(self, titolo, _(
-                "«{nome}» non ha registrazioni salvate. È in questo elenco perché la camera è "
-                "collegata adesso, non per via di quello che ha registrato.", nome=nome))
-            return
-
-        coda = (_("La camera è collegata, quindi ricomincerà a registrare da adesso.") if collegata
-                else _("La camera non è più collegata, quindi sparirà anche da questo elenco."))
-        if quanti:
-            domanda = _("Cancello tutte le registrazioni di «{nome}»?\n\n{quanti} file, {spazio}.\n"
-                        "Non si torna indietro: i file non vanno nel cestino.\n\n{coda}",
-                        nome=nome, quanti=quanti, spazio=_spazio(byte), coda=coda)
-        else:
-            domanda = _("«{nome}» non ha più registrazioni: sono già state cancellate per "
-                        "vecchiaia o per fare spazio.\n\nResta nell'elenco perché Mirto ne "
-                        "conserva il nome. Lo tolgo?\n\n{coda}", nome=nome, coda=coda)
-        if QMessageBox.question(self, titolo, domanda,
-                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+        quanto = (_("{quanti} file, {spazio}.", quanti=quanti, spazio=_spazio(byte)) if quanti
+                  else _("Non ci sono più video: sono già stati cancellati per vecchiaia o per "
+                         "fare spazio."))
+        if QMessageBox.question(
+                self, titolo,
+                _("Cancello tutto quello che Mirto ha di «{nome}»?\n\n{quanto}\n"
+                  "Non si torna indietro: i file non vanno nel cestino.\n\n"
+                  "Sparisce anche da questo elenco. Se la camera c'è ancora, ricomincerà a "
+                  "registrare e tornerà da sola.", nome=nome, quanto=quanto),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         guaio = store.rimuovi_camera(self.cam_id)
         if guaio:

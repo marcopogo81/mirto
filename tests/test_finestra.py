@@ -174,6 +174,9 @@ class LaPaginaRivediTest(unittest.TestCase):
         non dei video — che intanto sono stati cancellati da sé. Contare i file e fermarsi a zero
         voleva dire rifiutarsi di fare l'unica cosa che serviva. Qui si preme il pulsante per
         davvero, con la risposta «sì» già data, e si pretende che la voce sparisca.
+
+        Vale una regola sola, e questa prova è quella che la tiene: **si chiede e si cancella
+        tutto**, cartellino compreso, in qualunque stato sia la camera.
         """
         from PySide6.QtWidgets import QMessageBox
 

@@ -1071,3 +1071,16 @@ class CancellareUnaCameraTest(unittest.TestCase):
         self.store.cam_dir("bagno", "Bagno")
         self.assertEqual(self.store.rimuovi_camera("bagno"), "")
         self.assertNotIn("bagno", self.store.cameras())
+
+    def test_chi_registra_si_rifa_la_cartella_da_solo(self):
+        """Per questo si può cancellare tutto senza pensarci: la cartella non è una cosa da salvare.
+
+        ``cam_dir`` col nome la ricrea, ed è quello che fa ``folder_for`` al primo video. Quindi
+        l'elenco di *Rivedi* finisce per mostrare quello che esiste davvero: se la camera c'è,
+        torna da sola; se non c'è più, resta sparita.
+        """
+        self._camera("porta", "Porta")
+        self.store.rimuovi_camera("porta")
+        self.assertFalse(self.store.cam_dir("porta").exists())
+        self.store.cam_dir("porta", "Porta")        # come fa «folder_for» quando riparte
+        self.assertIn("porta", self.store.cameras(), "ricomparsa da sé, col suo nome")
