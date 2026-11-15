@@ -46,12 +46,9 @@ log = logging.getLogger(__name__)
 ESPHOME, ZIGBEE, MALEDUCATO = "esphome", "zigbee2mqtt", "maleducato"
 MARCHE = (ESPHOME, ZIGBEE, MALEDUCATO)
 
-# Come si chiamano le marche per chi guarda la finestra, e cosa comportano.
-DESCRIZIONE_MARCHE = {
-    ESPHOME: "si annuncia da sé (Mirto lo trova subito)",
-    ZIGBEE: "non si annuncia, ma parla la sua lingua (Mirto lo trova dal suo elenco)",
-    MALEDUCATO: "non si annuncia e non parla nessuna lingua nota (va preso a orecchio)",
-}
+# Cosa comporta ogni marca, per chi guarda la finestra, sta in «descrizione_marca()» dentro
+# «smarthome_finta_ui»: le frasi vanno scritte dentro «_()» al momento di mostrarle, o il
+# traduttore non le vede. Qui non se ne tiene una seconda copia: due copie divergono.
 
 # «Indirizzo già in uso» ha un numero diverso per ogni sistema: 48 su macOS, 98 su Linux, 10048 su
 # Windows. Scritti a mano, i primi due passavano e il terzo no — e la CI del 15/11 l'ha scoperto

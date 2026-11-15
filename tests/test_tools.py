@@ -2361,3 +2361,171 @@ class LeRigheDelPannelloSiChiamanoComeSonoFatteTest(unittest.TestCase):
                 if chiave.arg is not None:
                     self.assertFalse(e_un_elenco(chiave.value),
                                      f"riga {chiamata.lineno}: «{chiave.arg}» vuole un testo")
+
+
+class OgniScrittaDellInterfacciaPassaDalTraduttoreTest(unittest.TestCase):
+    """Una scritta che non passa da ``_()`` resta in italiano per sempre.
+
+    `CONTRIBUTING` promette due cose a chi arriva: *«the files in the repository stay in English»* e
+    *«the application itself speaks both English and Italian»*. Il 14/11 avevo deciso che i due
+    simulatori erano arnesi da sviluppo e potevano restare in italiano; Marco il 15/11: *«se voglio
+    avere collaboratori i simulatori devono essere pubblici ed in lingua»*. Aveva ragione lui: un
+    simulatore che si apre solo in italiano smentisce il patto, e il patto era già scritto.
+
+    ``tools/i18n_check.py`` controlla un'altra cosa: che ogni testo **già dentro** ``_()`` abbia la
+    sua traduzione. Non si accorge di una scritta che non c'è mai entrata. Questo guardiano guarda
+    il buco che resta: ogni letterale passato a un metodo che **mostra** qualcosa deve essere
+    avvolto. Non costruisce finestre, quindi gira anche dove Qt non c'è.
+
+    Le righe di registro (``log.warning`` e compagnia) non si traducono: le legge chi sviluppa, nel
+    file di registro, e il registro del progetto è in italiano.
+    """
+
+    # I metodi che portano un testo sotto gli occhi di qualcuno, e **quali** dei loro argomenti si
+    # vedono. Il posto conta: «addItem(_('Sempre'), "sempre")» mostra il primo e si tiene il secondo
+    # come chiave, e un guardiano che guardasse tutti gli argomenti darebbe la caccia alle chiavi.
+    # Era il primo difetto di questo guardiano stesso: venticinque lamentele, tutte sbagliate.
+    MOSTRANO = {
+        "setText": (0,), "setWindowTitle": (0,), "setPlaceholderText": (0,),
+        # «append» non c'è, e non per dimenticanza: su un riquadro di testo mostra una riga, su una
+        # lista aggiunge una chiave, e dal codice le due cose sono identiche. Un guardiano che non
+        # sa distinguere due casi opposti dà lamentele sbagliate, e una lamentela sbagliata insegna
+        # a non leggere le lamentele.
+        "setToolTip": (0,), "setTitle": (0,), "addItem": (0,),
+        # QMessageBox.information(genitore, titolo, testo): il genitore non è un testo.
+        "information": (1, 2), "warning": (1, 2), "critical": (1, 2), "question": (1, 2),
+        "print": (0, 1, 2, 3),
+        # I costruttori: è lì che un'etichetta prende il suo testo quasi sempre, e un guardiano
+        # che guardasse solo «setText» non vedrebbe la maggior parte delle scritte del programma.
+        "QLabel": (0,), "QPushButton": (0,), "QCheckBox": (0,), "QRadioButton": (0,),
+        "QGroupBox": (0,), "QAction": (0,), "QToolButton": (0,),
+    }
+    # Dove si guarda: tutta l'interfaccia, più i simulatori, che sono pubblici.
+    GUARDATI = ("mirto/gui", "mirto/actions/smarthome_finta.py", "mirto/actions/simulator.py")
+
+    @classmethod
+    def _files(cls):
+        for voce in cls.GUARDATI:
+            p = ROOT / voce
+            for f in (sorted(p.rglob("*.py")) if p.is_dir() else [p]):
+                if "__pycache__" not in str(f):
+                    yield f
+
+    @classmethod
+    def scritte_nude(cls, sorgente: str, dove: str = "<prova>") -> list[str]:
+        """I letterali mostrati senza passare da ``_()``. Separata per poterla falsificare."""
+        import ast  # noqa: PLC0415
+
+        guai = []
+        try:
+            albero = ast.parse(sorgente)
+        except SyntaxError:
+            return guai
+
+        # Le frasi già tradotte, riconosciute **dove stanno** e non dal nodo in cima. La prima
+        # versione di questo guardiano pretendeva che l'argomento fosse lui stesso un letterale, e
+        # su «setText(_('A') if acceso else 'B')» non vedeva niente: l'argomento è un «if», non una
+        # stringa. Falsificandolo su quella riga vera è venuto fuori che era finto.
+        tradotte = set()
+        for n in ast.walk(albero):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    and n.func.id in ("_", "gettext", "ngettext")):
+                for dentro in ast.walk(n):
+                    if isinstance(dentro, ast.Constant) and isinstance(dentro.value, str):
+                        tradotte.add(id(dentro))
+
+        for n in ast.walk(albero):
+            if not isinstance(n, ast.Call):
+                continue
+            if isinstance(n.func, ast.Attribute):
+                nome = n.func.attr
+                # «log.warning(...)» è registro, non interfaccia: lo si riconosce dall'oggetto.
+                oggetto = ast.unparse(n.func.value)
+                if oggetto in ("log", "logger", "logging") or oggetto.endswith(".log"):
+                    continue
+            else:
+                nome = getattr(n.func, "id", "")
+            if nome not in cls.MOSTRANO:
+                continue
+            for posto in cls.MOSTRANO[nome]:
+                if posto >= len(n.args):
+                    continue
+                for dentro in ast.walk(n.args[posto]):
+                    if not (isinstance(dentro, ast.Constant) and isinstance(dentro.value, str)):
+                        continue
+                    if id(dentro) in tradotte or not cls.e_una_frase(dentro.value):
+                        continue
+                    guai.append(f"{dove}:{n.lineno}: {nome}(…{dentro.value[:50]!r}…) "
+                                f"non passa da _()")
+        return guai
+
+    @staticmethod
+    def e_una_frase(testo: str) -> bool:
+        """Se questo testo sia una frase da tradurre o un pezzo di impalcatura da lasciare stare.
+
+        Non si traducono: i simboli (``✕``, ``--:--:--``), i nomi propri (``Mirto``), gli esempi
+        tecnici (``rtsp://…``, ``+39333…``), le sigle (``OK``, ``MAC``) e i pezzi di marcatura con
+        cui si costruisce una riga (``<span style='color:``) — lì la frase vera sta dentro, in un
+        ``_()`` suo, e si guarda da sé.
+
+        **Quello che questo guardiano non vede**, e va saputo: una parola sola. ``_("Luce")`` è
+        tradotta e va tradotta, ma una parola sola potrebbe anche essere un nome proprio o una
+        chiave, e non c'è modo di distinguerle guardando il codice. Il guardiano chiede due parole
+        o niente: prende le frasi, che sono quasi tutte, e sulle parole singole si fida di chi
+        scrive. Chiedere anche quelle vorrebbe dire dare la caccia a ``"Twilio"`` e ``"POST"``.
+        """
+        import re  # noqa: PLC0415
+
+        t = testo.strip()
+        if re.match(r"^[a-z]+://|^[+@]|^\{", t):
+            return False                            # un indirizzo, un numero, un segnaposto
+        # Via l'impalcatura: tag (anche aperti a metà, perché la riga si compone a pezzi),
+        # entità e segnaposto. Quello che resta è il testo che uno legge.
+        t = re.sub(r"<[^>]*>|<[^>]*$|&\w+;|\{[^}]*\}", " ", t)
+        # Via i nomi di cose: «smoke_alarm», «command_topic», «Content-Type», «font-size:»,
+        # «tuoindirizzo@gmail.com». Una parola incollata a un'altra da `_`, `-`, `.`, `:` o `@` non
+        # è una parola da leggere, è un nome che il programma si dice da solo.
+        t = re.sub(r"[A-Za-zÀ-ÿ]+[-_.:@][A-Za-zÀ-ÿ_.:@-]*", " ", t)
+        parole = re.findall(r"[A-Za-zÀ-ÿ]{3,}", t)
+        return len(parole) >= 2
+
+    def test_il_guardiano_vede_una_scritta_nuda(self):
+        """Falsificazione: se non riconosce questa, non riconosce niente."""
+        guai = self.scritte_nude("etichetta.setText('Luce del portico')")
+        self.assertEqual(len(guai), 1, f"guardiano cieco: {guai}")
+
+    def test_il_guardiano_lascia_passare_quella_tradotta(self):
+        self.assertEqual(self.scritte_nude("etichetta.setText(_('Luce del portico'))"), [])
+
+    def test_il_guardiano_guarda_dentro_le_scelte(self):
+        """Il buco vero, trovato falsificando: la scritta stava in un ramo di un «if».
+
+        ``setText(_('A') if acceso else 'B')`` ha come argomento un ``IfExp``, non una stringa, e
+        il guardiano di prima chiedeva che l'argomento **fosse** una stringa. Passava.
+        """
+        guai = self.scritte_nude(
+            "b.setText(_('Non passa più nessuno') if acceso else 'Fai passare qualcuno')")
+        self.assertEqual(len(guai), 1, f"il ramo non tradotto non si vede: {guai}")
+        self.assertEqual(self.scritte_nude(
+            "b.setText(_('Non passa più nessuno') if acceso else _('Fai passare qualcuno'))"), [])
+
+    def test_il_guardiano_guarda_anche_i_costruttori(self):
+        """Quasi tutte le etichette prendono il testo alla nascita, non con «setText»."""
+        self.assertEqual(len(self.scritte_nude("QPushButton('Cerca i dispositivi')")), 1)
+        self.assertEqual(self.scritte_nude("QPushButton(_('Cerca i dispositivi'))"), [])
+
+    def test_il_guardiano_non_si_lamenta_del_registro(self):
+        self.assertEqual(self.scritte_nude("log.warning('non ho potuto pubblicare')"), [])
+
+    def test_il_guardiano_guarda_davvero_i_file(self):
+        files = list(self._files())
+        self.assertGreater(len(files), 10, "nessun file guardato: il guardiano è cieco")
+        self.assertIn("smarthome_finta_ui.py", [f.name for f in files])
+
+    def test_nessuna_scritta_dell_interfaccia_resta_fuori(self):
+        guai = []
+        for f in self._files():
+            guai += self.scritte_nude(f.read_text(encoding="utf-8"),
+                                      f.relative_to(ROOT).as_posix())
+        self.assertEqual(guai, [], "scritte che resterebbero in italiano per chiunque:\n  "
+                                   + "\n  ".join(guai))

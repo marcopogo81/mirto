@@ -26,9 +26,13 @@ una scatola blu in cima e un campo ridotto a tre puntini. Tutti e tre erano miei
    silenzio, e sembrava che «Aggiungi» fosse rotto. Nel menu ora c'è solo la marca, e cosa comporta
    si legge in una riga sotto, che cambia con la scelta. Una prova guarda che quel campo resti largo.
 
-**Perché i testi non passano dal traduttore.** È uno strumento di sviluppo, come
-``--simulatore-nodo``: nessun utente lo aprirà mai. Mettere le sue frasi nel catalogo vorrebbe dire
-far tradurre in sette lingue parole che vedremo soltanto noi.
+**I testi passano dal traduttore, come tutto il resto.** Il 14/11 li avevo lasciati fuori dicendo
+che è uno strumento di sviluppo e lo vediamo solo noi. Marco, il giorno dopo: *«se voglio avere
+collaboratori i simulatori devono essere pubblici ed in lingua»*. Ha ragione, e il patto era già
+scritto nel ``CONTRIBUTING``: *«the project is documented in English so that anyone can read it and
+contribute»*. Un simulatore è la prima cosa che apre chi vuole dare una mano e non ha un impianto
+in casa — cioè quasi tutti — e aprirgli davanti una finestra in una lingua che non legge è dirgli
+che il progetto non è per lui.
 
 **Il filo.** I cambiamenti arrivano dal filo che legge dal broker, non da quello dell'interfaccia:
 passano da un segnale Qt, che è il modo in cui in Mirto si rimbalza il lavoro sul filo giusto.
@@ -58,10 +62,11 @@ from PySide6.QtWidgets import (
 
 from . import theme as T
 from .widgets import mono_font
+from ..i18n import _
 from ..actions.smarthome_finta import (
-    DESCRIZIONE_MARCHE,
     ESPHOME,
     LUCE,
+    MALEDUCATO,
     MARCHE,
     PRESA,
     SENSORE,
@@ -74,7 +79,21 @@ from ..actions.smarthome_finta import (
 
 log = logging.getLogger(__name__)
 
-ETICHETTA_TIPI = {LUCE: "Luce", PRESA: "Presa", SENSORE: "Sensore"}
+def descrizione_marca(marca: str) -> str:
+    """Cosa comporta quella marca, tradotto. Le frasi stanno qui e non in «smarthome_finta»:
+    devono stare dentro «_()» al momento di mostrarle, altrimenti il traduttore non le vede e una
+    tabella costruita all'import resterebbe nella lingua di quando e' partito il programma."""
+    return {
+        ESPHOME: _("si annuncia da sé: Mirto lo trova subito"),
+        ZIGBEE: _("non si annuncia, ma parla la sua lingua: Mirto lo trova dal suo elenco"),
+        MALEDUCATO: _("non si annuncia e non parla nessuna lingua nota: va cercato a orecchio"),
+    }.get(marca, "")
+
+
+def etichetta_tipo(tipo: str) -> str:
+    """Il tipo in parole. Si traduce qui e non in una tabella: una tabella di stringhe fatta
+    all'import resterebbe nella lingua di quando e' partito il programma."""
+    return {LUCE: _("Luce"), PRESA: _("Presa"), SENSORE: _("Sensore")}.get(tipo, tipo)
 
 # Il campo del nome non deve mai scendere sotto questa larghezza: è il difetto 3 qui sopra, e la
 # prova che lo guarda usa lo stesso numero. Sotto i duecento pixel non ci si scrive un nome.
@@ -119,7 +138,7 @@ class FinestraCasaFinta(QDialog):
         self.casa.su_cambio = lambda d, da_chi: self._ponte.cambiato.emit(d.identificativo, da_chi)
         self._righe: dict[str, tuple[QLabel, QPushButton]] = {}
 
-        self.setWindowTitle("Casa smart finta — Mirto")
+        self.setWindowTitle(_("Casa smart finta — Mirto"))
         self.setMinimumWidth(780)
         fuori = QVBoxLayout(self)
         fuori.setSpacing(14)
@@ -138,7 +157,7 @@ class FinestraCasaFinta(QDialog):
         fuori.addWidget(self.diario)
         self.resize(820, 700)
         self._ridisegna()
-        self._scrivi(f"Casa finta in piedi. Broker su 127.0.0.1:{self.casa.porta}.")
+        self._scrivi(_("Casa finta in piedi. Broker su 127.0.0.1:{porta}.", porta=self.casa.porta))
 
     # --- i pezzi della finestra ----------------------------------------------
     @staticmethod
@@ -171,7 +190,7 @@ class FinestraCasaFinta(QDialog):
         riga.addWidget(logo)
         dentro = QVBoxLayout()
         dentro.setSpacing(4)
-        titolo = QLabel("Casa smart finta")
+        titolo = QLabel(_("Casa smart finta"))
         titolo.setStyleSheet(f"color:{T.TEXT}; font-size:{T.SIZE_TITLE}px; font-weight:700;")
         dentro.addWidget(titolo)
         self.indirizzo = QLabel(f"127.0.0.1:{self.casa.porta}")
@@ -181,10 +200,9 @@ class FinestraCasaFinta(QDialog):
         dentro.addWidget(self.indirizzo)
         # Non mandare a cercare una cosa che non c'è ancora: la scheda SmartHome arriva col passo 1,
         # e fino ad allora una riga che dice «vai in Impostazioni» fa perdere tempo a chi prova.
-        nota = QLabel("È l'indirizzo del broker. La scheda <i>Impostazioni → SmartHome</i> che lo "
-                      "chiederà arriva col passo 1: fino ad allora Mirto non ascolta ancora, e qui "
-                      "si vedono solo i cambiamenti fatti da questa finestra.<br>"
-                      "Il broker sta dentro questa finestra: chiudendola, i dispositivi spariscono.")
+        nota = QLabel(_("È l'indirizzo del broker da scrivere in Mirto, in <i>Impostazioni → "
+                        "SmartHome</i>.<br>Il broker sta dentro questa finestra: chiudendola, i "
+                        "dispositivi spariscono."))
         nota.setTextFormat(Qt.TextFormat.RichText)
         nota.setWordWrap(True)
         nota.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
@@ -214,22 +232,22 @@ class FinestraCasaFinta(QDialog):
         riga = QHBoxLayout()
         riga.setSpacing(8)
         self.nome = QLineEdit()
-        self.nome.setPlaceholderText("Nome del dispositivo, per esempio «Luce del portico»")
+        self.nome.setPlaceholderText(_("Nome del dispositivo, per esempio «Luce del portico»"))
         self.nome.setMinimumWidth(LARGHEZZA_MINIMA_NOME)
         self.nome.returnPressed.connect(self._aggiungi)
         riga.addWidget(self.nome, 1)
         self.tipo = QComboBox()
         for t in TIPI:
-            self.tipo.addItem(ETICHETTA_TIPI[t], t)
+            self.tipo.addItem(etichetta_tipo(t), t)
         self.tipo.setFixedWidth(130)
         riga.addWidget(self.tipo)
         self.marca = QComboBox()
         for m in MARCHE:
-            self.marca.addItem(m, m)
+            self.marca.addItem(m, m)   # il nome di una marca non si traduce
         self.marca.setFixedWidth(170)
         self.marca.currentIndexChanged.connect(self._spiega_la_marca)
         riga.addWidget(self.marca)
-        metti = QPushButton("Aggiungi")
+        metti = QPushButton(_("Aggiungi"))
         metti.setObjectName("primario")
         metti.clicked.connect(self._aggiungi)
         riga.addWidget(metti)
@@ -245,7 +263,7 @@ class FinestraCasaFinta(QDialog):
         # l'argomento c'è perché «currentIndexChanged» manda l'indice: un metodo che non lo accetta
         # solleva, e la riga di spiegazione resterebbe ferma sulla marca di prima
         marca = self.marca.currentData()
-        self.spiegazione.setText(f"{marca}: {DESCRIZIONE_MARCHE.get(marca, '')}")
+        self.spiegazione.setText(f"{marca}: {descrizione_marca(marca)}")
         self.spiegazione.setStyleSheet(f"color:{T.FAINT}; font-size:{T.SIZE_SMALL}px;")
 
     # --- disegnare ------------------------------------------------------------
@@ -256,7 +274,7 @@ class FinestraCasaFinta(QDialog):
             if arnese is not None:
                 arnese.deleteLater()
         self._righe.clear()
-        for colonna, testo in enumerate(("Dispositivo", "Marca", "Tipo", "Stato", "", "")):
+        for colonna, testo in enumerate((_("Dispositivo"), _("Marca"), _("Tipo"), _("Stato"), "", "")):
             intestazione = QLabel(testo)
             intestazione.setStyleSheet(f"color:{T.FAINT}; font-size:{T.SIZE_SMALL}px;")
             self.griglia.addWidget(intestazione, 0, colonna)
@@ -266,9 +284,9 @@ class FinestraCasaFinta(QDialog):
             self.griglia.addWidget(nome, r, 0)
             marca = QLabel(d.marca)
             marca.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
-            marca.setToolTip(DESCRIZIONE_MARCHE[d.marca])
+            marca.setToolTip(descrizione_marca(d.marca))
             self.griglia.addWidget(marca, r, 1)
-            tipo = QLabel(ETICHETTA_TIPI[d.tipo])
+            tipo = QLabel(etichetta_tipo(d.tipo))
             tipo.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
             self.griglia.addWidget(tipo, r, 2)
             stato = QLabel()
@@ -278,7 +296,7 @@ class FinestraCasaFinta(QDialog):
             gira.setMinimumWidth(170)
             gira.clicked.connect(lambda _=False, i=d.identificativo: self._gira(i))
             self.griglia.addWidget(gira, r, 4)
-            togli = QPushButton("Togli")
+            togli = QPushButton(_("Togli"))
             togli.setObjectName("small")
             togli.clicked.connect(lambda _=False, i=d.identificativo: self._togli(i))
             self.griglia.addWidget(togli, r, 5)
@@ -292,11 +310,11 @@ class FinestraCasaFinta(QDialog):
             return
         stato, gira = pezzi
         if d.tipo == SENSORE:
-            stato.setText("rileva" if d.acceso else "niente")
-            gira.setText("Non passa più nessuno" if d.acceso else "Fai passare qualcuno")
+            stato.setText(_("rileva") if d.acceso else _("niente"))
+            gira.setText(_("Non passa più nessuno") if d.acceso else _("Fai passare qualcuno"))
         else:
-            stato.setText("acceso" if d.acceso else "spento")
-            gira.setText("Spegni" if d.acceso else "Accendi")
+            stato.setText(_("acceso") if d.acceso else _("spento"))
+            gira.setText(_("Spegni") if d.acceso else _("Accendi"))
         stato.setStyleSheet(f"color:{T.ARMED if d.acceso else T.FAINT}; font-weight:600;")
 
     def _scrivi(self, testo: str) -> None:
@@ -312,7 +330,7 @@ class FinestraCasaFinta(QDialog):
     def _togli(self, identificativo: str) -> None:
         d = self.casa.dispositivi.get(identificativo)
         if d is not None and self.casa.togli(identificativo):
-            self._scrivi(f"Tolto «{d.nome}». Se Mirto lo aveva in elenco, deve sparire anche da lì.")
+            self._scrivi(_("Tolto «{nome}». Se Mirto lo aveva in elenco, deve sparire anche da lì.", nome=d.nome))
             self._ridisegna()
 
     def _aggiungi(self) -> None:
@@ -320,7 +338,7 @@ class FinestraCasaFinta(QDialog):
         if not nome:
             # Prima questo passo era muto, e insieme al campo schiacciato faceva sembrare rotto il
             # pulsante. Un rifiuto va detto dov'è successo.
-            self.spiegazione.setText("Scrivi prima un nome: serve a riconoscerlo nell'elenco.")
+            self.spiegazione.setText(_("Scrivi prima un nome: serve a riconoscerlo nell'elenco."))
             self.spiegazione.setStyleSheet(f"color:{T.PAUSED}; font-size:{T.SIZE_SMALL}px;")
             self.nome.setFocus()
             return
@@ -329,11 +347,8 @@ class FinestraCasaFinta(QDialog):
         self.casa.aggiungi(d)
         self.nome.clear()
         self._spiega_la_marca()
-        self._scrivi(f"Aggiunto «{nome}» ({d.marca}). " + {
-            ESPHOME: "Si annuncia: Mirto lo deve trovare da solo.",
-            ZIGBEE: "Non si annuncia, ma sta nell'elenco della sua marca: Mirto lo deve trovare da lì.",
-        }.get(d.marca, "Maleducato: non si annuncia e non parla nessuna lingua nota, "
-                       "Mirto lo trova solo con l'ascolto grezzo."))
+        self._scrivi(_("Aggiunto «{nome}» ({marca}). {cosa}", nome=nome, marca=d.marca,
+                       cosa=descrizione_marca(d.marca)))
         self._ridisegna()
 
     def _identificativo_per(self, nome: str) -> str:
@@ -352,12 +367,12 @@ class FinestraCasaFinta(QDialog):
         if d is None:
             return
         self._aggiorna_riga(identificativo)
-        comera = ("rileva" if d.acceso else "niente") if d.tipo == SENSORE else \
-                 ("acceso" if d.acceso else "spento")
+        comera = (_("rileva") if d.acceso else _("niente")) if d.tipo == SENSORE else \
+                 (_("acceso") if d.acceso else _("spento"))
         if da_chi == "comando":
-            self._scrivi(f"← Mirto ha comandato «{d.nome}»: ora è {comera}.")
+            self._scrivi(_("← Mirto ha comandato «{nome}»: ora è {comera}.", nome=d.nome, comera=comera))
         else:
-            self._scrivi(f"→ «{d.nome}» messo a {comera} da qui: Mirto lo deve vedere cambiare.")
+            self._scrivi(_("→ «{nome}» messo a {comera} da qui: Mirto lo deve vedere cambiare.", nome=d.nome, comera=comera))
 
     def reject(self) -> None:
         """Esc è «chiudi», non «annulla».
@@ -388,6 +403,6 @@ def apri_casa_finta(porta: int = 0) -> int:
     vesti_come_mirto(app)
     finestra = FinestraCasaFinta(casa)
     finestra.show()
-    print(f"Casa smart finta in piedi. Broker MQTT su 127.0.0.1:{casa.porta}")
-    print("In Mirto: Impostazioni → SmartHome → indirizzo del broker.", flush=True)
+    print(_("Casa smart finta in piedi. Broker MQTT su 127.0.0.1:{porta}", porta=casa.porta))
+    print(_("In Mirto: Impostazioni → SmartHome → indirizzo del broker."), flush=True)
     return app.exec()

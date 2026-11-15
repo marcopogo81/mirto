@@ -357,14 +357,16 @@ class SimulatorServer:
 
 
 def run_simulator(name: str = "simulato", port: int = 8443) -> int:
+    from ..i18n import _  # noqa: PLC0415
     from .nodes import fingerprint, pem_to_der  # noqa: PLC0415
 
     key = os.environ.get("MIRTO_NODE_KEY") or generate_key()
     srv = SimulatorServer(name=name, port=port, key_hex=key, host="0.0.0.0")
     fp = fingerprint(pem_to_der(srv.cert_path.read_text()))
-    print(f"Nodo simulato '{name}' in ascolto su https://<questo-computer>:{srv.port}")
-    print(f"Impronta del certificato: {fp}")
-    print(f"Chiave condivisa (da inserire in Mirto): {key}", flush=True)
+    print(_("Nodo simulato «{name}» in ascolto su https://<questo-computer>:{porta}",
+            name=name, porta=srv.port))
+    print(_("Impronta del certificato: {fp}", fp=fp))
+    print(_("Chiave condivisa (da inserire in Mirto): {key}", key=key), flush=True)
     srv.start()
     try:
         while True:
