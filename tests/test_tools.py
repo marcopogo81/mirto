@@ -1475,6 +1475,45 @@ class UnaLunghezzaNonSiScriveAManoTest(unittest.TestCase):
         self.assertEqual(guai, [], "lunghezza scritta a mano invece di len(...):\n  " + "\n  ".join(guai))
 
 
+class INumeriDegliErroriDiSistemaHannoUnNomeTest(unittest.TestCase):
+    """«Indirizzo già in uso» è 48 su macOS, 98 su Linux, 10048 su Windows.
+
+    Il 15/11 avevo scritto `errno in (48, 98)`: i due sistemi su cui proviamo passavano, Windows no,
+    e il messaggio che spiegava come uscirne non compariva proprio dove serviva di più. È il terzo
+    inciampo della stessa giornata sulla stessa cosa — un numero o un carattere che cambia col
+    sistema e che noi due, su Mac, non possiamo vedere.
+
+    I nomi di `errno` li sanno tutti e tre i sistemi. Un numero scritto a mano sa solo quello su cui
+    è stato scritto.
+    """
+
+    def test_no_system_error_number_is_written_by_hand(self):
+        import ast
+
+        guai = []
+        for cartella in ("mirto", "node", "tools", "tests"):
+            for f in sorted((ROOT / cartella).rglob("*.py")):
+                if "__pycache__" in str(f):
+                    continue
+                try:
+                    albero = ast.parse(f.read_text(encoding="utf-8"))
+                except SyntaxError:
+                    continue
+                for n in ast.walk(albero):
+                    if not isinstance(n, ast.Compare):
+                        continue
+                    if "errno" not in ast.unparse(n.left):
+                        continue
+                    for c in n.comparators:
+                        dentro = c.elts if isinstance(c, (ast.Tuple, ast.List, ast.Set)) else [c]
+                        if any(isinstance(x, ast.Constant) and isinstance(x.value, int)
+                               for x in dentro):
+                            guai.append(f"{f.relative_to(ROOT).as_posix()}:{n.lineno}: "
+                                        f"{ast.unparse(n)[:70]}")
+        self.assertEqual(guai, [], "numeri di errore scritti a mano invece dei nomi di errno: "
+                                   "cambiano da un sistema all'altro.\n  " + "\n  ".join(guai))
+
+
 class UnPercorsoCheDiventaUnValoreUsaAsPosixTest(unittest.TestCase):
     """Un percorso relativo passato a `str()` su Windows ha la barra rovesciata.
 

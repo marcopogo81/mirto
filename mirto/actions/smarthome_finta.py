@@ -32,6 +32,7 @@ quello.
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import threading
@@ -51,6 +52,12 @@ DESCRIZIONE_MARCHE = {
     ZIGBEE: "non si annuncia, ma parla la sua lingua (Mirto lo trova dal suo elenco)",
     MALEDUCATO: "non si annuncia e non parla nessuna lingua nota (va preso a orecchio)",
 }
+
+# «Indirizzo già in uso» ha un numero diverso per ogni sistema: 48 su macOS, 98 su Linux, 10048 su
+# Windows. Scritti a mano, i primi due passavano e il terzo no — e la CI del 15/11 l'ha scoperto
+# sui soli lavori Windows, che e' l'unico posto dove nessuno di noi due guarda. I nomi di «errno»
+# li sanno tutti e tre, e non si sbagliano.
+OCCUPATA = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", errno.EADDRINUSE)}
 
 LUCE, PRESA, SENSORE = "luce", "presa", "sensore"
 TIPI = (LUCE, PRESA, SENSORE)
@@ -386,7 +393,7 @@ def accendi(porta: int = 0) -> tuple["CasaFinta | None", str]:
         casa.avvia()
     except OSError as exc:
         quale = porta or 1883
-        if getattr(exc, "errno", None) in (48, 98):      # «indirizzo già in uso», macOS e Linux
+        if getattr(exc, "errno", None) in OCCUPATA:
             return None, (f"La porta {quale} è già occupata: probabilmente c'è un'altra casa finta "
                           f"aperta, o un broker vero (Mosquitto).\n"
                           f"Chiudi quella che c'è, oppure apri questa su una porta libera:\n"
