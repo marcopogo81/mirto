@@ -165,8 +165,14 @@ class DcoTest(unittest.TestCase):
     # soggetto e non dal numero di genitori, per il motivo spiegato nella prova qui sotto.
     # Il modello è stretto apposta: una commit umana che comincia per «Merge» (per esempio
     # «Merge due elenchi in uno») resta controllata come tutte le altre.
+    #
+    # La quarta forma è quella che GitHub fabbrica per **provare** una pull request: «Merge <sha>
+    # into <sha>», senza nome di ramo. Non compare da nessuna parte nella storia — vive solo nel
+    # checkout della CI — e il 15/11 ha fatto rossa la prima pull request del progetto su sei
+    # sistemi su sei. La spiegazione qui sopra la prevedeva già; il modello no.
     FUSIONE_AUTOMATICA = re.compile(
-        r"^Merge (pull request #\d+ |branch ['\"]|remote-tracking branch ['\"])")
+        r"^Merge (pull request #\d+ |branch ['\"]|remote-tracking branch ['\"]"
+        r"|[0-9a-f]{7,40} into [0-9a-f]{7,40}$)")
 
     def test_the_history_is_already_signed(self):
         """La regola vale anche per chi la scrive: gli ultimi commit sono firmati.
@@ -218,9 +224,13 @@ class DcoTest(unittest.TestCase):
         """
         for soggetto in ("Merge pull request #1 from marcopogo81/dependabot/github_actions/x",
                          "Merge branch 'main' into funzioni-rapide",
-                         'Merge remote-tracking branch "origin/main"'):
+                         'Merge remote-tracking branch "origin/main"',
+                         # quella che GitHub fabbrica per provare una pull request (15/11)
+                         "Merge f5e32641395d7a86bb57e6801ffcdadccf4fbc19 into "
+                         "3812e30f3809673664f340112787e01513201fb8"):
             self.assertTrue(self.FUSIONE_AUTOMATICA.match(soggetto), soggetto)
         for soggetto in ("Merge due elenchi in uno, perché tenerli pari a mano non funziona",
+                         "Merge i due elenchi into uno solo",   # parole, non impronte
                          "Mergiare non è una parola italiana",
                          "Il portachiavi non sapeva che abbiamo cambiato nome"):
             self.assertIsNone(self.FUSIONE_AUTOMATICA.match(soggetto),

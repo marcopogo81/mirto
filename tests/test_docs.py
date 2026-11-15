@@ -473,9 +473,16 @@ class LIdentitaDelleCommitTest(unittest.TestCase):
     DALLA_PUBBLICAZIONE = "2026-11-08"
     PRIVATO = "@users.noreply.github.com"
 
-    @staticmethod
-    def e_un_automa(riga: str) -> bool:
-        return "[bot]" in riga
+    # «noreply@github.com» è GitHub stesso: è il committer delle fusioni che fabbrica lui, sia
+    # quelle del pulsante «Merge» sia quella finta con cui prova una pull request. Non è un
+    # indirizzo di nessuno, quindi non può essere l'indirizzo personale che questa prova protegge —
+    # e lasciarlo fuori rendeva rossa qualunque pull request, anche di un contributore di passaggio
+    # che non avrebbe avuto modo di farla diventare verde (15/11).
+    AUTOMI = ("[bot]", "noreply@github.com")
+
+    @classmethod
+    def e_un_automa(cls, riga: str) -> bool:
+        return any(segno in riga for segno in cls.AUTOMI)
 
     def commit_recenti(self):
         import subprocess
