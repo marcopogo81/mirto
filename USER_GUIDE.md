@@ -672,6 +672,23 @@ because none of the others has both the cameras and the outputs.
 A home light goes into a chain exactly like a node's relay: pick the device, then **Turn on** or
 **Turn off**, and how long it should stay on. When the chain is over, Mirto turns it off.
 
+And the other way round: make a home device the **first block** of an action and choose whether to
+listen for it coming **on**, going **off**, or both. The chain then runs just as it does from a
+camera — *the stairs light comes on, and the node's speaker says hello*. Pick no device and it
+listens to all of them.
+
+Two things Mirto does **not** treat as a change, and they're the ones that spare you the surprises:
+
+- **when it connects to the broker**, the devices all tell it how they are. Learning that a light is
+  on isn't "the light came on", so starting Mirto in the evening with a light on sets nothing off;
+- **changes it made itself.** If an action turns a light on, that doesn't restart an action listening
+  to the same light, and neither does the automatic switch-off afterwards. Without this rule two
+  actions would chase each other all night.
+
+An action triggered by a light bulb goes through the same limits as one triggered by a camera: **When
+it's active** (only when the house is armed, or always), the hours, the pause between two shots, the
+daily cap and **Stop everything**. There's no back door.
+
 ### 13.4 Two things to know, because a light bulb is not a node
 
 These aren't details: they change what happens in your home, and we'd rather write them down than

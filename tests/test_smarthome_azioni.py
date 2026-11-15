@@ -65,6 +65,12 @@ class DomoticaFinta:
 
     Serve a provare **l'engine**, non il protocollo: il protocollo ha le sue prove, contro la casa
     finta vera, e mescolare le due cose vorrebbe dire che un difetto dell'uno si nasconde nell'altro.
+
+    **Imita il contratto intero, non la metà che serve adesso.** Il 15/11 ne esisteva una versione
+    senza `ascolta` e `non_ascoltare`, perché il passo 2 non ne aveva bisogno; il passo 3 li ha
+    aggiunti al motore e quattordici prove sono cadute in fondo a `stop()`. Un finto che implementa
+    metà del contratto non prova meno: prova **male**, e si scopre il giorno che la metà che manca
+    serve. Le prove del passo 3 lo usano da qui invece di tenerne una seconda copia.
     """
 
     def __init__(self, dispositivi=None, risponde: bool = True):
@@ -72,11 +78,34 @@ class DomoticaFinta:
         self.esplode = False
         self.comandi: list[tuple[str, bool]] = []
         self.stato: dict[str, bool] = {}
+        self.ascoltatori: list = []
         self._lucchetto = threading.Lock()
         self._dispositivi = list(dispositivi or [])
 
     def dispositivi(self):
         return list(self._dispositivi)
+
+    def ascolta(self, chi):
+        if chi not in self.ascoltatori:
+            self.ascoltatori.append(chi)
+
+    def non_ascoltare(self, chi):
+        if chi in self.ascoltatori:
+            self.ascoltatori.remove(chi)
+
+    def dillo(self, identificativo: str, nome: str, acceso) -> None:
+        """Come se il dispositivo avesse annunciato il suo stato sul broker.
+
+        Il `Domotica` vero ingoia le eccezioni di chi ascolta — chi ascolta non deve poter zittire
+        gli altri — e quella garanzia ha già la sua prova in `test_smarthome.py`. Qui non si ripete:
+        provarla contro questo finto vorrebbe dire provare il finto.
+        """
+        from mirto.actions.smarthome import Dispositivo  # noqa: PLC0415
+
+        d = Dispositivo(identificativo, nome, argomento_stato="s", argomento_comando="c")
+        d.acceso = acceso
+        for chi in list(self.ascoltatori):
+            chi(d)
 
     def comanda(self, identificativo: str, acceso: bool) -> bool:
         if self.esplode:
@@ -383,8 +412,12 @@ class ControLaCasaFintaVeraTest(unittest.TestCase):
         self.assertTrue(aspetta(lambda: self.vera.dispositivi()), "l'annuncio non è arrivato")
         self.core = types.SimpleNamespace(
             config=self.cfg, secrets=mem_secrets(),
+            # Il contratto intero, anche le parti che questa prova non usa: un sostituto a metà
+            # fa esplodere `stop()`, ed è esattamente come l'ho scoperto.
             domotica=types.SimpleNamespace(comanda=self.vera.comanda,
-                                           dispositivi=self.vera.dispositivi),
+                                           dispositivi=self.vera.dispositivi,
+                                           ascolta=lambda _c: None,
+                                           non_ascoltare=lambda _c: None),
             notifier=types.SimpleNamespace(notify_text=lambda *_a: None))
         self.engine = ActionEngine(self.core)
         self.addCleanup(self.engine.stop)

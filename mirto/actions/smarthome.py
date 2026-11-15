@@ -430,6 +430,40 @@ class CasaSmart:
                 log.exception("smarthome: su_cambio è esploso per %s", d.identificativo)
 
 
+@dataclass
+class CambioStato:
+    """Un dispositivo di casa ha cambiato stato: è un evento, come quello di una camera.
+
+    Serve a far scattare le azioni (passo 3 del piano domotica). Porta la chiave col prefisso —
+    ``smart:luce_scale`` — e non l'identificativo nudo, perché è così che un blocco scrive dove
+    ascolta, e confrontare due cose scritte nello stesso modo è l'unico confronto che non si sbaglia.
+
+    **Un cambio, non una lettura.** Quando Mirto si collega, il broker gli riconsegna lo stato di
+    tutti i dispositivi: imparare che la luce è accesa non è «la luce si è accesa». Chi costruisce
+    questi eventi (il motore) deve saperlo, o chi accende Mirto la sera con una luce accesa si sente
+    partire la musica di benvenuto. Qui non si può distinguere: lo sa solo chi ricorda il prima.
+    """
+
+    dispositivo: str            # «smart:<identificativo>», come lo scrive un blocco
+    nome: str                   # come si chiama, per i messaggi
+    acceso: bool
+    id: str = ""                # perché somigli a un evento di camera nei messaggi e nel controllo
+
+    def targets(self) -> set:
+        """Cosa «ha riconosciuto»: il verso del cambio. Tiene insieme il modello con le camere."""
+        return {"acceso" if self.acceso else "spento"}
+
+    @property
+    def score(self) -> float:
+        """Un cambio di stato è certo: non è un riconoscimento, è una notizia."""
+        return 1.0
+
+    @property
+    def camera_name(self) -> str:
+        """Non viene da una camera, e i messaggi che chiedono «dove» devono dire il dispositivo."""
+        return self.nome
+
+
 def chiave_di(identificativo: str) -> str:
     """``"luce_scale"`` → ``"smart:luce_scale"``: come un dispositivo smart si scrive in un blocco."""
     return "smart:" + str(identificativo or "").strip()

@@ -680,6 +680,24 @@ programma di videosorveglianza fa, perché nessuno degli altri ha sia le camere 
 Una lampadina di casa si mette in una catena come il relè di un nodo: scegli il dispositivo, poi
 **Accendi** o **Spegni**, e quanto deve restare accesa. Finita la catena, Mirto la spegne.
 
+E nell'altro verso: come **primo blocco** di un'azione metti un dispositivo di casa e scegli se
+ascoltare quando si **accende**, quando si **spegne**, o tutti e due. Da lì parte la catena come
+parte da una camera — *si accende la luce delle scale, e la cassa del nodo dice «ciao»*. Se non
+scegli nessun dispositivo, ascolta tutti.
+
+Due cose che Mirto **non** considera un cambio, e sono quelle che ti risparmiano le sorprese:
+
+- **quando si collega al broker**, i dispositivi gli raccontano tutti com'erano. Imparare che la
+  luce è accesa non è «la luce si è accesa», quindi accendere Mirto la sera con una luce accesa non
+  fa partire niente;
+- **i cambi che ha fatto lui.** Se un'azione accende una luce, quell'accensione non fa ripartire
+  un'azione che ascolta la stessa luce, e nemmeno lo spegnimento automatico di dopo. Senza questa
+  regola due azioni si rincorrerebbero tutta la notte.
+
+Un'azione che scatta da una lampadina passa dagli stessi limiti di una che scatta da una camera:
+**Quando è attiva** (solo a casa protetta, o sempre), gli orari, la pausa fra due scatti, il tetto
+giornaliero e **Ferma tutto**. Non c'è una porta di servizio.
+
 ### 13.4 Due cose da sapere, perché una lampadina non è un nodo
 
 Queste non sono dettagli: cambiano cosa succede in casa tua, e preferiamo scriverle che lasciartele
