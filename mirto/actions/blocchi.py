@@ -54,8 +54,11 @@ PREFISSO_SUONO = "sound:"
 # Il dispositivo di un blocco, scritto **col prefisso** (scelta di Marco, 23/10 sera). Costa uguale a
 # scriverlo nudo e ci risparmia di riconvertire tutte le configurazioni il giorno che arrivano le cam
 # esterne o una presa comandata: un identificativo nuovo è un prefisso nuovo, non una migrazione.
-NODO, COMPUTER = "nodo", "computer"
-PREFISSI = (NODO, COMPUTER)
+NODO, COMPUTER, SMART = "nodo", "computer", "smart"
+PREFISSI = (NODO, COMPUTER, SMART)
+# Il terzo prefisso, 15/11, ed è esattamente quello che la riga qui sopra aveva previsto il 23/10:
+# «una presa comandata». È arrivato senza migrazione e senza un tipo di blocco nuovo — una luce smart
+# è un dispositivo come un nodo, e un blocco «comando» la comanda come comanda un relè.
 # «Questo computer» è un dispositivo da subito, non un caso a parte: la camera e il microfono del Mac
 # si scelgono in un blocco come tutto il resto, e la scheda Generale deve solo abilitarli. Farne
 # un'eccezione vorrebbe dire rifare lo stesso lavoro quando arriveranno le camere esterne.

@@ -677,7 +677,28 @@ Una volta collegato, i dispositivi compaiono nelle **Azioni** in tutte e due i v
 *uscite* («la camera riconosce il cane → accendi la luce delle scale»). È la cosa che nessun altro
 programma di videosorveglianza fa, perché nessuno degli altri ha sia le camere sia le uscite.
 
-### 13.4 Se non hai un impianto
+Una lampadina di casa si mette in una catena come il relè di un nodo: scegli il dispositivo, poi
+**Accendi** o **Spegni**, e quanto deve restare accesa. Finita la catena, Mirto la spegne.
+
+### 13.4 Due cose da sapere, perché una lampadina non è un nodo
+
+Queste non sono dettagli: cambiano cosa succede in casa tua, e preferiamo scriverle che lasciartele
+scoprire.
+
+**Il tempo lo conta Mirto, non la lampadina.** A un nodo Mirto dice «accendi per trenta secondi» e il
+conto lo tiene il nodo: anche se Mirto si chiude, la sirena tace da sola. Una lampadina smart quel
+patto non ce l'ha — le si dice «accendi», e resta accesa. Quindi lo spegnimento lo fa Mirto, al
+momento giusto e anche quando premi **Ferma tutto**. Ma se il computer si spegne di colpo, o Mirto
+viene ammazzato mentre una luce è accesa, **quella luce resta accesa**: è un limite della casa smart,
+e si rimedia dal suo interruttore.
+
+**I limiti della sirena non valgono su una presa smart.** Un nodo dichiara cosa ha attaccato ai suoi
+morsetti, e da lì nascono i tetti — la sirena tre minuti per volta, tre ogni mezz'ora. Una presa smart
+non dichiara niente, e nessuno può sapere cosa ci hai collegato. Se ci attacchi una sirena, quella
+sirena **non ha un budget**: suonerà quanto dice l'azione. Per una sirena vera usa l'uscita di un
+nodo, dove i limiti ci sono e sono imposti due volte.
+
+### 13.5 Se non hai un impianto
 
 Ce n'è uno finto, con la sua finestra, fatto apposta per provare: `python -m mirto
 --simulatore-smarthome`. Apre un broker su `127.0.0.1:1883` con dentro cinque dispositivi di tre

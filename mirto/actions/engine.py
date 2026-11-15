@@ -41,11 +41,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ..config import data_dir
-from .blocchi import NODO, blocchi_di, dispositivo_di, obiettivi_di, scatta
+from .blocchi import NODO, SMART, blocchi_di, dispositivo_di, obiettivi_di, scatta
 from .presets import MANUAL_KINDS
 from .passi import (passi_di, problemi as problemi_catena, quanto_dura,
                     quanto_dura_il_gruppo, quanto_suona, scegli_a_turno, srotola)
 from .nodes import NodeClient
+from .smarthome import SPEGNI as SPEGNI_SMART
 from ..i18n import _, questo_computer
 
 log = logging.getLogger(__name__)
@@ -380,6 +381,12 @@ class ActionEngine:
         self.specs: list[ActionSpec] = []
         self._confirm: dict[str, _Confirmation] = {}
         self._timers: list[threading.Timer] = []
+        # I dispositivi di casa che **Mirto** ha accesi e non ha ancora spento. Serve a «Ferma
+        # tutto», e non è un dettaglio: un nodo conta i secondi da sé (gli si dice «accendi per
+        # trenta» e si spegne anche se Mirto muore), una lampadina smart no — il timer è qui. Senza
+        # questo elenco, «Ferma tutto» cancellerebbe il timer e lascerebbe la luce accesa a vita,
+        # cioè farebbe il contrario di quello che dice.
+        self._smart_accesi: set[str] = set()
         self._strong: dict[str, float] = {}  # camera → ora dell'ultima conferma forte
         self._active_until: dict[str, float] = {}  # azione → fine dell'attivazione in corso
         self._siren_log: list[tuple[float, float]] = []  # (inizio, durata) delle sirene recenti
@@ -951,6 +958,11 @@ class ActionEngine:
         # obbedire al pezzo. Vuoto vuol dire «quello dell'azione», che è il caso di tutte le azioni
         # scritte finora.
         dove = str(chiamata.get("dispositivo") or "") or (("nodo:" + spec.node) if spec.node else "")
+        # Un dispositivo di casa non si comanda con una richiesta HTTP a un nodo: si pubblica sul
+        # broker. Il resto della catena non cambia di una riga — l'attesa dopo, il gruppo, «Ferma
+        # tutto» e l'errore che ferma la fila sono gli stessi (15/11, passo 2 del piano domotica).
+        if dispositivo_di(dove)[0] == SMART:
+            return self._esegui_smart(spec, ev, catena, i, suono_predefinito)
         client = self._client_di(dove)
         if client is None:
             log.error("Azione %s, passo %d: dispositivo %s non disponibile", spec.name, i + 1,
@@ -1010,6 +1022,80 @@ class ActionEngine:
         """
         with self._lock:
             self._giri[spec.name] = self._giri.get(spec.name, 0) + 1
+
+    # --- i dispositivi di casa ------------------------------------------------
+    def _domotica(self):
+        """Il collegamento alla domotica, o ``None``. Sta nel core, non qui: deve vivere quanto Mirto."""
+        return getattr(self.core, "domotica", None)
+
+    def _esegui_smart(self, spec: ActionSpec, ev, catena: list[dict], i: int,
+                      suono_predefinito: str = "") -> bool:
+        """Accende o spegne un dispositivo di casa, e programma il passo dopo. True se è partito.
+
+        **Perché la durata la conta Mirto, e un nodo no.** A un nodo si dice «accendi per trenta
+        secondi» e si spegne da sé: se Mirto muore nel frattempo, la sirena tace comunque, ed è una
+        promessa che sta nel firmware. Una lampadina smart non ha quel contratto — le si dice
+        «accendi», e resta accesa. Quindi il tempo lo tiene Mirto, e di conseguenza si prende carico
+        di spegnerla: al timer (qui), e a «Ferma tutto» (``_spegni_smart_tutti``). Un processo
+        ammazzato lascia la luce accesa, e questo **va scritto in guida**: è un limite della casa
+        smart, non un difetto che si possa togliere da dentro.
+        """
+        chiamata = catena[i]
+        dove = str(chiamata.get("dispositivo") or "")
+        _tipo, quale = dispositivo_di(dove)
+        casa = self._domotica()
+        comando = str(chiamata.get("comando") or "")
+        acceso = comando != SPEGNI_SMART
+        fatto = False
+        if casa is not None and quale:
+            try:
+                fatto = bool(casa.comanda(quale, acceso))
+            except Exception as exc:  # noqa: BLE001 - un broker che cade non porta via la catena
+                log.error("Azione %s, passo %d: dispositivo di casa %s non comandato: %s",
+                          spec.name, i + 1, quale, exc)
+                self._audit("errore", azione=spec.name, errore=str(exc), passo=i + 1)
+                fatto = False
+        if not fatto:
+            # Lo stesso trattamento del nodo che non risponde: si ferma la fila, perché una catena
+            # andata a metà lascia la casa in uno stato che nessuno ha chiesto.
+            log.error("Azione %s, passo %d: dispositivo di casa %s non disponibile",
+                      spec.name, i + 1, quale or "?")
+            self._audit("errore", azione=spec.name, passo=i + 1,
+                        errore=_('dispositivo di casa non disponibile'))
+            self._perche_no[spec.name] = _('dispositivo di casa non disponibile')
+            if chiamata.get("nel_gruppo"):
+                self._programma_dopo(spec, ev, catena, i, suono_predefinito)
+            return False
+        durata = float(chiamata.get("durata") or 0)
+        with self._lock:
+            if acceso:
+                self._smart_accesi.add(quale)
+            else:
+                self._smart_accesi.discard(quale)
+        if acceso and durata > 0:
+            self._schedule(durata, self._spegni_smart, quale)
+        self._programma_dopo(spec, ev, catena, i, suono_predefinito)
+        return True
+
+    def _spegni_smart(self, quale: str) -> None:
+        """Spegne un dispositivo di casa e smette di considerarlo acceso. Non solleva mai."""
+        casa = self._domotica()
+        with self._lock:
+            self._smart_accesi.discard(quale)
+        if casa is None:
+            return
+        try:
+            casa.comanda(quale, False)
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: non ho potuto spegnere %s", quale)
+
+    def _spegni_smart_tutti(self) -> list[str]:
+        """Spegne tutto quello che Mirto ha accesso in casa. Torna i nomi, per la riga di controllo."""
+        with self._lock:
+            quali = sorted(self._smart_accesi)
+        for quale in quali:
+            self._spegni_smart(quale)
+        return quali
 
     def _programma_dopo(self, spec: ActionSpec, ev, catena: list[dict], i: int,
                         suono_predefinito: str = "") -> None:
@@ -1079,7 +1165,17 @@ class ActionEngine:
                 log.exception("Salvataggio configurazione fallito")
         self._cancel_pending()
         self.deterrents_paused_until = self.clock() + 3600  # anche i dissuasori si fermano per un'ora
+        # **Prima** i dispositivi di casa, poi i nodi. `_cancel_pending` ha appena cancellato i timer,
+        # e fra quelli c'era lo spegnimento di ogni luce smart accesa: se non si spegnessero qui,
+        # «Ferma tutto» le lascerebbe accese per sempre. Un nodo invece conta i suoi secondi da sé.
+        casa = self._spegni_smart_tutti()
         msg = self._stop_nodes()
+        if casa:
+            self._audit("ferma-tutto-casa", dispositivi=casa)
+            # Chi ha solo lampadine smart e nessun nodo non deve leggere «nessun nodo configurato»
+            # dopo che Mirto gli ha appena spento le luci: leggerebbe che non è stato fatto niente.
+            if not self.clients:
+                msg = _('⛔ Tutto fermo.')
         return msg + (_(' Protezione disattivata: /inserisci per riattivarla.') if was_armed else "")
 
     def _stop_nodes(self) -> str:

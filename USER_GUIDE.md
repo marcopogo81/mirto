@@ -669,7 +669,28 @@ comes on → play the welcome music from the node's speaker") and as *outputs* (
 the dog → turn on the stairs light"). It's the thing no other video-surveillance program does,
 because none of the others has both the cameras and the outputs.
 
-### 13.4 If you don't have a smart home
+A home light goes into a chain exactly like a node's relay: pick the device, then **Turn on** or
+**Turn off**, and how long it should stay on. When the chain is over, Mirto turns it off.
+
+### 13.4 Two things to know, because a light bulb is not a node
+
+These aren't details: they change what happens in your home, and we'd rather write them down than
+let you find them out.
+
+**Mirto keeps the time, not the bulb.** Mirto tells a node "switch on for thirty seconds" and the
+node keeps the count itself: even if Mirto closes, the siren falls silent on its own. A smart bulb has
+no such contract — you tell it "on", and it stays on. So the switching off is Mirto's job, at the
+right moment and also when you press **Stop everything**. But if the computer is cut off, or Mirto is
+killed while a light is on, **that light stays on**: it's a limit of smart homes, and the remedy is
+its own switch.
+
+**The siren's limits don't apply to a smart plug.** A node declares what is wired to its terminals,
+and the caps come from that — a siren three minutes at a time, three every half hour. A smart plug
+declares nothing, and nobody can know what you've plugged into it. If you plug in a siren, that siren
+**has no budget**: it will sound for as long as the action says. For a real siren use a node's output,
+where the limits exist and are enforced twice.
+
+### 13.5 If you don't have a smart home
 
 There's a fake one, with a window of its own, built for trying this out: `python -m mirto
 --smarthome-simulator`. It opens a broker on `127.0.0.1:1883` holding five devices of three different

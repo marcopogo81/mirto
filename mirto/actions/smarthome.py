@@ -52,6 +52,15 @@ JSON_STATO = "json_stato"    # {"state": "ON"}: Zigbee2MQTT
 # Le marche che sappiamo riconoscere. «sconosciuta» è il dispositivo adottato a orecchio.
 ESPHOME, ZIGBEE, SCONOSCIUTA = "esphome", "zigbee2mqtt", "sconosciuta"
 
+# I due comandi che un dispositivo di casa sa fare, e si fermano qui: clima, serrande e tende hanno
+# stati che non sono «acceso o spento» e nemmeno compaiono nell'elenco (vedi «COMPONENTI»).
+#
+# **Sono identificativi, non scritte.** Finiscono nella configurazione, dove devono restare uguali
+# per sempre: una configurazione scritta in inglese non deve diventare illeggibile il giorno che si
+# cambia lingua. Quello che si legge sullo schermo è la «descrizione», che si traduce dove si mostra.
+ACCENDI, SPEGNI = "accendi", "spegni"
+COMANDI = (ACCENDI, SPEGNI)
+
 PREFISSO_ANNUNCIO = "homeassistant"
 PREFISSO_ZIGBEE = "zigbee2mqtt"
 ELENCO_ZIGBEE = f"{PREFISSO_ZIGBEE}/bridge/devices"
@@ -419,6 +428,51 @@ class CasaSmart:
                 self.su_cambio(d)
             except Exception:  # noqa: BLE001 - chi ascolta non deve poter spegnere l'ascolto
                 log.exception("smarthome: su_cambio è esploso per %s", d.identificativo)
+
+
+def chiave_di(identificativo: str) -> str:
+    """``"luce_scale"`` → ``"smart:luce_scale"``: come un dispositivo smart si scrive in un blocco."""
+    return "smart:" + str(identificativo or "").strip()
+
+
+def dispositivi_per_le_azioni(dispositivi) -> list[dict]:
+    """I dispositivi di casa nella forma che il wizard già conosce: ``{chiave, nome}``.
+
+    La stessa forma dei nodi (``{"chiave": "nodo:n1", "nome": "Ingresso"}``), perché per chi
+    configura un'azione una lampadina smart e un relè di un nodo sono la stessa cosa: un posto dove
+    far succedere qualcosa. **Solo i comandabili**: un sensore di movimento non si accende, e
+    offrirlo vorrebbe dire lasciar costruire un pezzo che non partirà mai — la stessa ragione per cui
+    «questo computer» non è nell'elenco delle uscite.
+    """
+    return [{"chiave": chiave_di(d.identificativo), "nome": d.nome or d.identificativo}
+            for d in (dispositivi or []) if d.comandabile]
+
+
+def comandi_di(dispositivo) -> list[dict]:
+    """I comandi di un dispositivo di casa, nella forma in cui il nodo dichiara i suoi.
+
+    Un nodo dice *«ho un comando che si chiama luce_ingresso, di tipo light»*; qui si dice la stessa
+    cosa di una lampadina smart, e il wizard non deve imparare niente di nuovo. Il ``tipo`` è quello
+    del nodo (``light``, ``generic``) e non il nostro (``luce``, ``presa``): è il vocabolario che la
+    striscia dei pezzi già parla, e tradurlo qui costa due righe invece di un ramo in più là.
+
+    **Nessun limite di legge.** I tetti dei tre minuti nascono dal tipo dichiarato dal nodo, che
+    sulle sue morsettiere sa cosa c'è attaccato; una presa smart non lo dichiara e nessuno può
+    saperlo da qui. Chi attacca una sirena a una presa smart ha una sirena senza budget, e **va
+    scritto in guida** invece di finto-risolto con un tetto inventato.
+    """
+    from ..i18n import _  # noqa: PLC0415
+
+    if not getattr(dispositivo, "comandabile", False):
+        return []
+    nome = dispositivo.nome or dispositivo.identificativo
+    tipo = "light" if dispositivo.tipo == "luce" else "generic"
+    return [
+        {"nome": ACCENDI, "tipo": tipo, "descrizione": _('Accendi {nome}', nome=nome),
+         "dispositivo": chiave_di(dispositivo.identificativo)},
+        {"nome": SPEGNI, "tipo": tipo, "descrizione": _('Spegni {nome}', nome=nome),
+         "dispositivo": chiave_di(dispositivo.identificativo)},
+    ]
 
 
 class Domotica:
