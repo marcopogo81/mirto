@@ -691,7 +691,7 @@ class IlWifiSiChiedeDurantelAbbinamentoTest(unittest.TestCase):
             albero = ast.parse(percorso.read_text(encoding="utf-8"))
             for nodo in ast.walk(albero):
                 if isinstance(nodo, ast.Call) and getattr(nodo.func, "id", getattr(nodo.func, "attr", "")) == cosa:
-                    trovati.add(str(percorso.relative_to(cls.RADICE)))
+                    trovati.add(percorso.relative_to(cls.RADICE).as_posix())
         return trovati
 
     @classmethod

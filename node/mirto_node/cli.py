@@ -976,7 +976,7 @@ def file_non_del_servizio(folder: Path, uid: int | None, stat=os.stat) -> list[s
             continue
         if st.st_uid == uid or st.st_mode & 0o044:   # suo, oppure leggibile da chiunque
             continue
-        cattivi.append(str(percorso.relative_to(folder)))
+        cattivi.append(percorso.relative_to(folder).as_posix())
     return cattivi
 
 

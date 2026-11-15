@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import socket
 import struct
+import sys
 import threading
 import time
 
@@ -189,7 +190,14 @@ class Broker:
     # --- vita -----------------------------------------------------------------
     def avvia(self) -> "Broker":
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform != "win32":
+            # Altrove SO_REUSEADDR vuol dire «riusa una porta lasciata in TIME_WAIT», e serve:
+            # senza, due prove di fila sulla stessa porta non si riaprono. Su Windows vuol dire
+            # un'altra cosa — «lega questa porta **anche se** qualcuno ce l'ha già» — e quindi due
+            # case finte prenderebbero la stessa porta senza che nessuna delle due se ne accorga:
+            # la seconda ruberebbe metà dei collegamenti alla prima, in silenzio. Lì il
+            # comportamento giusto è quello di serie, che rifiuta.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((self.indirizzo, self.porta))
             s.listen(32)

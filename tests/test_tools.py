@@ -851,10 +851,10 @@ class UnImportDentroUnaFunzioneNonValePerLeAltreTest(unittest.TestCase):
                 if isinstance(cima, ast.ClassDef):
                     for n in cima.body:
                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            controlla(n, set(), globali, prestati, str(f.relative_to(radice)), guai)
+                            controlla(n, set(), globali, prestati, f.relative_to(radice).as_posix(), guai)
             for n in albero.body:
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    controlla(n, set(), globali, prestati, str(f.relative_to(radice)), guai)
+                    controlla(n, set(), globali, prestati, f.relative_to(radice).as_posix(), guai)
         self.assertEqual(guai, [], "nomi presi in prestito da un'altra funzione:\n  " + "\n  ".join(guai))
 
 
@@ -942,7 +942,7 @@ class UnImportInFondoRendeLocaleTuttaLaFunzioneTest(unittest.TestCase):
                 if "__pycache__" in str(f):
                     continue
                 albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
-                guai += self._guai(albero, str(f.relative_to(radice)))
+                guai += self._guai(albero, f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "nomi usati prima del loro import locale:\n  " + "\n  ".join(guai))
 
 
@@ -1284,7 +1284,7 @@ class UnNomeLettoDeveEsistereTest(unittest.TestCase):
             for f in sorted((radice / cartella).rglob("*.py")):
                 if "__pycache__" in str(f) or "/build/" in str(f):
                     continue
-                guai += nomi_mai_definiti(f.read_text(encoding="utf-8"), str(f.relative_to(radice)))
+                guai += nomi_mai_definiti(f.read_text(encoding="utf-8"), f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "nomi letti e mai definiti:\n  " + "\n  ".join(guai))
 
 
@@ -1475,8 +1475,54 @@ class UnaLunghezzaNonSiScriveAManoTest(unittest.TestCase):
         self.assertEqual(guai, [], "lunghezza scritta a mano invece di len(...):\n  " + "\n  ".join(guai))
 
 
+class UnPercorsoCheDiventaUnValoreUsaAsPosixTest(unittest.TestCase):
+    """Un percorso relativo passato a `str()` su Windows ha la barra rovesciata.
+
+    La lezione era già scritta qui sotto, l'8/11, per gli archivi — e il 13/11 l'ho rifatta uguale
+    in una prova: un percorso relativo passato a `str()` finiva in un insieme confrontato con
+    `{"mirto/gui/pairing_ui.py"}`. Su macOS e Linux combaciava, su Windows no, e per due giorni la
+    CI pubblica è rimasta rossa sui due lavori Windows senza che nessuno di noi due — che Windows
+    non lo usa — se ne accorgesse.
+
+    **Perché proprio questa forma e non tutte.** Un percorso dentro un messaggio d'errore con le
+    barre rovesciate è brutto e basta; un percorso dentro un `str()` esplicito quasi sempre diventa
+    un **valore**, cioè qualcosa che verrà confrontato — ed è lì che il sistema operativo cambia il
+    risultato invece che l'aspetto. Quindi si guarda quella: la forma che rompe, non quella che
+    stona.
+    """
+
+    def test_no_stringified_relative_path_anywhere(self):
+        import ast
+
+        forma = re.compile(r"str\(\s*[\w.]+\.relative_to\(")
+        guai = []
+        for cartella in ("mirto", "node", "tools", "tests"):
+            for f in sorted((ROOT / cartella).rglob("*.py")):
+                if "__pycache__" in str(f):
+                    continue
+                for i, riga in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+                    # gli esempi del guardiano qui sotto sono marcati: deve vederli, non contarli
+                    if forma.search(riga) and "forma-di-esempio" not in riga:
+                        guai.append(f"{f.relative_to(ROOT).as_posix()}:{i}")
+        self.assertEqual(guai, [], "percorsi trasformati in testo con str() invece che con "
+                                   "as_posix(): su Windows hanno la barra rovesciata.\n  "
+                                   + "\n  ".join(guai))
+
+    def test_the_guardian_can_see_the_shape_it_looks_for(self):
+        """Che il modello riconosca la forma si prova qui, perché nel codice non deve più esserci."""
+        forma = re.compile(r"str\(\s*[\w.]+\.relative_to\(")
+        for riga in ("        trovati.add(str(percorso.relative_to(cls.RADICE)))",  # forma-di-esempio
+                     "x = str( f.relative_to(radice) )",                           # forma-di-esempio
+                     "cattivi.append(str(percorso.relative_to(folder)))"):         # forma-di-esempio
+            self.assertTrue(forma.search(riga), riga)
+        for riga in ('guai.append(f"{f.relative_to(ROOT)}:{n.lineno}")',
+                     "nomi.add(percorso.relative_to(radice).as_posix())",
+                     "if percorso.is_relative_to(radice):"):
+            self.assertIsNone(forma.search(riga), f"questa non è la forma che rompe: {riga}")
+
+
 class DentroUnArchivioIlSeparatoreELaBarraTest(unittest.TestCase):
-    """`str(f.relative_to(dove))` dentro un tar: su Windows mette la barra rovesciata (8/11).
+    """`f.relative_to(dove).as_posix()` dentro un tar: su Windows mette la barra rovesciata (8/11).
 
     Il pacchetto che Mirto manda a un nodo si costruiva con `str(Path)` come nome dei membri. Su
     macOS e Linux `str()` e `as_posix()` danno la stessa cosa, quindi non si vedeva; su Windows
@@ -1693,7 +1739,7 @@ class UnParametroNonSiRiusaPerAltroTest(unittest.TestCase):
             for f in sorted((radice / cartella).rglob("*.py")):
                 if "__pycache__" in str(f):
                     continue
-                guai += parametri_riusati(f.read_text(encoding="utf-8"), str(f.relative_to(radice)))
+                guai += parametri_riusati(f.read_text(encoding="utf-8"), f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "parametri riusati per un'altra cosa:\n  " + "\n  ".join(guai))
 
 
