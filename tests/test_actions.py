@@ -1365,17 +1365,77 @@ class PannelloAzioneTest(unittest.TestCase):
         self.assertEqual(nomi.count("Sparita"), 1)
         self.assertIn("Sparita", [c["nome"] for c in viste], "le sconosciute restano dove stavano prima")
 
+    # I campi della finestra delle azioni, letti **dalla finestra** e non riscritti qui. Fino al
+    # 15/11 questo elenco era scritto a mano in questa prova, e aggiungendo due campi la prova
+    # cadeva per dire «aggiornami» — cioè era il terzo posto da ricordare, dopo la finestra e la
+    # tabella degli aiuti. Adesso si legge il sorgente: così l'elenco non può più divergere, e la
+    # prova fallisce solo quando c'è davvero un campo senza spiegazione.
+    @staticmethod
+    def campi_della_finestra() -> tuple[set, set]:
+        """``(tutti i campi, quelli con un'etichetta)`` letti da ``settings.py`` con ``ast``.
+
+        Con ``ast`` e non con una ricerca di stringhe: una ricerca prenderebbe anche le chiavi
+        scritte dentro i commenti e nei docstring — e questo file ne è pieno — dando un elenco più
+        lungo del vero, cioè un guardiano che si lamenta di campi che non esistono.
+        """
+        import ast  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        sorgente = Path("mirto/gui/settings.py").read_text(encoding="utf-8")
+        tutti: set = set()
+        con_etichetta: set = set()
+        for n in ast.walk(ast.parse(sorgente)):
+            # «self._righe = [ (chiave, etichetta, arnese), ... ]»
+            if not (isinstance(n, ast.Assign) and len(n.targets) == 1
+                    and ast.unparse(n.targets[0]) == "self._righe"):
+                continue
+            for voce in getattr(n.value, "elts", []):
+                pezzi = getattr(voce, "elts", [])
+                if len(pezzi) < 2 or not isinstance(pezzi[0], ast.Constant):
+                    continue
+                chiave = str(pezzi[0].value)
+                tutti.add(chiave)
+                # L'etichetta c'è quando è una chiamata a «_(...)»: una stringa vuota vuol dire
+                # «questa riga non ha etichetta», e allora non le serve nemmeno la (i).
+                if isinstance(pezzi[1], ast.Call):
+                    con_etichetta.add(chiave)
+        return tutti, con_etichetta
+
+    def test_the_guardian_can_still_read_the_window(self):
+        """Falsificazione: se non trova i campi, le prove qui sotto passerebbero su un insieme vuoto."""
+        tutti, con_etichetta = self.campi_della_finestra()
+        self.assertGreater(len(tutti), 15, f"non legge più i campi della finestra: {tutti}")
+        self.assertIn("nome", con_etichetta)
+        # Una riga senza etichetta davvero: il riquadro che accende l'AI non ha un nome a sinistra.
+        # (La prima stesura metteva qui «cosa_fa», ed era sbagliata: l'etichetta ce l'ha, è il
+        # **wizard** a toglierla con SENZA_ETICHETTA perché ripeterebbe il titolo della pagina.
+        # L'ha detto questa prova stessa, che è il motivo per cui esiste.)
+        self.assertIn("ai_camera", tutti - con_etichetta, "una riga senza etichetta non si vede più")
+        self.assertIn("cosa_fa", con_etichetta, "«cosa_fa» l'etichetta ce l'ha, nella finestra vecchia")
+
     def test_every_field_of_the_window_has_a_help_text(self):
         from mirto.actions.pannello_azione import aiuto, chiavi_aiuto
 
-        attesi = {"nome", "tipo", "comando", "quando_parte", "ritardo", "attesa_conferma",
-                  "se_nessuno_conferma", "obiettivi_camera", "obiettivi_microfono",
-                  "suoni_emessi", "pausa", "massimi", "cosa_fa", "quando_attiva",
-                  "fascia", "avvisa", "camere", "microfoni", "attiva"}
-        self.assertEqual(set(chiavi_aiuto()), attesi)
-        for chiave in attesi:
-            self.assertGreater(len(aiuto(chiave)), 40, f"l'aiuto di «{chiave}» non spiega niente")
+        _tutti, con_etichetta = self.campi_della_finestra()
+        for chiave in sorted(con_etichetta):
+            with self.subTest(campo=chiave):
+                self.assertGreater(len(aiuto(chiave)), 40,
+                                   f"l'aiuto di «{chiave}» non spiega niente")
         self.assertEqual(aiuto("inventata"), "", "un campo senza aiuto non fa esplodere la finestra")
+
+    def test_no_help_text_is_left_over(self):
+        """Un aiuto per un campo che non esiste più è un testo che nessuno legge e che si traduce.
+
+        Si tiene insieme all'altra metà: quella sopra prende il campo senza spiegazione, questa la
+        spiegazione senza campo. Da sole, ciascuna lascia passare l'altro verso.
+        """
+        from mirto.actions.pannello_azione import chiavi_aiuto
+
+        tutti, _con = self.campi_della_finestra()
+        # «tipo», «comando» e «massimi» restano in tabella: sono campi della finestra vecchia, ancora
+        # raggiungibile, e il loro aiuto è quello. Si scrivono qui perché si veda che è una scelta.
+        avanzati = set(chiavi_aiuto()) - tutti - {"tipo", "comando", "massimi"}
+        self.assertEqual(avanzati, set(), f"aiuti per campi che non esistono: {avanzati}")
 
 
 class CatenaDiPassiTest(unittest.TestCase):

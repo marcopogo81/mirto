@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from .. import DISCUSSIONI_URL
 from ..actions.aggiorna_nodo import aggiornamento_del_nodo
-from ..actions.pannello_azione import blocchi_del_trigger, trigger_di_casa
+from ..actions.pannello_azione import aiuto as aiuto_campo, blocchi_del_trigger, trigger_di_casa
 from ..actions.smarthome import chiave_di as chiave_smart, comandi_di, dispositivi_per_le_azioni
 from ..actions.presets import (
     ACTION_KINDS,
@@ -3082,6 +3082,9 @@ class ActionDialog(QDialog):
         self.notify.setChecked(bool(a.get("notify", True)))
         self.enabled = QCheckBox(_('Azione attiva'))
         self.enabled.setChecked(bool(a.get("enabled", True)))
+        # Questa riga non ha etichetta — la domanda la fa il titolo della pagina — quindi non ha la
+        # (i) accanto: la spiegazione sta addosso al riquadro, o non si vedrebbe da nessuna parte.
+        self.enabled.setToolTip(aiuto_campo("acceso"))
         self.hint = QLabel()
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color:#9AA8BA; font-size:12px;")
@@ -3921,9 +3924,12 @@ class ActionWizard(ActionDialog):
         (N_('Informazioni generali'), N_('Il nome lo leggerai su Telegram e nell\'elenco delle azioni.'),
          ["nome", "quando_attiva", "quando_parte", "attesa_conferma",
           "se_nessuno_conferma", "fascia"]),
-        (N_('Cosa la fa scattare'), N_('Da quali dispositivi, e che cosa devono riconoscere.'),
+        (N_('Cosa la fa scattare'),
+         N_('Da quali dispositivi, e che cosa devono riconoscere. Anche una luce o un sensore di '
+            'casa che cambia stato può far partire un\'azione.'),
          ["camere", "obiettivi_camera", "ai_camera",
-          "microfoni", "microfoni_mancanti", "obiettivi_microfono", "ai_microfono"]),
+          "microfoni", "microfoni_mancanti", "obiettivi_microfono", "ai_microfono",
+          "dispositivi_casa", "versi_casa"]),
         (N_('Imposta le azioni'),
          N_('Una serie di operazioni in sequenza, su qualsiasi dispositivo rilevato: il «+» propone '
             'quello che sanno fare i dispositivi collegati — i nodi, e le casse abbinate a loro. '

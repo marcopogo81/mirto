@@ -194,8 +194,18 @@ def _AIUTI() -> dict:  # noqa: N802
                     '**oppure**: scatta quella che vede per prima, e cercano tutte la stessa cosa.'),
         "microfoni": _('Da quali microfoni. Nessuno spuntato = tutti, e come per le camere vale '
                        '**oppure**: basta che uno senta.'),
-        "attiva": _('Spenta, l\'azione resta scritta ma non scatta. Utile per provare senza '
+        # La chiave e' quella del campo — «acceso» — e non «attiva» come stava fino al 15/11:
+        # con due nomi diversi questo testo non lo leggeva nessuno, perche' nessuno li metteva
+        # insieme. Era tradotto e mai mostrato.
+        "acceso": _('Spenta, l\'azione resta scritta ma non scatta. Utile per provare senza '
                     'cancellare niente.'),
+        "dispositivi_casa": _('Le luci, le prese e i sensori di casa che Mirto ha trovato. '
+                              'Spuntandone uno, l\'azione parte quando **quel dispositivo cambia '
+                              'stato**: anche un sensore va bene, anzi è il caso più utile — il '
+                              'sensore del corridoio si accende, e si accende la luce delle scale.'),
+        "versi_casa": _('In quale verso. Spuntali tutti e due e l\'azione parte a ogni cambio. '
+                        'Quello che accendi tu, da Mirto o da Telegram, **non la fa partire**: '
+                        '«quando si accende» vuol dire quando si accende da sé.'),
     }
 
 
