@@ -4925,7 +4925,25 @@ class IlWizardColDispositivoDiCasaTest(unittest.TestCase):
         self.addCleanup(w.deleteLater)
         if con_casa:
             w.set_dispositivi_casa(self.CASA)
+        self._vai_dove_si_sceglie_il_trigger(w)
         return w
+
+    @staticmethod
+    def _vai_dove_si_sceglie_il_trigger(w) -> None:
+        """Il wizard mostra **una pagina per volta**, e questi campi stanno nella seconda.
+
+        Senza questa riga `isVisibleTo` risponde sempre «no» — non perche' la riga sia nascosta, ma
+        perche' e' nascosta tutta la pagina che la contiene. Le prime stesure di queste prove
+        chiedevano la visibilita' senza cambiare pagina: quella che si aspettava «no» passava per il
+        motivo sbagliato, e quella che si aspettava «si'» cadeva pur essendo il codice a posto. Se
+        n'e' accorto Marco lanciandole sul Mac.
+
+        La pagina si cerca **per il campo che contiene**, non per numero: un numero scritto qui
+        diventa sbagliato il giorno che si aggiunge una schermata, e nessuno lo lega a questo file.
+        """
+        dove = next(i for i, (_t, _s, chiavi) in enumerate(type(w).PAGINE)
+                    if "dispositivi_casa" in chiavi)
+        w.vai(dove)
 
     def _pronta_da_salvare(self, w) -> None:
         """Nome e un pezzo in «Cosa fa»: senza, «_accept» si ferma su un avviso modale.
