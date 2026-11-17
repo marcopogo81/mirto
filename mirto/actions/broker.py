@@ -278,6 +278,30 @@ class Broker:
         with self._lucchetto:
             return [(a, c) for a, c in self._ritenuti.items() if combacia(filtro, a)]
 
+    def quanti_iscritti(self, argomento: str) -> int:
+        """Quanti collegamenti riceverebbero una pubblicazione su questo argomento. Per guardare.
+
+        Serve a una prova che pubblica e si aspetta che qualcuno senta: fra `iscrivi()` e il momento
+        in cui il broker ha registrato l'iscrizione passa un pezzo di rete, e una prova che pubblica
+        subito dopo perde il messaggio **a volte** — cioè diventa una di quelle che in CI si
+        liquidano come «sarà stata la rete». Con questo sportello si aspetta il fatto invece di
+        sperarci.
+        """
+        with self._lucchetto:
+            return sum(1 for c in self._clienti
+                       if any(combacia(f, argomento) for f in c.iscrizioni))
+
+    def testamenti(self) -> list[tuple[str, bytes, bool]]:
+        """I testamenti che i collegamenti vivi hanno lasciato. Serve a guardare, nelle prove.
+
+        Un testamento è l'unica cosa del protocollo che **non si può osservare da fuori** finché non
+        serve: lo si dichiara al collegamento e lo si vede solo quando qualcuno muore male. Senza
+        questo sportello, l'unico modo di provare che Mirto l'ha lasciato sarebbe ammazzarlo — e una
+        prova che ammazza un processo e aspetta un keepalive è una prova che in CI sarà fragile.
+        """
+        with self._lucchetto:
+            return [c.testamento for c in self._clienti if c.testamento]
+
     def togli(self, cliente: _Cliente) -> None:
         with self._lucchetto:
             if cliente in self._clienti:

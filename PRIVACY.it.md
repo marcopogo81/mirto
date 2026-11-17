@@ -25,9 +25,26 @@ vale la pena saperle, e la terza è quella che si dà per scontata al contrario:
   regola del token di Telegram e dei nodi;
 - **un broker è una bacheca condivisa.** Mirto legge lo stato che i tuoi dispositivi pubblicano lì e ci
   scrive i comandi; tutto quello che Mirto legge era già su quella bacheca, a disposizione di qualunque
-  altra cosa ci sia attaccata. Mirto oggi **non pubblica niente di suo** sul broker: né eventi, né
-  fotogrammi, né lo stato inserito. Se una versione futura lo farà, questa pagina lo dirà prima che esca, e
-  sarà spento finché non lo accendi tu.
+  altra cosa ci sia attaccata.
+
+**E adesso Mirto può pubblicarci anche cose sue** — è la parte che quella pagina aveva promesso di dirti
+prima che uscisse. È **spenta** (*Impostazioni → SmartHome → «Racconta sul broker cosa succede»*), e
+quando la accendi, sotto un ramo `mirto/` suo, pubblica:
+
+- se è **in funzione**, e se è **inserito o disinserito**;
+- un **evento** quando succede: quale camera, cosa ha riconosciuto, quanto era sicuro, quando. Vale la
+  stessa regola degli altri canali — a casa disinserita non parte un avviso, e non parte niente nemmeno
+  sul broker;
+- quale camera **sta vedendo qualcosa**, per circa mezzo minuto dopo un evento.
+
+**Nessun fotogramma, se non lo chiedi a parte.** L'ultima foto di ogni camera è un **secondo**
+interruttore, anche lui spento, e di proposito non è lo stesso: un JPEG di casa tua su una bacheca
+condivisa è una cosa di natura diversa dallo stato del tuo allarme, e lo legge qualunque cosa sia
+attaccata a quel broker. Accendilo solo se sai cos'altro c'è attaccato.
+
+Quello che Mirto pubblica lo legge tutto ciò che è attaccato al broker, e chi sia a essere attaccato lo
+decide il broker, non Mirto. Se il tuo è condiviso oltre casa tua, è la cosa a cui pensare prima di
+accendere questa.
 
 - **Statistiche d'uso (solo con il tuo sì)**: al primo avvio Mirto chiede; la risposta predefinita è **no**
   (chiudere la finestra senza scegliere = te lo richiede la volta dopo). Con il sì, una volta al giorno: un numero

@@ -720,6 +720,10 @@ class MirtoCore:
         self.scheduler.start()
         self.presence.start()
         self.domotica.start()
+        # Gli eventi passano anche sul broker, se il racconto è accesso (passo 5). Si attacca qui,
+        # al nucleo, perché è l'unico posto che conosce tutti e due: il dispatcher non sa cos'è un
+        # broker e la domotica non sa cos'è un evento, e va bene che resti così.
+        self.notifier.anche.append(self._racconta_evento)
         self.cameras.start(threaded_discovery=threaded_discovery)
         self.recording.start()
         self.telemetry.start()
@@ -728,6 +732,22 @@ class MirtoCore:
 
             prevent_sleep(True)
         log.info("Mirto avviato")
+
+    def _racconta_evento(self, ev) -> None:
+        """Un evento sul broker, se il racconto è accesso. Non solleva: lo tiene il dispatcher.
+
+        Tre messaggi, in quest'ordine, e l'ordine conta: prima la camera «sta vedendo qualcosa»,
+        poi l'evento, poi — solo se le istantanee sono accese — il fotogramma. Chi scrive
+        un'automazione sullo stato della camera lo vede cambiare **prima** di ricevere l'evento,
+        che è l'ordine in cui le cose sono successe davvero.
+        """
+        racconto = getattr(self.domotica, "racconto", None)
+        if racconto is None:
+            return
+        camera = str(getattr(ev, "camera_name", "") or "")
+        racconto.camera(camera, True)
+        racconto.evento(ev)
+        racconto.istantanea(ev)
 
     def stop(self) -> None:
         if not self._started:

@@ -707,7 +707,41 @@ declares nothing, and nobody can know what you've plugged into it. If you plug i
 **has no budget**: it will sound for as long as the action says. For a real siren use a node's output,
 where the limits exist and are enforced twice.
 
-### 13.5 If you don't have a smart home
+### 13.5 Making Mirto show up in Home Assistant
+
+So far Mirto has read your home and driven it. This is the other direction: **Mirto telling the world
+what is happening**, so that Home Assistant — or anything else attached to the broker — knows.
+
+You turn it on with the **"Publish what happens on the broker"** tick box at the bottom of the
+SmartHome tab. It is off by default, and not by accident: whatever Mirto publishes is readable by
+**everything** attached to that broker, and who is attached is decided by the broker, not by Mirto.
+
+Once it is on, Mirto publishes under a branch of its own:
+
+| Topic | What it says |
+|---|---|
+| `mirto/status` | `online` while it is running. If Mirto dies badly, the broker — not Mirto — sets it to `offline` |
+| `mirto/armed` | `ON` or `OFF`: armed or disarmed |
+| `mirto/event` | an event: which camera, what it recognised, how confident, when |
+| `mirto/<camera>/event` | the same event, but only for that camera |
+| `mirto/<camera>/state` | `ON` while that camera is seeing something, then back to `OFF` |
+
+Three things worth knowing:
+
+- **with the house disarmed it publishes no events**, just as it sends no alerts. The armed state it
+  always publishes: saying "I am disarmed" is precisely its job.
+- **photos are a separate tick box**, also off. Each camera's latest photo on
+  `mirto/<camera>/snapshot` is a frame of your home on a shared board: anything attached to it can
+  see that, including a plug with badly written firmware. Turn it on only if you know what else uses
+  that broker.
+- **if two cameras have names that are too alike** — "Cam#2" and "Cam 2" — they would end up on the
+  same topic and overwrite each other. Mirto tells you so in the tab rather than inventing a
+  different name: a topic Mirto changes by itself is a topic you will not find later.
+
+For now Mirto does **not announce itself**: in Home Assistant you add the sensors yourself, once,
+using the topics in the table. Being found without writing anything is the next step.
+
+### 13.6 If you don't have a smart home
 
 There's a fake one, with a window of its own, built for trying this out: `python -m mirto
 --smarthome-simulator`. It opens a broker on `127.0.0.1:1883` holding five devices of three different

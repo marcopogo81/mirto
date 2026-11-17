@@ -169,11 +169,16 @@ class CasaSmart:
     def __init__(self, indirizzo: str, porta: int = 1883, *, utente: str | None = None,
                  password: str | None = None, tls: bool = False,
                  su_cambio: Callable[[Dispositivo], None] | None = None,
-                 nome: str = "mirto") -> None:
+                 nome: str = "mirto",
+                 testamento: tuple[str, bytes, bool] | None = None) -> None:
         self.indirizzo, self.porta = indirizzo, porta
         self.utente, self.password, self.tls = utente, password, tls
         self.su_cambio = su_cambio
         self.nome = nome
+        # Cosa dire se Mirto spira. Si dichiara **al collegamento**, perché lo manda il broker e non
+        # Mirto: un messaggio che Mirto manda da sé, se è morto, non lo manda. Resta `None` quando il
+        # racconto è spento, e allora Mirto non apre bocca su questo broker (passo 5).
+        self.testamento = testamento
         self._cliente: mqtt.Cliente | None = None
         self._dispositivi: dict[str, Dispositivo] = {}
         self._per_argomento: dict[str, list[str]] = {}    # argomento -> identificativi
@@ -186,7 +191,8 @@ class CasaSmart:
         """Si collega e si mette in ascolto delle prime due vie. Solleva ``mqtt.ErroreMqtt``."""
         self._cliente = mqtt.Cliente(
             self.indirizzo, self.porta, nome=self.nome, utente=self.utente, password=self.password,
-            tls=self.tls, riprova=True, su_messaggio=self._arrivato).collega(secondi)
+            tls=self.tls, riprova=True, su_messaggio=self._arrivato,
+            testamento=self.testamento).collega(secondi)
         self._cliente.iscrivi(*ARGOMENTI_ANNUNCIO, ELENCO_ZIGBEE)
         return self
 
@@ -197,6 +203,19 @@ class CasaSmart:
 
     def collegata(self) -> bool:
         return self._cliente is not None and self._cliente.collegato()
+
+    def pubblica(self, argomento: str, carico: bytes, ritenuto: bool = False) -> bool:
+        """Mette un messaggio sul broker. False se non siamo collegati, senza sollevare.
+
+        Serve al racconto di Mirto (passo 5) e passa dallo **stesso collegamento** che ascolta la
+        casa: due collegamenti allo stesso broker sarebbero due cose da tenere in piedi, due modi di
+        cadere e due righe da capire nel pannello Sistema, per nessun guadagno.
+        """
+        cliente = self._cliente
+        if cliente is None or not cliente.collegato():
+            return False
+        cliente.pubblica(argomento, carico, ritenuto=ritenuto)
+        return True
 
     def __enter__(self) -> "CasaSmart":
         return self.collega()
@@ -527,6 +546,11 @@ class Domotica:
     def __init__(self, config, secrets) -> None:
         self.config, self.secrets = config, secrets
         self.casa: CasaSmart | None = None
+        # Il racconto di Mirto sul broker (passo 5), oppure `None` — e `None` è il caso normale,
+        # perche' e' spento finche' non lo accendi. Lo tiene questo oggetto e non il motore, perche'
+        # deve dire «sono qui» appena il collegamento c'e', e «me ne vado» prima che sparisca:
+        # tutte e due le cose le sa solo chi apre e chiude il collegamento.
+        self.racconto = None
         self.errore = ""
         self._lucchetto = threading.RLock()
         self._ascoltatori: list[Callable[[Dispositivo], None]] = []
@@ -538,6 +562,14 @@ class Domotica:
     def stop(self) -> None:
         with self._lucchetto:
             casa, self.casa = self.casa, None
+            racconto, self.racconto = self.racconto, None
+        # «Me ne vado» **prima** di chiudere, e non si conta sul testamento: quello lo manda il
+        # broker quando si accorge che il collegamento e' caduto, e puo' volerci un keepalive —
+        # chiudendo per bene, Home Assistant lo sa subito invece che fra un minuto.
+        if racconto is not None:
+            racconto.basta()        # i timer in attesa non tengono in piedi Mirto che si chiude
+        if racconto is not None and casa is not None:
+            racconto.me_ne_vado()
         if casa is not None:
             casa.chiudi()
 
@@ -551,12 +583,20 @@ class Domotica:
         host = str(dati.get("host") or "").strip()
         if not dati.get("enabled") or not host:
             return False
+        from .racconto import PREFISSO, Racconto, testamento  # noqa: PLC0415
+
+        # Il racconto e' una scelta a parte dal collegamento: chi vuole solo accendere le luci di
+        # casa non deve ritrovarsi lo stato del suo antifurto su una bacheca condivisa per aver
+        # configurato un broker. L'ha scritto `PRIVACY.md` il 17/11, in due lingue.
+        parla = bool(dati.get("publish"))
+        prefisso = str(dati.get("prefix") or PREFISSO).strip("/ ") or PREFISSO
         try:
             casa = CasaSmart(host, int(dati.get("port") or 1883),
                              utente=str(dati.get("username") or "") or None,
                              password=self.secrets.get(SMARTHOME_PASSWORD) or None,
                              tls=bool(dati.get("tls")),
-                             su_cambio=self._dillo_a_tutti).collega()
+                             su_cambio=self._dillo_a_tutti,
+                             testamento=testamento(prefisso) if parla else None).collega()
         except Exception as exc:  # noqa: BLE001 - un broker spento non deve impedire l'avvio
             self.errore = str(exc)
             log.warning("domotica: non collegata a %s (%s)", host, exc)
@@ -569,6 +609,13 @@ class Domotica:
                 log.exception("domotica: non ho potuto riprendere %s", voce)
         with self._lucchetto:
             self.casa = casa
+            self.racconto = (Racconto(casa.pubblica, prefisso,
+                                      istantanee=bool(dati.get("publish_snapshots")),
+                                      quanto_dura=float(dati.get("camera_state_seconds") or 0))
+                             if parla else None)
+        if self.racconto is not None:
+            self.racconto.sono_qui()
+            self.racconto.protezione(bool(self.config.get("actions.armed", False)))
         return True
 
     # --- chi vuole saperlo ----------------------------------------------------

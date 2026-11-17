@@ -716,7 +716,41 @@ non dichiara niente, e nessuno può sapere cosa ci hai collegato. Se ci attacchi
 sirena **non ha un budget**: suonerà quanto dice l'azione. Per una sirena vera usa l'uscita di un
 nodo, dove i limiti ci sono e sono imposti due volte.
 
-### 13.5 Se non hai un impianto
+### 13.5 Far comparire Mirto in Home Assistant
+
+Fin qui Mirto ha letto la tua casa e l'ha comandata. Questo è il verso opposto: **Mirto che racconta
+cosa succede**, così Home Assistant — o qualunque altra cosa attaccata al broker — lo sa.
+
+Si accende con la spunta **«Racconta sul broker cosa succede»**, in fondo alla scheda SmartHome. È
+spenta di serie, e non per caso: quello che Mirto pubblica lo legge **tutto** ciò che è attaccato a
+quel broker, e chi sia attaccato lo decide il broker, non Mirto.
+
+Quando la accendi, Mirto pubblica sotto un ramo suo:
+
+| Argomento | Cosa dice |
+|---|---|
+| `mirto/status` | `online` finché c'è. Se Mirto muore male lo mette a `offline` il broker, non Mirto |
+| `mirto/armed` | `ON` o `OFF`: inserito o disinserito |
+| `mirto/event` | un evento: quale camera, cosa ha riconosciuto, quanto era sicuro, quando |
+| `mirto/<camera>/event` | lo stesso evento, ma solo di quella camera |
+| `mirto/<camera>/state` | `ON` mentre quella camera sta vedendo qualcosa, poi torna `OFF` |
+
+Tre cose che vale la pena sapere:
+
+- **a casa disinserita non pubblica gli eventi**, come non manda gli avvisi. Lo stato della
+  protezione invece lo pubblica sempre: è proprio il suo mestiere dire «sono disinserito».
+- **le foto sono una spunta a parte**, e anche quella spenta. L'ultima foto di ogni camera su
+  `mirto/<camera>/snapshot` è un fotogramma di casa tua su una bacheca condivisa: lo vede qualunque
+  cosa ci sia attaccata, compresa una presa col firmware scritto male. Accendila solo se sai
+  cos'altro usa quel broker.
+- **se due camere hanno nomi che si somigliano troppo** — «Cam#2» e «Cam 2» — finirebbero sullo
+  stesso argomento e si sovrascriverebbero a vicenda. Mirto te lo dice nella scheda invece di
+  inventarsi un nome diverso: un argomento che Mirto cambia da sé è un argomento che poi non trovi.
+
+Per adesso Mirto **non si annuncia** da solo: in Home Assistant i sensori li aggiungi tu, una volta,
+con gli argomenti della tabella. Farsi trovare senza scrivere niente è il passo dopo.
+
+### 13.6 Se non hai un impianto
 
 Ce n'è uno finto, con la sua finestra, fatto apposta per provare: `python -m mirto
 --simulatore-smarthome`. Apre un broker su `127.0.0.1:1883` con dentro cinque dispositivi di tre

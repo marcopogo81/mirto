@@ -86,6 +86,7 @@ class SchedaSmartHome(QWidget):
         self.stato.setWordWrap(True)
         fuori.addWidget(self.stato)
         fuori.addLayout(self._corpo(), 1)
+        fuori.addWidget(self._racconto(dati))
         fuori.addWidget(self._pronto())
         self._mostra_adesso()
 
@@ -200,6 +201,63 @@ class SchedaSmartHome(QWidget):
         riga.setStyleSheet(f"color:{T.MUTED}; font-weight:800; font-size:11px; letter-spacing:1.4px; "
                            f"padding:2px 0 6px 2px; border-bottom:1px solid {T.LINE}; margin-top:6px;")
         return riga
+
+    def _racconto(self, dati: dict) -> QWidget:
+        """I due interruttori del racconto: Mirto che parla sul broker.
+
+        **Stanno qui sotto e non in cima**, dopo l'elenco dei dispositivi, perché sono una cosa che
+        si decide *dopo* aver visto che il collegamento funziona — e perché chi apre questa scheda
+        la apre per accendere le luci di casa, non per pubblicare lo stato del suo antifurto.
+
+        **Sono due e non uno**, e non è pignoleria: il secondo mette un fotogramma di casa su una
+        bacheca condivisa, cioè una cosa di natura diversa dallo stato dell'allarme. Metterli nello
+        stesso interruttore vorrebbe dire far dire sì a una cosa chiedendone un'altra.
+        """
+        scatola = QWidget()
+        dentro = QVBoxLayout(scatola)
+        dentro.setContentsMargins(0, 6, 0, 0)
+        dentro.setSpacing(4)
+        self.racconta = QCheckBox(_('Racconta sul broker cosa succede (eventi e protezione)'))
+        self.racconta.setChecked(bool(dati.get("publish")))
+        self.racconta.setToolTip(_(
+            'Mirto pubblica i suoi eventi, se è inserito o disinserito, e quale camera sta vedendo '
+            'qualcosa. Serve a far comparire Mirto in Home Assistant. Quello che pubblica lo legge '
+            'chiunque sia attaccato al broker, quindi è spento finché non lo accendi tu.'))
+        dentro.addWidget(self.racconta)
+        self.racconta_foto = QCheckBox(_('   …e anche l\'ultima foto di ogni camera'))
+        self.racconta_foto.setChecked(bool(dati.get("publish_snapshots")))
+        self.racconta_foto.setToolTip(_(
+            'Attenzione: mette un fotogramma di casa tua sul broker, dove lo vede qualunque cosa ci '
+            'sia attaccata — compresa una presa col firmware scritto male. Accendilo solo se sai chi '
+            'altro usa quel broker.'))
+        dentro.addWidget(self.racconta_foto)
+        self.nota_pestati = QLabel()
+        self.nota_pestati.setWordWrap(True)
+        self.nota_pestati.setStyleSheet(f"color:{T.PAUSED}; font-size:{T.SIZE_SMALL}px;")
+        dentro.addWidget(self.nota_pestati)
+        for spunta in (self.racconta, self.racconta_foto):
+            spunta.stateChanged.connect(self._racconto_cambiato)
+        self._racconto_cambiato()
+        return scatola
+
+    def _racconto_cambiato(self, *_a) -> None:
+        """Le foto si scelgono solo se si racconta, e si avvisa se due camere si pestano i piedi."""
+        from ..actions.racconto import argomenti_che_si_pestano  # noqa: PLC0415
+
+        parla = self.racconta.isChecked()
+        self.racconta_foto.setEnabled(parla)
+        pestati = argomenti_che_si_pestano(
+            [str(c.get("name") or "") for c in (self.cfg.get("cameras.known") or [])]) if parla else {}
+        if pestati:
+            # Si dice e non si risolve: cambiare il nome di una camera lo sa fare lui in dieci
+            # secondi, mentre un argomento che Mirto si inventa nessuno lo trova in Home Assistant.
+            quali = "; ".join(", ".join(n) for n in pestati.values())
+            self.nota_pestati.setText(_(
+                '⚠︎ Queste camere finirebbero sullo stesso argomento e si sovrascriverebbero a '
+                'vicenda: {quali}. Cambia il nome a una delle due.', quali=quali))
+        else:
+            self.nota_pestati.setText("")
+        self.nota_pestati.setVisible(bool(pestati))
 
     def _pronto(self) -> QWidget:
         """La riga «sei pronto», con due esempi scritti.
@@ -431,4 +489,11 @@ class SchedaSmartHome(QWidget):
             "username": self.utente.text().strip(),
             "tls": bool((self.cfg.get("smarthome") or {}).get("tls")),
             "adopted": list(self._adottati),
+            "publish": self.racconta.isChecked(),
+            # Spegnendo il racconto si spengono anche le foto: lasciarle accese «per quando lo
+            # riaccendi» vorrebbe dire che un domani basta una spunta per far uscire le immagini,
+            # e chi l'ha premuta si ricorda di aver detto sì a una cosa sola.
+            "publish_snapshots": self.racconta.isChecked() and self.racconta_foto.isChecked(),
+            "prefix": str((self.cfg.get("smarthome") or {}).get("prefix") or "mirto"),
+            "camera_state_seconds": (self.cfg.get("smarthome") or {}).get("camera_state_seconds", 30),
         }

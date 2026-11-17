@@ -23,9 +23,24 @@ things are worth knowing, and the third is the one people assume wrongly:
 - **the broker's password lives in the system keychain**, never in a configuration file — the same rule as
   for the Telegram token and the nodes;
 - **a broker is a shared board.** Mirto reads the state your devices publish there and writes commands;
-  everything Mirto reads was already on that board, available to anything else attached to it. Mirto
-  publishes **nothing of its own** on the broker today: no events, no frames, no armed state. If a future
-  version does, this page will say so before it ships, and it will be off until you turn it on.
+  everything Mirto reads was already on that board, available to anything else attached to it.
+
+**And Mirto can now publish things of its own there** — this is the part that page promised to tell you
+before it shipped. It is **off** (*Settings → SmartHome → "Publish what happens on the broker"*), and when
+you turn it on, under a `mirto/` topic of its own, it publishes:
+
+- whether it is **running**, and whether it is **armed or disarmed**;
+- an **event** when one happens: which camera, what was recognised, how confident, when. The same rule as
+  the other channels — with the house disarmed no alert goes out, and nothing goes on the broker either;
+- which camera is **seeing something**, for about half a minute after an event.
+
+**No frames, unless you ask for them separately.** The latest photo of each camera is a *second* switch,
+also off, and it is deliberately not the same one: a JPEG of your home on a shared board is a different
+kind of thing from the state of your alarm, and anything attached to that broker can read it. Turn it on
+only if you know what else is on there.
+
+What Mirto publishes is readable by everything attached to the broker, and the broker — not Mirto — decides
+who that is. If yours is shared beyond your home, that is the thing to think about before turning this on.
 
 ## Usage statistics (only if you say yes)
 

@@ -461,6 +461,13 @@ class ActionEngine:
             self._cancel_pending()
             self._pool.submit(self._stop_nodes)  # spegne anche ciò che è già acceso
         self._audit("inserito" if armed else "disinserito")
+        # Lo si racconta sul broker, se il racconto è accesso (passo 5). **Anche quando si
+        # disinserisce**, ed è il caso che conta: un'integrazione che sapesse solo quando la casa è
+        # protetta mostrerebbe «protetta» per sempre dal momento in cui la si spegne, che è la bugia
+        # più pericolosa che possa dire un pannello di antifurto.
+        racconto = getattr(self._domotica(), "racconto", None)
+        if racconto is not None:
+            racconto.protezione(bool(armed))
         return (_('🔒 Protezione ATTIVA: avvisi e azioni attivi.') if armed
                 else _("🔓 Protezione DISATTIVATA: nessun avviso e nessuna azione (gli eventi restano nell'archivio del {computer}).",
                        computer=questo_computer()))

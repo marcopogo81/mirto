@@ -108,6 +108,20 @@ DEFAULTS: dict[str, Any] = {
         # I dispositivi presi a orecchio: quelli che non si annunciano e non parlano nessuna lingua
         # nota. Gli altri non si ricordano, perché si rifanno vedere da soli a ogni avvio.
         "adopted": [],                 # [{topic, name, command_topic}]
+        # Mirto che **si racconta** sul broker: eventi, protezione, stato per camera (passo 5).
+        # Spento, e non per prudenza generica: `PRIVACY.md` il 17/11 ha scritto, in due lingue, che
+        # se una versione futura avesse pubblicato qualcosa di suo sarebbe stato spento finché non lo
+        # accendi tu. Questa riga è quella promessa.
+        "publish": False,
+        # Le istantanee sono un **secondo** interruttore, anche lui spento: un JPEG su
+        # `mirto/<camera>/snapshot` è un fotogramma di casa su una bacheca condivisa, e lo vede
+        # qualunque cosa sia attaccata al broker. Chi accende «raccontami» non ha chiesto questo.
+        "publish_snapshots": False,
+        "prefix": "mirto",             # su un broker di casa può esserci già qualcosa che si chiama così
+        # Per quanto una camera resta «sta vedendo qualcosa» dopo un evento. Uno stato ritenuto non
+        # si spegne da sé: a zero resta accesa finché non arriva altro, ed è una scelta, non un
+        # difetto — ma non è quella di serie, perché mentirebbe tutta la notte.
+        "camera_state_seconds": 30,
     },
     "notifications": {
         "cooldown_seconds": 120,       # pausa minima tra due avvisi della stessa camera

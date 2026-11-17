@@ -36,8 +36,31 @@ Mirto publishing its own events and announcing itself — is not in here yet.
   the MQTT client is three hundred lines of our own code, so Mirto still installs without downloading
   anything.
 
-Both guides have a new chapter 13, and [`PRIVACY.md`](PRIVACY.md) says what a broker is and what Mirto does
-and does not put on it.
+### And Mirto tells the broker what is happening
+
+The other direction, and the one Home Assistant cares about. **Off by default**, because what Mirto
+publishes is readable by everything attached to that broker, and who is attached is the broker's
+business, not Mirto's. *Settings → SmartHome → "Publish what happens on the broker".*
+
+- **What it publishes**, under a `mirto/` branch of its own: whether it is running, whether it is armed,
+  an event when one happens (which camera, what was recognised, how confident, when), and which camera is
+  seeing something. With the house disarmed it publishes no events, exactly as it sends no alerts — the
+  armed state it publishes always, because saying "I am disarmed" is precisely its job.
+- **Frames are a second switch**, also off, and deliberately not the same one: a JPEG of your home on a
+  shared board is a different kind of thing from the state of your alarm.
+- **A camera does not stay "seeing something" forever.** A retained state does not switch itself off, so
+  Mirto switches it off after half a minute; without that, Home Assistant would show one camera as busy
+  from the first event until the next restart.
+- **Two cameras whose names clean up to the same topic are reported, not silently renumbered** — a topic
+  Mirto changes by itself is a topic nobody finds again.
+- It says `offline` when it closes, and leaves a **will** with the broker so that a Mirto killed badly
+  does not stay `online` for ever: a dead program sends no messages, but the broker can.
+
+Mirto does not announce itself to Home Assistant yet; the sensors are added once, by hand, from the
+topics in the guide. That is the next piece.
+
+Both guides have a new chapter 13, and [`PRIVACY.md`](PRIVACY.md) says what a broker is, what Mirto puts
+on it and what it does not.
 
 ## [0.2.0] – 2026-11-09
 
