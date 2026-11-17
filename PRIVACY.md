@@ -14,6 +14,19 @@ much stricter rules than video: in Italy the regulator considers audio recording
 in most cases. Nothing else about this page changes: that audio stays on your computer and on the node, and goes
 only to the alert channels you configured.
 
+Something else changed on 17 November 2026, and it is also not about the internet: Mirto can connect to an
+**MQTT broker** on your network, to see your home's lights, plugs and sensors and to switch them. Three
+things are worth knowing, and the third is the one people assume wrongly:
+
+- **it is a connection Mirto opens outwards**, to a broker whose address you give it, normally a machine in
+  your own home. No port is opened on your network, exactly as with Telegram;
+- **the broker's password lives in the system keychain**, never in a configuration file — the same rule as
+  for the Telegram token and the nodes;
+- **a broker is a shared board.** Mirto reads the state your devices publish there and writes commands;
+  everything Mirto reads was already on that board, available to anything else attached to it. Mirto
+  publishes **nothing of its own** on the broker today: no events, no frames, no armed state. If a future
+  version does, this page will say so before it ships, and it will be off until you turn it on.
+
 ## Usage statistics (only if you say yes)
 
 At first start Mirto asks whether to send usage statistics. The default answer is **no**; closing the window

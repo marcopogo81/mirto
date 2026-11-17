@@ -52,7 +52,9 @@ projects quietly die. Where help would change the most, today:
 
 - **Windows**: it is tested, but on one PC only — USB cameras, email and restart-after-crash autostart are
   still open;
-- **Home Assistant and MQTT**: the way local projects reach the people who would use them;
+- **more smart-home brands**: Mirto speaks MQTT and understands ESPHome and Zigbee2MQTT; every other brand
+  is an adapter of a few dozen lines, and the fake smart house (`--simulatore-smarthome`) lets you write
+  and test one without owning the hardware;
 - **GUI tests**: a third of the code is the interface and it is the least covered part;
 - **translations** beyond English and Italian, and **screenshots**;
 - **other hardware**: Raspberry Pi 3, other cameras, other Bluetooth speakers — most defects live there.

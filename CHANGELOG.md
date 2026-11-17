@@ -7,6 +7,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Your smart home, both ways
+
+Mirto now sees the lights, plugs and sensors already on your **MQTT broker**, drives them, and reacts to
+them. It is the half of the Home Assistant work that faces your house; the half that faces Home Assistant —
+Mirto publishing its own events and announcing itself — is not in here yet.
+
+- **It finds the devices, you don't type topics.** Three ways, tried in that order: the generic announcement
+  that ESPHome and friends publish; the language of the brand, recognised from what exists on the broker
+  (Zigbee2MQTT answers on its own topics whether or not its Home Assistant option is on); and, for a device
+  that does neither, listening to everything for a few seconds and letting you pick. Typing a topic by hand
+  is the last resort, not the first step. *Settings → SmartHome.*
+- **They are outputs in the actions.** A smart light goes into a chain exactly like a node's relay: *the
+  camera sees the dog, the porch light comes on.* A light stays on until something turns it off, so Mirto
+  keeps the time and turns it off — at the end of the step and on **Stop everything**, which otherwise would
+  cancel the timer and leave the house lit.
+- **A device changing state starts an action.** *The stairs light comes on, and the node's speaker plays a
+  welcome.* Two things are deliberately not a change: what the broker replays when Mirto connects (learning
+  that a light is on is not "the light came on"), and anything Mirto itself switched.
+- **`/on` and `/off` on Telegram**, for your smart lights and for node outputs, which could not be commanded
+  from Telegram at all before. `/on` by itself lists what there is, with each one's state: a command that
+  switches something on never guesses its target.
+- **The limits do not have a back door.** A siren switched on by hand uses the same three minutes every half
+  hour as an action does; a deterrent stays capped at thirty seconds. A smart **plug** has no such cap,
+  because a plug does not declare what you plugged into it — the guide says so rather than inventing one.
+- **A fake smart house to develop against** (`python -m mirto --simulatore-smarthome`): a minimal broker, a
+  window, and devices that behave like ESPHome, like Zigbee2MQTT, or like neither. No new dependency —
+  the MQTT client is three hundred lines of our own code, so Mirto still installs without downloading
+  anything.
+
+Both guides have a new chapter 13, and [`PRIVACY.md`](PRIVACY.md) says what a broker is and what Mirto does
+and does not put on it.
+
 ## [0.2.0] – 2026-11-09
 
 **The first public release.** Mirto watches the cameras your computer can already reach, decides on

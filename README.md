@@ -79,6 +79,7 @@ version and the story in words: [all twelve, full size](docs/cards.md).
 | **Alerts** | A photo on Telegram within seconds, with buttons to say *false alarm* or to silence it; the same by email, optionally by SMS. If a channel is down Mirto keeps trying instead of losing the event. |
 | **Recording** | Clips around each event (10 s before, 20 s after), or continuous recording, with a timeline to scrub through. Old footage deletes itself by age or when it hits the disk quota you set. |
 | **Physical actions** | A Raspberry Pi node gives Mirto a siren, lights, relays and sockets in the house. Every request is signed, and the node obeys only the computer it was paired with. |
+| **Your smart home, both ways** | Mirto finds the lights, plugs and sensors already on your MQTT broker — it does not ask you to type topics — and then works in both directions: a camera sees the dog and the porch light comes on, or the hallway sensor comes on and the node's speaker plays a welcome. From Telegram, `/on` and `/off`. The same limits apply: a siren switched on by hand uses the same three minutes every half hour. |
 | **Deterrents** | Sounds that move animals on, not people: raptor calls, a crow alarm, a shot, or your own recordings — chosen per species, rate-limited, and never aimed at a person. |
 | **When it is armed** | Arm and disarm from the app or from Telegram, on a weekly schedule, on date ranges, or by themselves when the phones of the people who live there leave the Wi-Fi. |
 | **Limits you cannot switch off** | The siren stops after 3 minutes and cannot run more than 3 minutes in any 30. Every output switches itself off. Nothing unlocks anything. Deterrents never point at a person. These are enforced twice: in the app, and again in the node, which does not trust the app. |
@@ -120,7 +121,8 @@ starting point: *you have a computer, a camera, and something outside you would 
 | Open source | ✅ **yes, all of it** | ✅ yes | ⚠️ core is Frigate (MIT); **the port is proprietary** | ❌ no | ❌ no | ⚠️ core yes, NVR no |
 | Extra hardware | ✅ none: your Mac's Neural Engine or your GPU | ⚠️ an accelerator is "strongly recommended" | ✅ none: Neural Engine | ✅ none | ⚠️ a decent GPU for many cameras | ⚠️ depends on the plugins |
 | Phone app | ❌ **no, on purpose** — Telegram is the remote ([why](#why-not-frigate-fregata-securityspy-blue-iris-or-scrypted)) | ❌ no | ✅ **yes**, free, with Apple Watch | ✅ yes | ⚠️ web | ✅ its own apps |
-| Drives physical devices | ✅ **yes**: nodes with siren, lights, relays, sounds | ⚠️ through MQTT and your automations | ❌ no | ❌ no | ⚠️ relays via plugins | ⚠️ through the home-automation platform |
+| Drives physical devices | ✅ **yes**: nodes with siren, lights, relays, sounds, and your home's smart lights and plugs | ⚠️ through MQTT and your automations | ❌ no | ❌ no | ⚠️ relays via plugins | ⚠️ through the home-automation platform |
+| Reacts to your smart home | ✅ **yes**: a device changing state starts an action | ❌ no — it commands itself, not your house | ❌ no | ❌ no | ❌ no | ❌ no |
 | Ready-made outdoor node | ✅ **yes**: one image on a microSD, boot, pair with a 6-digit PIN — ten minutes | ❌ build it yourself | ❌ | ❌ | ❌ | ❌ |
 | Deterrent sounds for animals | ✅ **yes**, with limits in the code | ❌ no | ❌ no | ❌ no | ❌ no | ❌ no |
 | Faces, plates | ❌ **no, by choice** | ✅ yes, built in | ⚠️ through Frigate+ | ✅ faces | ⚠️ plugins | ⚠️ plugins |
@@ -140,6 +142,12 @@ your computer with a 6-digit PIN — no terminal, no key to copy, and every copy
 identity the first time it boots. The others can drive a relay if you bring MQTT, a broker, a home
 automation platform and the afternoon it takes to wire them together; none of them hands you the node.
 
+**And the other direction, which none of them does at all.** Frigate speaks MQTT well, but what it commands
+is itself: switch detection on, stop recording. None of the five reacts to your house, because none of them
+has somewhere for a trigger to come from other than a camera. Mirto has both ends — the cameras and the
+outputs — so *the hallway sensor comes on, and the music starts* is a thing you can set up in the same
+window where you set up *the camera sees a person, and the siren sounds*.
+
 Around that: it runs on **macOS and Windows** from the same code; the safety limits on those outputs are
 written into **both** sides, so the node refuses an unsafe request even if the app asks for it; it carries
 **animal deterrents** that are forbidden to point at a person; and it is **entirely open source**, with no
@@ -147,7 +155,7 @@ paid tier to grow into.
 
 **What Mirto does not do**, so nobody finds out after installing it: no face recognition and no licence
 plates (a deliberate choice: in Italy they turn a camera into something a private person usually may not
-run); no HomeKit, Home Assistant or MQTT integration; no web interface; no multi-user accounts; it is not
+run); no HomeKit (it needs a bridge and another world to keep updated); no web interface; no multi-user accounts; it is not
 meant for twenty cameras on one machine; on Linux it runs, but only development and tests are supported
 there.
 
@@ -362,7 +370,8 @@ CI on every pull request.
 
 **This project is worked on at weekends**: first answer within 7 days, decision within 20, and weekday
 silence means nothing. That is enough to keep a program alive and not enough to make it grow, so **help is
-genuinely wanted** — Windows, Home Assistant and MQTT, interface tests, translations, other hardware.
+genuinely wanted** — Windows, more smart-home brands (the fake smart house in `--simulatore-smarthome`
+lets you write one without owning the hardware), interface tests, translations, other hardware.
 
 ## Who does what
 

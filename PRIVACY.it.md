@@ -15,6 +15,20 @@ regole molto più severe del video: in Italia il Garante considera la registrazi
 eccedente nella gran parte dei casi. Il resto di questa pagina non cambia: quell'audio resta sul tuo computer e
 sul nodo, e va solo ai canali di avviso che hai configurato.
 
+Un'altra cosa è cambiata il 17 novembre 2026, e nemmeno questa riguarda internet: Mirto può collegarsi a un
+**broker MQTT** sulla tua rete, per vedere le luci, le prese e i sensori di casa e per accenderli. Tre cose
+vale la pena saperle, e la terza è quella che si dà per scontata al contrario:
+
+- **è un collegamento che Mirto apre verso l'esterno**, a un broker il cui indirizzo glielo dai tu, di solito
+  una macchina in casa tua. Nessuna porta aperta sulla tua rete, esattamente come con Telegram;
+- **la password del broker sta nel portachiavi di sistema**, mai in un file di configurazione — la stessa
+  regola del token di Telegram e dei nodi;
+- **un broker è una bacheca condivisa.** Mirto legge lo stato che i tuoi dispositivi pubblicano lì e ci
+  scrive i comandi; tutto quello che Mirto legge era già su quella bacheca, a disposizione di qualunque
+  altra cosa ci sia attaccata. Mirto oggi **non pubblica niente di suo** sul broker: né eventi, né
+  fotogrammi, né lo stato inserito. Se una versione futura lo farà, questa pagina lo dirà prima che esca, e
+  sarà spento finché non lo accendi tu.
+
 - **Statistiche d'uso (solo con il tuo sì)**: al primo avvio Mirto chiede; la risposta predefinita è **no**
   (chiudere la finestra senza scegliere = te lo richiede la volta dopo). Con il sì, una volta al giorno: un numero
   creato a caso, versione, sistema, lingua, camere e nodi per fasce, modalità di registrazione e funzioni accese.

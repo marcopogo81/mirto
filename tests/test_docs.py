@@ -869,3 +869,94 @@ class CollegamentiAllaGuidaTest(unittest.TestCase):
         numeri = [[re.match(r"^\S+", t).group(0) for t in self._titoli(n) if re.match(r"^\d", t)]
                   for n in ("GUIDA_UTENTE.md", "USER_GUIDE.md")]
         self.assertEqual(numeri[0], numeri[1], "le due guide hanno capitoli diversi: si sono allontanate")
+
+
+class IlReadmeNonDiceIlContrarioDelCodiceTest(unittest.TestCase):
+    """Quello che il README promette e quello che il programma fa devono stare insieme.
+
+    **Perché questo file ha questo guardiano.** Il piano della domotica, scritto il 14/11, apriva con un
+    avvertimento su noi stessi: *«il ROADMAP pubblico oggi promette solo la prima parte mentre il README
+    alla riga 150 dichiara "no HomeKit, Home Assistant or MQTT integration". Vanno riallineati nello
+    stesso rilascio, o diventiamo quelli che dicono una cosa e ne fanno un'altra»*. E prima di quello, il
+    13/11, il README era rimasto per due giorni a dire una cosa non vera su Windows senza che nessuno se ne
+    accorgesse.
+
+    Il difetto che questo guardiano previene non è un errore di scrittura: è **la deriva**. Una riga di
+    README scritta quando era vera, e dimenticata quando ha smesso di esserlo. Nessuno la rilegge, perché
+    nessuno rilegge il README cercando le bugie.
+
+    **Come funziona, e cosa non prova.** Si prendono alcune capacità che si possono riconoscere dal codice
+    con certezza — un modulo che esiste, una funzione che si chiama — e per ciascuna si pretende che il
+    README non dica il contrario. Non prova che il README dica *tutto* quello che Mirto fa: quello non si
+    può controllare da un programma, e un guardiano che finge di farlo sarebbe peggio di niente. Prova che
+    non dica il falso, che è la metà controllabile e anche la metà che fa danno.
+    """
+
+    @staticmethod
+    def _testo(nome: str) -> str:
+        return (ROOT / nome).read_text(encoding="utf-8")
+
+    def test_the_guardian_can_still_see_the_code(self):
+        """Falsificazione: se non trovasse i moduli, le prove qui sotto passerebbero su niente."""
+        self.assertTrue((ROOT / "mirto" / "actions" / "smarthome.py").exists(),
+                        "il modulo della domotica non si trova più: questo guardiano è cieco")
+        self.assertTrue((ROOT / "mirto" / "actions" / "mqtt.py").exists())
+
+    def test_it_does_not_claim_there_is_no_mqtt(self):
+        """La riga che il piano aveva previsto, e che per tre giorni è stata falsa.
+
+        Finché «mirto/actions/mqtt.py» e «smarthome.py» esistono, il README non può elencare MQTT o Home
+        Assistant fra le cose che Mirto non fa. HomeKit sì, perché quella è una decisione e non un ritardo.
+        """
+        if not (ROOT / "mirto" / "actions" / "mqtt.py").exists():
+            self.skipTest("senza il modulo MQTT la promessa tornerebbe vera")
+        readme = self._testo("README.md")
+        for frase in ("no HomeKit, Home Assistant or MQTT integration",
+                      "no Home Assistant or MQTT integration",
+                      "no MQTT integration"):
+            self.assertNotIn(frase, readme,
+                             f"il README dice «{frase}» mentre il codice parla MQTT da giorni")
+
+    def test_the_roadmap_does_not_promise_what_is_already_built(self):
+        """Una roadmap che promette una cosa fatta dice a chi legge che il progetto non si guarda.
+
+        Trovare i dispositivi di casa e comandarli è costruito: se la roadmap lo mette ancora fra le cose
+        che verranno, chi arriva non capisce a che punto siamo — e la roadmap è il documento che la gente
+        legge proprio per capire quello.
+        """
+        from mirto.actions.smarthome import comandi_di  # noqa: PLC0415
+
+        self.assertTrue(callable(comandi_di))
+        roadmap = self._testo("ROADMAP.md")
+        self.assertNotIn("events and armed/disarmed state published locally, so Mirto fits", roadmap,
+                         "la roadmap promette ancora la parte già costruita come se fosse da fare")
+
+    def test_a_built_feature_is_written_somewhere_public(self):
+        """E l'altro verso: una cosa costruita e non scritta in nessun posto pubblico non esiste.
+
+        Basta **un** posto fra README e CHANGELOG — se è costruita e non rilasciata il suo posto è
+        «Unreleased», e questo guardiano non vuole decidere quale dei due. Vuole che non siano zero.
+        """
+        from mirto.actions.blocchi import DOMOTICA  # noqa: PLC0415
+
+        self.assertEqual(DOMOTICA, "domotica")
+        pubblico = self._testo("README.md") + self._testo("CHANGELOG.md")
+        for parola in ("MQTT", "smart"):
+            self.assertIn(parola, pubblico,
+                          f"la domotica è costruita e «{parola}» non compare in nessun documento pubblico")
+
+    def test_the_privacy_page_mentions_the_broker_in_both_languages(self):
+        """Un posto nuovo dove i dati di casa passano va detto, e nella lingua di chi legge.
+
+        La pagina inglese è quella che conta, lo dice lei stessa; ma la traduzione italiana esiste perché
+        un'informativa che non si capisce non è un'informativa, e una metà aggiornata è peggio di niente —
+        chi legge l'italiano crederebbe che non ci sia nulla da sapere.
+        """
+        if not (ROOT / "mirto" / "actions" / "mqtt.py").exists():
+            self.skipTest("senza MQTT non c'è broker da raccontare")
+        for pagina in ("PRIVACY.md", "PRIVACY.it.md"):
+            with self.subTest(pagina=pagina):
+                testo = self._testo(pagina)
+                self.assertIn("MQTT", testo, "non dice che Mirto può collegarsi a un broker")
+                self.assertRegex(testo, r"(?i)(keychain|portachiavi)",
+                                 "non dice dove finisce la password del broker")
