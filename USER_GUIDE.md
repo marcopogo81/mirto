@@ -738,10 +738,49 @@ Three things worth knowing:
   same topic and overwrite each other. Mirto tells you so in the tab rather than inventing a
   different name: a topic Mirto changes by itself is a topic you will not find later.
 
-For now Mirto does **not announce itself**: in Home Assistant you add the sensors yourself, once,
-using the topics in the table. Being found without writing anything is the next step.
+You only need the topics in the table if you want to use them by hand, with something that isn't
+Home Assistant. With Home Assistant you don't have to write anything: see the next section.
 
-### 13.6 If you don't have a smart home
+### 13.6 Home Assistant finds it on its own
+
+With that box ticked, there is **nothing to configure** in Home Assistant. Mirto announces itself,
+and after a few seconds you'll find it under *Settings → Devices & services → MQTT* as a device
+called "Mirto", holding:
+
+| Entity | What it is |
+|---|---|
+| **Armed** | on when the house is armed |
+| **\<camera\> · motion** | a motion sensor for each camera |
+| **\<camera\>** | that camera's picture, **only** if you also turned snapshots on |
+
+From there they behave like any other sensor: you can build Home Assistant automations on them, put
+them on a dashboard, or have something chime when the house is armed and the garage sees someone.
+
+Four things worth knowing:
+
+- **if you add or remove a camera**, Mirto re-announces itself: the new camera shows up in Home
+  Assistant without you touching anything.
+- **renaming a camera changes the label and does not create a duplicate.** Mirto knows its cameras
+  by a code that never changes, not by their name: in Home Assistant you see the new name on the
+  same sensor, with its history behind it.
+- **if Mirto is off, Home Assistant says so.** Its sensors go "unavailable" rather than sitting on
+  their last value: a panel claiming "house armed" for a Mirto that stopped two days ago would be a
+  lie, and a believable one.
+- **unticking the box removes Mirto.** Its sensors disappear from Home Assistant instead of sitting
+  there greyed out forever — because once they're left behind, the only way out is digging through
+  the broker with a command-line tool.
+  If instead you turn the whole smart-home connection off, Mirto has no broker left to say it to:
+  its sensors stay in Home Assistant and go away the day Mirto reconnects to that broker. To have
+  them go now, untick the box first and the connection after.
+
+If you use Mirto in English, the labels are in English. If you switch languages they follow on
+Mirto's next start; the sensors stay the same ones, with their history.
+
+> The prefix Home Assistant listens on is `homeassistant`, which is the default. If you changed it
+> in your Home Assistant, Mirto won't show up for now: file it as a request and we'll make it
+> configurable.
+
+### 13.7 If you don't have a smart home
 
 There's a fake one, with a window of its own, built for trying this out: `python -m mirto
 --smarthome-simulator`. It opens a broker on `127.0.0.1:1883` holding five devices of three different

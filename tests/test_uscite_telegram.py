@@ -244,7 +244,7 @@ class ILimitiValgonoAncheDalTelefonoTest(ConUnNodoEUnaCasa):
 
     Un'azione che suona consuma il budget. Se il telefono non lo consumasse, chiunque potesse
     scrivere al bot avrebbe una sirena senza limiti — e il limite non è una preferenza, è il motivo
-    per cui questo programma si può tenere accesso in un condominio.
+    per cui questo programma si può tenere acceso in un condominio.
     """
 
     def test_la_sirena_a_mano_e_tagliata_al_tetto_del_tipo(self):

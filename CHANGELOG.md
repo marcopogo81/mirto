@@ -56,8 +56,35 @@ business, not Mirto's. *Settings → SmartHome → "Publish what happens on the 
 - It says `offline` when it closes, and leaves a **will** with the broker so that a Mirto killed badly
   does not stay `online` for ever: a dead program sends no messages, but the broker can.
 
-Mirto does not announce itself to Home Assistant yet; the sensors are added once, by hand, from the
-topics in the guide. That is the next piece.
+### And Home Assistant finds it on its own
+
+The last piece: with publishing on, there is **nothing to configure in Home Assistant**. Mirto announces
+itself over MQTT discovery and shows up under *Settings → Devices & services → MQTT* as a device called
+"Mirto" — armed state, a motion sensor per camera, and each camera's picture if frames are on too.
+
+- **Add or remove a camera and the announcement is redone**, so a new camera appears in Home Assistant
+  without anyone touching it.
+- **Renaming a camera changes the label and does not create a duplicate.** Mirto identifies its cameras
+  by a code that never changes, so Home Assistant shows the new name on the same sensor, history intact.
+  The same holds for switching Mirto's language: the labels are translated, the identities are not.
+- **Its sensors go "unavailable" when Mirto is not running**, rather than sitting on their last value. A
+  panel claiming "house armed" for a Mirto that stopped two days ago would be a lie, and a believable one.
+- **Turning publishing off removes them.** The entities are deleted from Home Assistant instead of being
+  left greyed out for ever — which is the part most programs skip, because what is left behind can only
+  be cleared by digging through the broker with a command-line client. Mirto remembers what it published,
+  **including which cameras**, so turning it off a month and a restart later still cleans up everything
+  instead of orphaning every camera but the first.
+- Nothing is published with publishing off, not even the announcement: a discovery message already says
+  that this house has a Mirto, how many cameras it has and what they are called.
+- Turning the whole smart-home connection off is the one case it cannot clean up on the spot — there is
+  no broker left to say it to — so it keeps the memory and cleans up the day it reconnects. The guide
+  says so, and says to untick publishing first if you want them gone now. Publishing and closing the
+  socket an instant later loses the messages at QoS 0 (six times out of eight, measured), so the
+  tempting version of this would have failed silently and burned the fallback with it.
+
+What no test here can prove is that a **real** Home Assistant, on someone else's network, lists Mirto
+among its devices. That is a manual check and it is still open; the prefix it listens on is assumed to
+be the default `homeassistant`.
 
 Both guides have a new chapter 13, and [`PRIVACY.md`](PRIVACY.md) says what a broker is, what Mirto puts
 on it and what it does not.

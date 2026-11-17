@@ -123,6 +123,20 @@ DEFAULTS: dict[str, Any] = {
         # difetto — ma non è quella di serie, perché mentirebbe tutta la notte.
         "camera_state_seconds": 30,
     },
+    # Cosa abbiamo già detto a Home Assistant. **Non sono preferenze: sono memoria**, e servono a
+    # sapere cosa andare a cancellare il giorno che si spegne il racconto — senza, resterebbero
+    # sensori orfani in Home Assistant, grigi e non cancellabili dalla sua interfaccia.
+    #
+    # Sta in un blocco **suo** e non dentro `smarthome`, e non è un vezzo: la finestra delle
+    # impostazioni salva scrivendo `smarthome` **tutto intero** da quello che si vede sullo schermo
+    # (tre punti lo fanno), e quello che non si vede sullo schermo non ci sopravvive. Tenendo la
+    # memoria là dentro, salvare le impostazioni la cancellava: al primo salvataggio Mirto si
+    # dimenticava cosa aveva pubblicato, e spegnendo il racconto lasciava indietro i sensori di tutte
+    # le camere. Trovato il 17/11 da una prova sul broker vero, non dalla lettura del codice.
+    "homeassistant": {
+        "published": False,
+        "cameras": [],                 # [[id, nome], …] come erano quando le abbiamo pubblicate
+    },
     "notifications": {
         "cooldown_seconds": 120,       # pausa minima tra due avvisi della stessa camera
         "telegram": {

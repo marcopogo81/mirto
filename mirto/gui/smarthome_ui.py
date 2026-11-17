@@ -231,6 +231,16 @@ class SchedaSmartHome(QWidget):
             'sia attaccata — compresa una presa col firmware scritto male. Accendilo solo se sai chi '
             'altro usa quel broker.'))
         dentro.addWidget(self.racconta_foto)
+        # Si dice **qui**, non solo nel suggerimento che compare passando sopra: la cosa migliore di
+        # questa spunta è che Home Assistant trova Mirto da sé, e se non si legge da nessuna parte
+        # chi la accende non sa cosa aspettarsi — va a cercare i sensori a mano, cioè fa il lavoro
+        # che questa riga di codice esiste per togliergli. Compare solo a spunta accesa, così si
+        # legge come una conseguenza e non come una promessa.
+        self.nota_scoperta = QLabel(_('Home Assistant lo troverà da solo: comparirà fra i suoi '
+                                      'dispositivi come «Mirto».'))
+        self.nota_scoperta.setWordWrap(True)
+        self.nota_scoperta.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
+        dentro.addWidget(self.nota_scoperta)
         self.nota_pestati = QLabel()
         self.nota_pestati.setWordWrap(True)
         self.nota_pestati.setStyleSheet(f"color:{T.PAUSED}; font-size:{T.SIZE_SMALL}px;")
@@ -240,14 +250,30 @@ class SchedaSmartHome(QWidget):
         self._racconto_cambiato()
         return scatola
 
+    def _nomi_delle_camere(self) -> list[str]:
+        """I nomi che **l'utente ha dato** alle sue camere, dalla configurazione.
+
+        Sono questi quelli che possono scontrarsi, perché li digita lui: due nomi che si somigliano
+        nascono da una persona che scrive, non da Mirto che li genera. Una camera trovata in rete e
+        mai rinominata porta il nome che le dà il programma, e quelli non si pestano fra loro.
+
+        Scritta dopo un errore mio: il 17/11 avevo letto `cameras.known`, una chiave che **non
+        esiste**, dando per scontato che ci fosse. L'avviso non si sarebbe acceso mai, e in silenzio.
+        Le chiavi vere sono due: le correzioni per ID stabile e le camere di rete.
+        """
+        nomi = [str((c or {}).get("name") or "")
+                for c in (self.cfg.get("cameras.overrides") or {}).values()]
+        nomi += [str((c or {}).get("name") or "") for c in (self.cfg.get("cameras.network") or [])]
+        return [n for n in nomi if n.strip()]
+
     def _racconto_cambiato(self, *_a) -> None:
         """Le foto si scelgono solo se si racconta, e si avvisa se due camere si pestano i piedi."""
         from ..actions.racconto import argomenti_che_si_pestano  # noqa: PLC0415
 
         parla = self.racconta.isChecked()
         self.racconta_foto.setEnabled(parla)
-        pestati = argomenti_che_si_pestano(
-            [str(c.get("name") or "") for c in (self.cfg.get("cameras.known") or [])]) if parla else {}
+        self.nota_scoperta.setVisible(parla)
+        pestati = argomenti_che_si_pestano(self._nomi_delle_camere()) if parla else {}
         if pestati:
             # Si dice e non si risolve: cambiare il nome di una camera lo sa fare lui in dieci
             # secondi, mentre un argomento che Mirto si inventa nessuno lo trova in Home Assistant.

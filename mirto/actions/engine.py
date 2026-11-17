@@ -64,7 +64,7 @@ META_EVERY_SECONDS = 600  # ogni quanto rileggere la "carta d'identità" dei nod
 # subito dopo venga comunque sentito.
 ECO_NOSTRO = 5.0
 # Quanto resta accesa un'uscita di un nodo accesa **a mano** da Telegram, se non si dice per quanto.
-# Un relè di un nodo non può restare accesso per sempre — il nodo conta i suoi secondi e si spegne —
+# Un relè di un nodo non può restare acceso per sempre — il nodo conta i suoi secondi e si spegne —
 # quindi una durata ci vuole sempre, e un minuto è il tempo in cui uno va a vedere cos'ha acceso.
 # I tetti del tipo (tre minuti la sirena, trenta secondi il dissuasore) restano sopra questo.
 DURATA_A_MANO = 60.0
@@ -461,7 +461,7 @@ class ActionEngine:
             self._cancel_pending()
             self._pool.submit(self._stop_nodes)  # spegne anche ciò che è già acceso
         self._audit("inserito" if armed else "disinserito")
-        # Lo si racconta sul broker, se il racconto è accesso (passo 5). **Anche quando si
+        # Lo si racconta sul broker, se il racconto è acceso (passo 5). **Anche quando si
         # disinserisce**, ed è il caso che conta: un'integrazione che sapesse solo quando la casa è
         # protetta mostrerebbe «protetta» per sempre dal momento in cui la si spegne, che è la bugia
         # più pericolosa che possa dire un pannello di antifurto.
@@ -1364,7 +1364,7 @@ class ActionEngine:
             log.exception("domotica: non ho potuto spegnere %s", quale)
 
     def _spegni_smart_tutti(self) -> list[str]:
-        """Spegne tutto quello che Mirto ha accesso in casa. Torna i nomi, per la riga di controllo."""
+        """Spegne tutto quello che Mirto ha acceso in casa. Torna i nomi, per la riga di controllo."""
         with self._lock:
             quali = sorted(self._smart_accesi)
         for quale in quali:

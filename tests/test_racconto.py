@@ -37,7 +37,7 @@ from mirto.actions.racconto import (
     argomento_stato,
     carico_evento,
     pulisci_nome,
-    testamento,
+    testamento as il_testamento,   # il nome «test…» pytest lo raccoglierebbe come prova
 )
 
 
@@ -178,7 +178,7 @@ class CosaEStatoECosaENotiziaTest(unittest.TestCase):
         Se il testamento dicesse un'altra cosa, o stesse su un altro argomento, dopo un crash Mirto
         resterebbe «online» per sempre e nessuno saprebbe che non c'è più.
         """
-        arg, carico, ritenuto = testamento()
+        arg, carico, ritenuto = il_testamento()
         self.assertEqual(arg, argomento_stato())
         self.assertEqual(carico, OFFLINE)
         self.assertTrue(ritenuto)
@@ -397,15 +397,14 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class ContoIlBrokerVeroTest(unittest.TestCase):
-    """E ora tutto insieme: `Domotica`, il client MQTT, un broker vero (finto di casa, vero di
-    protocollo) e un altro client che ascolta quello che Mirto dice.
+class BancoDelBrokerVero:
+    """Il banco di prova, **senza prove**: broker vero, `Domotica` vero, un client spia.
 
-    Le prove di sopra provano **cosa** si dice, contro un elenco in memoria, e sono quelle che
-    trovano i difetti di contenuto. Questa prova una cosa diversa e non meno importante: che i pezzi
-    **combacino** — che il racconto nasca quando l'impostazione è accesa, che non nasca quando è
-    spenta, e che un messaggio parta per davvero e arrivi a chi si è iscritto. Se qualcuno cambia la
-    forma di un argomento o dimentica di passare il testamento, è questa che cade.
+    Sta per conto suo e non è un `TestCase` di proposito. Ereditando da un `TestCase` per
+    riusarne il `setUp` si ereditano anche le sue prove, e si rifanno tutte una seconda volta
+    sotto un altro nome: il 17/11 le sette prove della scoperta ne mostravano sedici, e nove
+    erano le stesse di sopra rifatte. Costa tempo in CI e, peggio, una prova che cade compare
+    con un nome che non è il suo.
     """
 
     @classmethod
@@ -464,6 +463,18 @@ class ContoIlBrokerVeroTest(unittest.TestCase):
                             f"il broker non ha registrato l'iscrizione a {argomento}")
         return arrivati
 
+
+class ContoIlBrokerVeroTest(BancoDelBrokerVero, unittest.TestCase):
+    """E ora tutto insieme: `Domotica`, il client MQTT, un broker vero (finto di casa, vero di
+    protocollo) e un altro client che ascolta quello che Mirto dice.
+
+    Le prove di sopra provano **cosa** si dice, contro un elenco in memoria, e sono quelle che
+    trovano i difetti di contenuto. Questa prova una cosa diversa e non meno importante: che i pezzi
+    **combacino** — che il racconto nasca quando l'impostazione è accesa, che non nasca quando è
+    spenta, e che un messaggio parta per davvero e arrivi a chi si è iscritto. Se qualcuno cambia la
+    forma di un argomento o dimentica di passare il testamento, è questa che cade.
+    """
+
     def test_spento_non_nasce_nessun_racconto(self):
         """La promessa scritta in PRIVACY, provata dal verso che conta: configurare un broker non
         basta a far parlare Mirto."""
@@ -485,7 +496,13 @@ class ContoIlBrokerVeroTest(unittest.TestCase):
         """È il punto dei messaggi ritenuti, e il motivo per cui Home Assistant non mostra
         «sconosciuto» appena si riavvia."""
         self.assertTrue(self._accendi(publish=True))
-        self.assertTrue(aspetta(lambda: self.dom.racconto is not None))
+        # Si aspetta che lo stato sia **già sul broker**, non che l'oggetto che lo pubblica esista:
+        # fra le due cose c'è una corsa, e il tardivo che si iscrive nel mezzo non trova il ritenuto
+        # perché non è ancora stato scritto. Cadeva 1 volta su 30 circa, sempre in compagnia di altri
+        # file di prova — cioè solo quando la macchina è carica, che è quando si guarda meno.
+        presto = self._spia("mirto/status")
+        self.assertTrue(aspetta(lambda: any(c == b"online" for _a, c, _r in presto)),
+                        "lo stato non è mai arrivato sul broker")
         tardi = self._spia("mirto/status")
         self.assertTrue(aspetta(lambda: any(a == "mirto/status" for a, _c, _r in tardi)),
                         "chi arriva dopo non trova niente")
@@ -559,3 +576,176 @@ class ContoIlBrokerVeroTest(unittest.TestCase):
         self.assertTrue(casa.pubblica("mirto/prova", b"x", False))
         casa.chiudi()
         self.assertFalse(casa.pubblica("mirto/prova", b"x", False))
+
+
+class HomeAssistantTrovaMirtoDaSoloTest(BancoDelBrokerVero, unittest.TestCase):
+    """Passo 6, sul banco vero: le configurazioni partono davvero e arrivano a chi ascolta.
+
+Usa lo stesso banco della classe di sopra — broker vero, `Domotica` vero, un client a parte che fa
+    la parte di Home Assistant — senza esserne erede, perché erederne vorrebbe dire rifarne anche le
+    prove. Le prove di
+    ``test_scoperta.py`` dicono **cosa** c'è dentro i messaggi; queste dicono che partono, quando
+    partono, e che quando si spegne tutto qualcuno si prende la briga di cancellarle.
+    """
+
+    PROTEZIONE = "homeassistant/binary_sensor/mirto/armed/config"
+    MOVIMENTO = "homeassistant/binary_sensor/mirto/cam1_motion/config"
+    RECINTO = "homeassistant/zzz-recinto/config"
+
+    def _recinto(self, ha) -> None:
+        """Aspetta che **non sia arrivato niente**, che è la cosa più difficile da aspettare.
+
+        Una prova che vuole dire «non ha pubblicato» e guarda subito una lista vuota non prova
+        niente: la lista è vuota anche un istante prima che arrivi il messaggio che non dovrebbe
+        esserci. Passerebbe sempre, anche sul codice rotto, ed è il genere di prova verde che fa più
+        danno di una rossa.
+
+        Allora si pubblica un messaggio nostro, sullo stesso collegamento, e si aspetta **quello**:
+        MQTT consegna in ordine su una connessione, quindi quando arriva il recinto tutto ciò che
+        fosse partito prima è già arrivato. Dopo, una lista vuota vuol dire qualcosa.
+        """
+        casa = self.dom.casa
+        self.assertIsNotNone(casa, "non c'è collegamento: il recinto non si può piantare")
+        self.assertTrue(casa.pubblica(self.RECINTO, b"x", False))
+        self.assertTrue(aspetta(lambda: any(a == self.RECINTO for a, _c, _r in list(ha))),
+                        "il recinto non è arrivato: il broker non ha consegnato niente")
+
+    def _detti(self, ha) -> list[str]:
+        return [a for a, _c, _r in list(ha) if a != self.RECINTO]
+
+    def _niente_piu_in_magazzino(self) -> None:
+        """Aspetta che il broker abbia **davvero** svuotato il magazzino dei ritenuti.
+
+        `pubblica()` torna quando ha scritto sul socket, non quando il broker ha finito di
+        obbedire. Fra le due cose una spia che si iscrive riceve ancora le configurazioni di
+        prima — e una prova che le conta giudica su quelle. Cadeva una volta su sei, con un
+        messaggio che accusava il programma di non aver cancellato quando invece aveva cancellato.
+        """
+        broker = self.finta._mio_broker                      # noqa: SLF001
+        self.assertTrue(aspetta(lambda: not broker.ritenuti_per("homeassistant/#")),
+                        f"restano ritenuti: {broker.ritenuti_per('homeassistant/#')}")
+
+    def test_chi_ascolta_la_scoperta_trova_mirto(self):
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=True))
+        self.dom.scopri([("cam1", "Ingresso")])
+        self.assertTrue(aspetta(lambda: any(a == self.MOVIMENTO for a, _c, _r in ha)),
+                        f"la camera non si è fatta trovare: {[a for a, _c, _r in ha]}")
+        self.assertTrue(any(a == self.PROTEZIONE for a, _c, _r in ha))
+
+    def test_col_racconto_spento_non_si_pubblica_niente(self):
+        """La riga che conta per la riservatezza: chi vuole solo accendere le luci non si ritrova
+        l'antifurto su una bacheca condivisa, e **nemmeno il fatto di averne uno**.
+
+        Una configurazione di scoperta è già un'informazione: dice che in quella casa c'è un Mirto,
+        quante camere ha e come si chiamano. Pubblicarla «tanto è solo la configurazione» sarebbe
+        esattamente il genere di scorciatoia che PRIVACY.md promette di non prendere.
+        """
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=False))
+        self.assertEqual(self.dom.scopri([("cam1", "Ingresso")]), 0)
+        self._recinto(ha)
+        self.assertEqual(self._detti(ha), [], "ha parlato col racconto spento")
+
+    def test_si_fa_trovare_da_se_appena_si_collega(self):
+        """Senza, bisognerebbe aggiungere una camera per comparire — e chi ne ha già due non lo fa."""
+        self.dom.scopri([("cam1", "Ingresso")])        # prima del collegamento: non parte niente
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=True))   # riapre: adesso sì, con le camere di prima
+        self.assertTrue(aspetta(lambda: any(a == self.MOVIMENTO for a, _c, _r in ha)),
+                        f"riaprendo non si è fatto trovare: {[a for a, _c, _r in ha]}")
+
+    def test_spegnendo_il_racconto_si_cancella_quello_che_si_era_detto(self):
+        """La parte che quasi nessuno fa, provata dove si vede: sul broker.
+
+        E provata **dopo un riavvio finto**, che è il caso vero: chi spegne il racconto lo fa un
+        altro giorno, con l'elenco delle camere in memoria vuoto. Se la cancellazione guardasse
+        quell'elenco invece di quello scritto in configurazione, qui resterebbe orfano il sensore
+        della camera e si cancellerebbe solo quello della protezione.
+        """
+        self.assertTrue(self._accendi(publish=True))
+        self.dom.scopri([("cam1", "Ingresso")])
+        self.assertTrue(aspetta(lambda: self.cfg.get("homeassistant.published") is True))
+        self.dom.stop()
+        self.dom._camere = []                                           # noqa: SLF001 - «è un altro giorno»
+
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=False))
+        # Si aspettano **i vuoti**, non «due messaggi». Chi si iscrive ora riceve per prima cosa i
+        # ritenuti di prima — le configurazioni che questa prova stessa ha appena pubblicato — e
+        # contandoli la prova si fermava a quelli e giudicava su quelli: cadeva una volta su sei,
+        # e cadeva dicendo il vero («nessun vuoto») con un messaggio che sembrava un difetto del
+        # programma. Il fatto da aspettare non è quanti messaggi sono arrivati: è che le
+        # cancellazioni siano arrivate.
+        def vuoti():
+            return {a for a, c, _r in list(ha) if c == b""}
+
+        self.assertTrue(aspetta(lambda: {self.PROTEZIONE, self.MOVIMENTO} <= vuoti()),
+                        f"non ha cancellato tutto: vuoti={sorted(vuoti())}, "
+                        f"arrivati={[a for a, _c, _r in list(ha)]}")
+        self.assertFalse(self.cfg.get("homeassistant.published"))
+
+    def test_non_si_cancella_due_volte(self):
+        """Riaprendo due volte col racconto spento, la seconda non deve scrivere niente.
+
+        Scrivere messaggi vuoti sul broker di chi non ha mai acceso niente non rompe nulla, ma è
+        traffico a casa d'altri senza averlo chiesto, e su un broker condiviso si nota.
+        """
+        self.assertTrue(self._accendi(publish=True))
+        self.dom.scopri([("cam1", "Ingresso")])
+        self.assertTrue(aspetta(lambda: self.cfg.get("homeassistant.published") is True))
+        self.assertTrue(self._accendi(publish=False))
+        self.assertTrue(aspetta(lambda: self.cfg.get("homeassistant.published") is False))
+        self._niente_piu_in_magazzino()
+
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=False))
+        self._recinto(ha)
+        self.assertEqual(self._detti(ha), [], "ha cancellato di nuovo a vuoto")
+
+    def test_chi_non_ha_mai_acceso_niente_non_riceve_niente(self):
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=False))
+        self._recinto(ha)
+        self.assertEqual(self._detti(ha), [])
+
+    def test_le_camere_di_adesso_si_ricordano_per_la_prossima_volta(self):
+        self.assertTrue(self._accendi(publish=True))
+        self.dom.scopri([("cam1", "Ingresso"), ("cam2", "Garage")])
+        self.assertTrue(aspetta(lambda: self.cfg.get("homeassistant.cameras")))
+        self.assertEqual([list(c) for c in self.cfg.get("homeassistant.cameras")],
+                         [["cam1", "Ingresso"], ["cam2", "Garage"]])
+
+    def test_spegnendo_tutto_il_collegamento_la_memoria_si_tiene(self):
+        """Il caso in cui **non** si può cancellare subito, e la decisione che ne segue.
+
+        Chi spegne tutta la domotica, non la sola spunta, non ha più un broker a cui dire
+        «dimenticami». Si potrebbe provare a cancellare prima di chiudere, e ci ho provato: a QoS 0
+        pubblicare e chiudere il socket un istante dopo **perde i messaggi** — misurato, sei volte su
+        otto — e intanto la memoria era già stata azzerata, quindi quel tentativo rendeva impossibile
+        anche il recupero. Un rimedio che fallisce in silenzio e brucia il piano B è peggio del
+        problema.
+
+        Allora la memoria **si tiene**, e la cancellazione avviene il giorno che Mirto si ricollega a
+        quel broker — con il racconto spento, cioè nella strada già provata qui sopra. L'unico caso
+        che resta scoperto è «spengo e non ricollego mai più», e in quel caso Mirto è uscito dalla
+        vita di chi lo usava. Sta scritto nella guida, non nascosto.
+        """
+        self.assertTrue(self._accendi(publish=True))
+        self.dom.scopri([("cam1", "Ingresso")])
+        self.assertTrue(aspetta(lambda: self.cfg.get("homeassistant.published") is True))
+
+        self.cfg.set("smarthome", {"enabled": False, "host": "127.0.0.1", "port": self.finta.porta})
+        self.assertFalse(self.dom.riapri())
+        self.assertTrue(self.cfg.get("homeassistant.published"),
+                        "ha dimenticato cosa aveva pubblicato senza averlo cancellato")
+        self.assertEqual([list(c) for c in self.cfg.get("homeassistant.cameras")],
+                         [["cam1", "Ingresso"]])
+
+        # e al ricollegamento, col racconto spento, si cancella per davvero
+        ha = self._spia("homeassistant/#")
+        self.assertTrue(self._accendi(publish=False))
+        self.assertTrue(aspetta(lambda: {self.PROTEZIONE, self.MOVIMENTO}
+                                <= {a for a, c, _r in list(ha) if c == b""}),
+                        f"al ritorno non ha cancellato: {[a for a, _c, _r in list(ha)]}")
+        self.assertFalse(self.cfg.get("homeassistant.published"))

@@ -18,10 +18,12 @@ plan; the dates are deliberately absent, because a single maintainer should not 
 
 - **Supply chain**: dependency lock files with hashes for each platform, GitHub Actions pinned to commit
   SHAs (done), SBOM attached to every release.
-- **Home Assistant**: Mirto publishing its own events and its armed/disarmed state on the broker, and
-  then announcing itself so Home Assistant finds it without anyone writing a line of YAML. The other
-  half — Mirto finding, driving and reacting to the devices already on your broker — is built and waiting
-  for the next release; see the Unreleased section of [`CHANGELOG.md`](CHANGELOG.md).
+- **Home Assistant, the last mile.** Both halves are built and waiting for the next release — Mirto
+  finding, driving and reacting to the devices on your broker, and Mirto publishing its own state and
+  announcing itself so Home Assistant finds it without anyone writing a line of YAML; see the
+  Unreleased section of [`CHANGELOG.md`](CHANGELOG.md). What is **not** done is the part no test can
+  do for us: watching a real Home Assistant, on someone else's network, actually list Mirto among its
+  devices. Until that has happened once, this stays here and not in the released column.
 - **Windows parity**: restart after a crash (today macOS has it, Windows does not), and documentation
   written for Windows paths rather than translated from macOS.
 - **Performance with many cameras**: previews resized before conversion, inference without a single global

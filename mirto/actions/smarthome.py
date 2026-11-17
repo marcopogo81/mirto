@@ -552,6 +552,10 @@ class Domotica:
         # tutte e due le cose le sa solo chi apre e chiude il collegamento.
         self.racconto = None
         self.errore = ""
+        # Le camere di adesso, come coppie `(id, nome)`. Le sa il nucleo, non questo oggetto: qui si
+        # tengono solo per poter ripubblicare la scoperta quando il collegamento torna dopo una
+        # caduta, senza dover chiedere a nessuno.
+        self._camere: list[tuple[str, str]] = []
         self._lucchetto = threading.RLock()
         self._ascoltatori: list[Callable[[Dispositivo], None]] = []
 
@@ -616,7 +620,69 @@ class Domotica:
         if self.racconto is not None:
             self.racconto.sono_qui()
             self.racconto.protezione(bool(self.config.get("actions.armed", False)))
+            # Si fa trovare da Home Assistant (passo 6). Va fatto **dopo** `sono_qui()`: le voci
+            # dicono dove si vede se Mirto c'è, e un Home Assistant che leggesse la configurazione
+            # prima dello stato mostrerebbe per un istante dei sensori «non disponibili».
+            self.scopri(self._camere)
+        else:
+            # Il racconto è spento: se avevamo pubblicato, ci si toglie di torno invece di lasciare
+            # in Home Assistant dei sensori che non parleranno mai più.
+            self._dimenticami(casa, prefisso)
         return True
+
+    def scopri(self, camere) -> int:
+        """Si fa trovare da Home Assistant per queste camere. Torna quante voci ha pubblicato.
+
+        ``camere`` sono coppie ``(id, nome)``: l'**id** fa l'identificativo univoco, che deve restare
+        uguale per sempre, e il **nome** l'etichetta. Le sa il nucleo, che chiama questo metodo
+        quando una camera arriva o se ne va.
+        """
+        from . import scoperta  # noqa: PLC0415
+
+        with self._lucchetto:
+            self._camere = [(str(a), str(b)) for a, b in (camere or [])]
+            racconto, casa, elenco = self.racconto, self.casa, list(self._camere)
+        if racconto is None or casa is None:
+            return 0
+        from .. import __version__  # noqa: PLC0415
+
+        quante = 0
+        for argomento, carico, ritenuto in scoperta.voci(
+                racconto.prefisso, elenco, __version__, racconto.istantanee):
+            quante += 1 if casa.pubblica(argomento, carico, ritenuto) else 0
+        if quante:
+            # Si segna **in configurazione, con l'elenco dentro**, e non solo in memoria. Il giorno
+            # che il racconto si spegne bisogna andare a cancellare, e a quel punto l'elenco in
+            # memoria è vuoto — perché chi spegne il racconto lo fa tipicamente dopo un riavvio.
+            # Senza l'elenco scritto resterebbero orfani i sensori delle camere e si cancellerebbe
+            # solo quello della protezione: il caso più facile, fatto peggio.
+            self.config.set("homeassistant.published", True)
+            self.config.set("homeassistant.cameras", [[a, b] for a, b in elenco])
+        return quante
+
+    def _dimenticami(self, casa, prefisso: str) -> None:
+        """Cancella le voci della scoperta, **solo se le avevamo pubblicate**.
+
+        Succede quando si spegne il racconto: senza questo, in Home Assistant resterebbero i sensori
+        di Mirto per sempre, grigi e non cancellabili dalla sua interfaccia — bisognerebbe andarli a
+        togliere dal broker con un client MQTT. Lasciare quel lavoro a qualcun altro per
+        risparmiarsi dieci righe è il genere di cosa che si giudica male, e giustamente.
+
+        Il segno in configurazione serve anche al verso opposto: non scrivere messaggi vuoti sul
+        broker di chi non ha mai acceso niente. Cancellare è gentile; scrivere a casa di chi non ha
+        chiesto niente no.
+        """
+        from . import scoperta  # noqa: PLC0415
+
+        if not self.config.get("homeassistant.published", False):
+            return
+        # Dall'elenco scritto, non da quello in memoria: vedi `scopri()`.
+        camere = [(str(c[0]), str(c[1])) for c in (self.config.get("homeassistant.cameras") or [])
+                  if isinstance(c, (list, tuple)) and len(c) >= 2]
+        for argomento, carico, ritenuto in scoperta.cancellazioni(prefisso, camere):
+            casa.pubblica(argomento, carico, ritenuto)
+        self.config.set("homeassistant.published", False)
+        self.config.set("homeassistant.cameras", [])
 
     # --- chi vuole saperlo ----------------------------------------------------
     def ascolta(self, chi: Callable[[Dispositivo], None]) -> None:

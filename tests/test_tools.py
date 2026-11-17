@@ -2075,7 +2075,12 @@ def nomi_offerti(path) -> set[str] | None:
         if isinstance(nodo, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)):
             fuori.add(nodo.name)
         elif isinstance(nodo, _ast.Assign):
-            fuori |= {t.id for t in nodo.targets if isinstance(t, _ast.Name)}
+            # Anche `ACCESO, SPENTO = b"ON", b"OFF"`: una coppia assegna **due** nomi, e guardando
+            # solo i bersagli che sono un `Name` non se ne vedeva nessuno. Il 17/11 il guardiano ha
+            # accusato `R.ACCESO` e `R.SPENTO` di non esistere mentre esistevano, riga 51 di
+            # `racconto.py` — e un guardiano che accusa il giusto si impara a zittire (cap. 37).
+            for bersaglio in nodo.targets:
+                fuori |= {n.id for n in _ast.walk(bersaglio) if isinstance(n, _ast.Name)}
         elif isinstance(nodo, _ast.AnnAssign) and isinstance(nodo.target, _ast.Name):
             fuori.add(nodo.target.id)
         elif isinstance(nodo, _ast.Import):
@@ -2529,3 +2534,145 @@ class OgniScrittaDellInterfacciaPassaDalTraduttoreTest(unittest.TestCase):
                                       f.relative_to(ROOT).as_posix())
         self.assertEqual(guai, [], "scritte che resterebbero in italiano per chiunque:\n  "
                                    + "\n  ".join(guai))
+
+
+class UnaMemoriaNonStaInUnBloccoCheQualcunoRiscriveInteroTest(unittest.TestCase):
+    """`config.set("smarthome.published", …)` dentro un blocco che la finestra salva tutto intero.
+
+    Il 17/11, finito il passo 6, Mirto si segnava in `smarthome.published_discovery` quali voci aveva
+    pubblicato a Home Assistant: serve a sapere cosa andare a cancellare il giorno che si spegne il
+    racconto. Solo che la finestra delle impostazioni salva facendo `config.set("smarthome", …)` con
+    **tutto** quello che si vede sullo schermo, e quella memoria non si vede sullo schermo: al primo
+    salvataggio Mirto si dimenticava cosa aveva pubblicato, e spegnendo il racconto lasciava in Home
+    Assistant i sensori di tutte le camere, grigi e non cancellabili dalla sua interfaccia.
+
+    Non l'ha trovato la lettura del codice: l'ha trovato una prova sul broker vero, e per caso. Da
+    qui in avanti lo trova questo.
+
+    Il controllo: se da qualche parte si scrive un blocco intero (`set("x", …)`), nessun altro posto
+    può scrivere una chiave dentro quel blocco (`set("x.y", …)`) **e aspettarsi di ritrovarla**. Le
+    due scritture sono in file diversi e nessuna delle due è sbagliata da sola, che è il motivo per
+    cui una cosa così non si vede rileggendo.
+    """
+
+    def test_nessuna_chiave_scritta_dentro_un_blocco_che_viene_riscritto_intero(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        file = [f for f in sorted((radice / "mirto").rglob("*.py")) if "__pycache__" not in str(f)]
+        interi: dict[str, list[str]] = {}       # blocco -> dove si riscrive tutto
+        pezzi: dict[str, list[str]] = {}        # blocco -> dove si scrive una chiave dentro
+
+        for f in file:
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            for n in ast.walk(albero):
+                if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                        and n.func.attr == "set" and n.args
+                        and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
+                    continue
+                chiave = n.args[0].value
+                dove = f"{f.relative_to(radice)}:{n.lineno}"
+                if "." in chiave:
+                    pezzi.setdefault(chiave.split(".")[0], []).append(f"{dove} set(\"{chiave}\")")
+                elif len(n.args) > 1:
+                    # Un blocco intero si riconosce da cosa gli si dà: un dizionario, o il valore
+                    # tornato da una funzione che raccoglie una schermata (`valori()`).
+                    valore = n.args[1]
+                    intero = isinstance(valore, ast.Dict) or (
+                        isinstance(valore, ast.Call) and isinstance(valore.func, ast.Attribute)
+                        and valore.func.attr in ("valori", "values", "dati"))
+                    # Ma `{**(cfg.get("audio") or {}), "mac_mic": …}` **fonde**: riparte da quello che
+                    # c'è scritto e ci cambia dentro, quindi non perde niente di quello che non si
+                    # vede sullo schermo. È la differenza fra riscrivere e aggiornare, e il
+                    # guardiano senza questa distinzione accusava una riga sana — la prima che ha
+                    # guardato. Un guardiano che grida al lupo si impara a zittire, ed è peggio di
+                    # non averlo.
+                    if intero and isinstance(valore, ast.Dict) and any(
+                            k is None and chiave in ast.dump(v) for k, v in
+                            zip(valore.keys, valore.values)):
+                        intero = False
+                    if intero:
+                        interi.setdefault(chiave, []).append(f"{dove} set(\"{chiave}\", …tutto…)")
+
+        guai = []
+        for blocco, dentro in sorted(pezzi.items()):
+            if blocco in interi:
+                guai.append(f"«{blocco}» si riscrive intero in {', '.join(sorted(set(interi[blocco])))}"
+                            f" ma qualcuno ci scrive dentro: {', '.join(sorted(set(dentro)))}")
+        self.assertEqual(guai, [], "memoria che un salvataggio cancella:\n  " + "\n  ".join(guai))
+
+
+class UnAiutoImportatoNonSiChiamaTestQualcosaTest(unittest.TestCase):
+    """`from ..racconto import testamento` in cima a un file di prove.
+
+    `pytest` raccoglie come prova **qualunque** cosa al livello del modulo il cui nome inizia per
+    `test`, importata compresa. Dal 15/11 `testamento()` girava come prova a ogni corsa: non provava
+    niente, e `pytest` lo diceva — con un avviso, in mezzo agli altri, che ho letto per due giorni
+    senza vederlo.
+
+    È il difetto meno grave di tutta la suite e vale la pena averlo scritto per un motivo diverso:
+    **un avviso che si ignora per un giorno è un avviso che non serve a niente**. L'unico modo di
+    fare qualcosa di un avviso è renderlo una prova rossa. Costa cinque righe.
+    """
+
+    def test_nessun_aiuto_importato_si_chiama_come_una_prova(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        guai = []
+        for f in sorted((radice / "tests").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            for n in albero.body:                       # solo il livello del modulo: lì raccoglie
+                if not isinstance(n, (ast.Import, ast.ImportFrom)):
+                    continue
+                for a in n.names:
+                    nome = a.asname or a.name.split(".")[-1]
+                    if nome.startswith("test"):
+                        guai.append(f"{f.relative_to(radice)}:{n.lineno} «{nome}» importato qui "
+                                    f"pytest lo raccoglie come prova (dagli un altro nome con «as»)")
+        self.assertEqual(guai, [], "aiuti che pytest conta come prove:\n  " + "\n  ".join(guai))
+
+
+class UnaProvaScrittaDeveAncheGirareTest(unittest.TestCase):
+    """Tre prove finite **dentro** `if __name__ == "__main__":`, dopo `unittest.main()`.
+
+    Il 17/11, spostando tre prove dentro la classe che aveva il banco, il mio script le ha appese in
+    fondo al file — cioè dentro il blocco finale, dove sono indentate bene, compilano, si leggono
+    come prove e **non girano mai**. `grep -c "def test_"` ne contava trenta, `unittest` ventisette.
+
+    La cosa peggiore non è l'errore: è che il segnale l'avevo davanti. `pytest` ha stampato 27
+    subito dopo lo spostamento e me lo sono spiegato come «numero vecchio» invece di guardarlo. Una
+    prova che non gira è peggio di una prova che non c'è: la seconda si vede mancare, la prima dice
+    di sì a una domanda che nessuno ha fatto.
+
+    Il controllo: ogni `def test_…` in `tests/` deve essere membro diretto di una classe che
+    `unittest` raccoglie. Non dentro un `if`, non dentro un'altra funzione, non al livello del
+    modulo — dove `unittest` non la vedrebbe comunque, mentre `pytest` sì, e la differenza fra i due
+    è un altro modo di avere una prova che gira in un posto solo.
+    """
+
+    def test_ogni_prova_sta_dentro_una_classe_che_unittest_raccoglie(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        guai = []
+        for f in sorted((radice / "tests").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            dentro_le_classi = set()
+            for c in ast.walk(albero):
+                if isinstance(c, ast.ClassDef):
+                    dentro_le_classi |= {id(m) for m in c.body
+                                         if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            for n in ast.walk(albero):
+                if (isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and n.name.startswith("test") and id(n) not in dentro_le_classi):
+                    guai.append(f"{f.relative_to(radice)}:{n.lineno} «{n.name}» non è dentro "
+                                f"nessuna classe: scritta, letta, e mai eseguita")
+        self.assertEqual(guai, [], "prove che non girano:\n  " + "\n  ".join(guai))

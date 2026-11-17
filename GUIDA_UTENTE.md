@@ -747,10 +747,49 @@ Tre cose che vale la pena sapere:
   stesso argomento e si sovrascriverebbero a vicenda. Mirto te lo dice nella scheda invece di
   inventarsi un nome diverso: un argomento che Mirto cambia da sé è un argomento che poi non trovi.
 
-Per adesso Mirto **non si annuncia** da solo: in Home Assistant i sensori li aggiungi tu, una volta,
-con gli argomenti della tabella. Farsi trovare senza scrivere niente è il passo dopo.
+Gli argomenti della tabella ti servono solo se vuoi usarli a mano, con qualcosa che non è Home
+Assistant. Con Home Assistant non devi scrivere niente: vedi il capitolo che segue.
 
-### 13.6 Se non hai un impianto
+### 13.6 Home Assistant lo trova da solo
+
+Accesa quella spunta, in Home Assistant **non devi configurare niente**. Mirto si annuncia, e dopo
+qualche secondo lo trovi in *Impostazioni → Dispositivi e servizi → MQTT* come un dispositivo che si
+chiama «Mirto», con dentro:
+
+| Entità | Cos'è |
+|---|---|
+| **Protezione** | acceso quando la casa è inserita |
+| **\<camera\> · movimento** | un sensore di movimento per ogni camera |
+| **\<camera\>** | la foto della camera, **solo** se hai acceso anche le istantanee |
+
+Da lì valgono come qualunque altro sensore: ci puoi fare le automazioni di Home Assistant, metterli
+in una dashboard, o farci suonare qualcosa quando la casa è inserita e il garage vede qualcuno.
+
+Quattro cose che vale la pena sapere:
+
+- **se aggiungi o togli una camera**, Mirto rifà l'annuncio da sé: la camera nuova compare in Home
+  Assistant senza che tu tocchi niente.
+- **rinominare una camera cambia l'etichetta e non crea un doppione.** Mirto riconosce le sue
+  camere da un codice che non cambia mai, non dal nome: in Home Assistant vedi il nome nuovo sullo
+  stesso sensore, con la sua storia dietro.
+- **se Mirto è spento, Home Assistant lo dice.** I suoi sensori diventano «non disponibili» invece
+  di restare sull'ultimo valore: un pannello che dice «casa protetta» di un Mirto fermo da due
+  giorni sarebbe una bugia, e sarebbe credibile.
+- **spegnendo la spunta, Mirto si cancella.** I suoi sensori spariscono da Home Assistant invece di
+  restare lì grigi per sempre — perché quelli, una volta rimasti, si tolgono solo frugando nel
+  broker con un programma a riga di comando.
+  Se invece spegni **tutto il collegamento** alla domotica, Mirto non ha più nessun broker a cui
+  dirlo: i suoi sensori restano in Home Assistant, e spariscono il giorno che Mirto si ricollega a
+  quel broker. Se vuoi che spariscano subito, togli prima la spunta e poi, se vuoi, il collegamento.
+
+Se usi Mirto in inglese, le etichette sono in inglese. Se cambi lingua, cambiano al riavvio di
+Mirto; i sensori restano gli stessi, con la loro storia.
+
+> Il prefisso su cui Home Assistant ascolta è `homeassistant`, che è quello di serie. Se nel tuo
+> Home Assistant l'hai cambiato, Mirto per ora non compare: scrivilo come richiesta e lo rendiamo
+> configurabile.
+
+### 13.7 Se non hai un impianto
 
 Ce n'è uno finto, con la sua finestra, fatto apposta per provare: `python -m mirto
 --simulatore-smarthome`. Apre un broker su `127.0.0.1:1883` con dentro cinque dispositivi di tre

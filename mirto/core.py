@@ -180,6 +180,7 @@ class MirtoCore:
     # --- sorgenti → analisi -----------------------------------------------
     def _source_added(self, source: CameraSource) -> None:
         self.recording.poke()
+        self._rifa_la_scoperta()
         with self._lock:
             if self.detector is None:
                 self._waiting[source.info.id] = source
@@ -207,6 +208,7 @@ class MirtoCore:
 
     def _source_removed(self, cam_id: str) -> None:
         self.recording.poke()
+        self._rifa_la_scoperta()
         with self._lock:
             self._waiting.pop(cam_id, None)
             pipe = self.pipelines.pop(cam_id, None)
@@ -720,7 +722,7 @@ class MirtoCore:
         self.scheduler.start()
         self.presence.start()
         self.domotica.start()
-        # Gli eventi passano anche sul broker, se il racconto è accesso (passo 5). Si attacca qui,
+        # Gli eventi passano anche sul broker, se il racconto è acceso (passo 5). Si attacca qui,
         # al nucleo, perché è l'unico posto che conosce tutti e due: il dispatcher non sa cos'è un
         # broker e la domotica non sa cos'è un evento, e va bene che resti così.
         self.notifier.anche.append(self._racconta_evento)
@@ -733,8 +735,25 @@ class MirtoCore:
             prevent_sleep(True)
         log.info("Mirto avviato")
 
+    def _rifa_la_scoperta(self) -> None:
+        """Dice alla domotica quali camere ci sono, così Home Assistant le trova (passo 6).
+
+        Si chiama quando una camera appare o sparisce, che è l'unico momento in cui l'elenco cambia:
+        agganciarsi qui invece di ripassare ogni tanto vuol dire che una camera attaccata adesso
+        compare in Home Assistant adesso, e non al prossimo riavvio di Mirto.
+
+        Chi sa quali camere ci sono è **questo** oggetto; la domotica sa come dirlo. Per questo
+        l'elenco si passa invece di farglielo cercare: il giorno che le camere si contano in un altro
+        modo, la domotica non ha niente da cambiare.
+        """
+        try:
+            camere = [(cam_id, src.info.name) for cam_id, src in self.cameras.sources.items()]
+            self.domotica.scopri(sorted(camere))
+        except Exception:  # noqa: BLE001 - una camera che appare non deve poter portare via il resto
+            log.exception("domotica: non ho potuto rifare la scoperta")
+
     def _racconta_evento(self, ev) -> None:
-        """Un evento sul broker, se il racconto è accesso. Non solleva: lo tiene il dispatcher.
+        """Un evento sul broker, se il racconto è acceso. Non solleva: lo tiene il dispatcher.
 
         Tre messaggi, in quest'ordine, e l'ordine conta: prima la camera «sta vedendo qualcosa»,
         poi l'evento, poi — solo se le istantanee sono accese — il fotogramma. Chi scrive

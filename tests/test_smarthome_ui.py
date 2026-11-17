@@ -476,6 +476,42 @@ class LaSchedaTest(unittest.TestCase):
         self.assertIn("primary_button", chiamate)
         self.assertIn("CardList", chiamate)
 
+    # --- la nota della scoperta (passo 6) ---------------------------------
+    # Il programma faceva la cosa più bella del passo 6 — Home Assistant che lo trova da solo
+    # — e non lo diceva da nessuna parte tranne il suggerimento che compare passando sopra la
+    # spunta, che è il posto che si legge meno di tutti. Chi la accende non sa cosa aspettarsi,
+    # va a cercare i sensori a mano, e fa esattamente il lavoro che quel codice esiste per
+    # togliergli. Non è un difetto che una prova può scoprire: si vede solo aprendo la finestra.
+    def test_a_racconto_spento_non_promette_niente(self):
+        self.scheda.racconta.setChecked(False)
+        self.assertFalse(self.scheda.nota_scoperta.isVisibleTo(self.scheda),
+                         "promette Home Assistant a chi non ha acceso il racconto")
+
+    def test_accendendo_lo_dice(self):
+        self.scheda.racconta.setChecked(True)
+        self.assertTrue(self.scheda.nota_scoperta.isVisibleTo(self.scheda),
+                        "accende il racconto e non dice cosa succederà")
+        self.assertIn("Home Assistant", self.scheda.nota_scoperta.text())
+
+    def test_la_nota_passa_dal_traduttore(self):
+        """Una riga scritta a mano in italiano, qui, la vedrebbe anche chi usa Mirto in inglese."""
+        from mirto.i18n import set_language
+
+        self.addCleanup(set_language, "it")
+        self.scheda.racconta.setChecked(True)
+        it = self.scheda.nota_scoperta.text()
+        set_language("en")
+        from mirto.gui.smarthome_ui import SchedaSmartHome
+        from PySide6.QtWidgets import QLineEdit
+
+        altra = SchedaSmartHome(self.cfg, self.segreti, QLineEdit())
+        self.addCleanup(altra.stacca)
+        self.addCleanup(lambda: altra.domotica.stop())
+        self.addCleanup(altra.deleteLater)
+        altra.racconta.setChecked(True)
+        self.assertNotEqual(altra.nota_scoperta.text(), it, "la nota è in italiano anche in inglese")
+        self.assertIn("Home Assistant", altra.nota_scoperta.text())
+
 
 if __name__ == "__main__":
     unittest.main()
