@@ -161,8 +161,15 @@ def guide_link(heading: str, parent_dialog=None) -> QLabel:
     return link
 
 
-def help_box(steps: list[str], heading: str, parent_dialog=None, title: str | None = None) -> QFrame:
-    """Riquadro con i passi essenziali (uno per riga, numerati) e il link alla guida completa."""
+def help_box(steps: list[str], heading: str, parent_dialog=None, title: str | None = None,
+             piccolo: bool = False) -> QFrame:
+    """Riquadro con i passi essenziali (uno per riga, numerati) e il link alla guida completa.
+
+    ``piccolo`` rimpicciolisce il testo di un paio di punti: serve nelle schede dove sotto c'è un
+    elenco che deve respirare, e l'aiuto — che si legge una volta — si stava prendendo lo spazio di
+    quello che si guarda ogni giorno (SmartHome, 14/11).
+    """
+    corpo = T.SIZE_SMALL - 1 if piccolo else T.SIZE_BODY
     box = QFrame()
     box.setObjectName("helpBox")
     box.setStyleSheet(f"#helpBox {{ background:#1E2938; border:1px solid {T.LINE}; "
@@ -171,7 +178,8 @@ def help_box(steps: list[str], heading: str, parent_dialog=None, title: str | No
     lay.setContentsMargins(14, 10, 14, 10)
     lay.setSpacing(6)
     head = QLabel(title or _('Come fare'))
-    head.setStyleSheet(f"font-weight:700; color:{T.TEXT}; background:transparent; border:none;")
+    head.setStyleSheet(f"font-weight:700; color:{T.TEXT}; background:transparent; border:none; "
+                       f"font-size:{corpo + 1}px;")
     lay.addWidget(head)
     for i, step in enumerate(steps, 1):
         row = QHBoxLayout()
@@ -179,11 +187,12 @@ def help_box(steps: list[str], heading: str, parent_dialog=None, title: str | No
         num = QLabel(f"{i}.")
         num.setFixedWidth(18)
         num.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        num.setStyleSheet(f"color:{T.INFO}; font-weight:700; background:transparent; border:none;")
+        num.setStyleSheet(f"color:{T.INFO}; font-weight:700; background:transparent; border:none; "
+                          f"font-size:{corpo}px;")
         text = QLabel(step)
         text.setWordWrap(True)
         text.setTextFormat(Qt.TextFormat.RichText)
-        text.setStyleSheet(f"color:{T.TEXT}; background:transparent; border:none;")
+        text.setStyleSheet(f"color:{T.TEXT}; background:transparent; border:none; font-size:{corpo}px;")
         row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
         row.addWidget(text, 1)
         lay.addLayout(row)

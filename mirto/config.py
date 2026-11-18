@@ -99,6 +99,44 @@ DEFAULTS: dict[str, Any] = {
         "disarm_on_arrival": True,     # la disattiva quando rientra qualcuno
         "interval_seconds": 60,        # ogni quanto controllare
     },
+    "smarthome": {
+        "enabled": False,              # la domotica di casa, vista attraverso un broker MQTT
+        "host": "",                    # indirizzo del broker (cercato in rete o scritto a mano)
+        "port": 1883,
+        "username": "",                # la password sta nel portachiavi, mai qui
+        "tls": False,
+        # I dispositivi presi a orecchio: quelli che non si annunciano e non parlano nessuna lingua
+        # nota. Gli altri non si ricordano, perché si rifanno vedere da soli a ogni avvio.
+        "adopted": [],                 # [{topic, name, command_topic}]
+        # Mirto che **si racconta** sul broker: eventi, protezione, stato per camera (passo 5).
+        # Spento, e non per prudenza generica: `PRIVACY.md` il 17/11 ha scritto, in due lingue, che
+        # se una versione futura avesse pubblicato qualcosa di suo sarebbe stato spento finché non lo
+        # accendi tu. Questa riga è quella promessa.
+        "publish": False,
+        # Le istantanee sono un **secondo** interruttore, anche lui spento: un JPEG su
+        # `mirto/<camera>/snapshot` è un fotogramma di casa su una bacheca condivisa, e lo vede
+        # qualunque cosa sia attaccata al broker. Chi accende «raccontami» non ha chiesto questo.
+        "publish_snapshots": False,
+        "prefix": "mirto",             # su un broker di casa può esserci già qualcosa che si chiama così
+        # Per quanto una camera resta «sta vedendo qualcosa» dopo un evento. Uno stato ritenuto non
+        # si spegne da sé: a zero resta accesa finché non arriva altro, ed è una scelta, non un
+        # difetto — ma non è quella di serie, perché mentirebbe tutta la notte.
+        "camera_state_seconds": 30,
+    },
+    # Cosa abbiamo già detto a Home Assistant. **Non sono preferenze: sono memoria**, e servono a
+    # sapere cosa andare a cancellare il giorno che si spegne il racconto — senza, resterebbero
+    # sensori orfani in Home Assistant, grigi e non cancellabili dalla sua interfaccia.
+    #
+    # Sta in un blocco **suo** e non dentro `smarthome`, e non è un vezzo: la finestra delle
+    # impostazioni salva scrivendo `smarthome` **tutto intero** da quello che si vede sullo schermo
+    # (tre punti lo fanno), e quello che non si vede sullo schermo non ci sopravvive. Tenendo la
+    # memoria là dentro, salvare le impostazioni la cancellava: al primo salvataggio Mirto si
+    # dimenticava cosa aveva pubblicato, e spegnendo il racconto lasciava indietro i sensori di tutte
+    # le camere. Trovato il 17/11 da una prova sul broker vero, non dalla lettura del codice.
+    "homeassistant": {
+        "published": False,
+        "cameras": [],                 # [[id, nome], …] come erano quando le abbiamo pubblicate
+    },
     "notifications": {
         "cooldown_seconds": 120,       # pausa minima tra due avvisi della stessa camera
         "telegram": {

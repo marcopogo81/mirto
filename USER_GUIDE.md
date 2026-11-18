@@ -27,11 +27,11 @@ Images and recordings stay on the computer: only the photos and clips of the ale
 - [10. Schedule](#10-schedule)
 - [11. Presence](#11-presence)
 - [12. Nodes](#12-nodes)
-- [13. Actions](#13-actions)
-- [14. General settings and continuous operation](#14-general-settings-and-continuous-operation)
-- [15. Tests and diagnostics](#15-tests-and-diagnostics)
-- [16. Troubleshooting](#16-troubleshooting)
-- [17. Security, privacy and terms of use](#17-security-privacy-and-terms-of-use)
+- [14. Actions](#14-actions)
+- [15. General settings and continuous operation](#15-general-settings-and-continuous-operation)
+- [16. Tests and diagnostics](#16-tests-and-diagnostics)
+- [17. Troubleshooting](#17-troubleshooting)
+- [18. Security, privacy and terms of use](#18-security-privacy-and-terms-of-use)
 - Appendices: [A. Telegram commands](#appendix-a-telegram-commands) ·
 [B. Installing from source and command line](#appendix-b-installing-from-source-and-command-line) ·
 [C. Node commands](#appendix-c-node-commands) ·
@@ -96,7 +96,7 @@ To install from source with Python see [Appendix B](#appendix-b-installing-from-
 | `~/Library/Application Support/Mirto/` | `%LOCALAPPDATA%\Mirto\`, i.e. `C:\Users\<user>\AppData\Local\Mirto\` |
 | Recognition on the Apple Neural Engine (CoreML) or CPU | Recognition on the **GPU (DirectML)** or CPU: the *System* column says which |
 | Icon in the menu bar, at the top | Icon in the **notification area**, bottom right |
-| After a crash Mirto restarts by itself | After a crash it has to be reopened by hand (see [14](#14-general-settings-and-continuous-operation)) |
+| After a crash Mirto restarts by itself | After a crash it has to be reopened by hand (see [14](#15-general-settings-and-continuous-operation)) |
 | ⌘Q to quit, ⌘, for Settings | **Ctrl+Q** to quit, **Ctrl+,** for Settings |
 
 Installing from source on Windows is described in [Appendix B](#appendix-b-installing-from-source-and-command-line).
@@ -107,11 +107,11 @@ Installing from source on Windows is described in [Appendix B](#appendix-b-insta
 
 1. **Terms of use.** Read them, tick **I have read and accept the terms of use** and press **I accept**.
    Without accepting them Mirto closes. They remain available in **Help → Terms of use** (see
-   [17](#17-security-privacy-and-terms-of-use)).
+   [17](#18-security-privacy-and-terms-of-use)).
 2. **Usage statistics.** Mirto asks **"Will you help improve Mirto?"**. The default answer is **No, thanks**;
    with **Yes, send usage statistics** a short anonymous message is sent once a day. **Show what is sent**
    displays the exact message. You can change your choice in
-   [Settings → General](#14-general-settings-and-continuous-operation).
+   [Settings → General](#15-general-settings-and-continuous-operation).
 3. **Camera permission.** The system asks for access to the **Camera**: answer **Allow**. On macOS the
    permission is managed in *System Settings → Privacy & Security → Camera*.
 4. **Services start.** In the *System* column the rows go from amber ("connecting…", "loading…") to green
@@ -121,7 +121,7 @@ Installing from source on Windows is described in [Appendix B](#appendix-b-insta
    [7.1](#71-telegram)).
 
 > **Black picture?** Quit Mirto completely (⌘Q / Ctrl+Q) and open it again: the first time, while the system
-> asks for permission, the camera may not switch on. If the problem persists see [16](#16-troubleshooting).
+> asks for permission, the camera may not switch on. If the problem persists see [16](#17-troubleshooting).
 
 ---
 ## 4. The main window
@@ -178,7 +178,7 @@ Events older than the retention period (30 days by default) are deleted automati
 | Menu | Items |
 |---|---|
 | **Mirto** | **Settings…** (⌘, / Ctrl+,), **Close window (keeps running in background)** (⌘W / Ctrl+W), **Quit Mirto** (⌘Q / Ctrl+Q) |
-| **Tests** | The tests in [15](#15-tests-and-diagnostics) |
+| **Tests** | The tests in [15](#16-tests-and-diagnostics) |
 | **Help** | **Telegram commands**, **User guide**, **Open logs folder**, **Support Mirto**, **Terms of use**, **About Mirto** |
 
 Confirmations of important operations (quitting, Stop all, clearing events, switching off the only camera)
@@ -381,7 +381,7 @@ Behaviour by category:
 
 **Tuning the person threshold.** After a few days of use: if you find events without people (curtains, shadows,
 animals) raise it by 0.05 at a time; if a person is not reported lower it by 0.05 and check there is enough
-light. The thresholds in this tab are the defaults: an action can use its own (see [13](#13-actions)).
+light. The thresholds in this tab are the defaults: an action can use its own (see [13](#14-actions)).
 
 ### 8.2 Microphones: sounds
 
@@ -411,7 +411,7 @@ The alert arrives like the camera alerts (e.g. "🪟 Sound: Glass breaking") wit
 camera. Each sound has a 2-minute pause per microphone. While a node is playing (siren, deterrent) and for the
 10 seconds after, sounds are ignored, except the smoke alarm. **Mute** and **Paused** also apply to sounds. To make
 a node **react** to a sound (e.g. glass breaking → siren) add the sound to the targets of an action (see
-[13](#13-actions)).
+[13](#14-actions)).
 
 > Listening is neither recorded nor sent: the audio stays in memory for a few seconds, just long enough to
 > recognise the sound. The exception is recording a node's audio, which must be turned on explicitly (see
@@ -566,7 +566,7 @@ Connect the camera to the **CAMERA** socket with the Raspberry Pi switched off.
 3. Enter the **6-digit PIN** and choose the node's **name** (e.g. *Garage*): it is the name shown in Mirto and in
    alerts. The network name stays `mirto-node-XXXX.local`.
 4. Press **Pair**. The node's cameras appear within a few seconds; Mirto then offers to create the actions (see
-   [13](#13-actions)).
+   [13](#14-actions)).
 5. **If the node is on the network cable, Mirto asks whether to put it on Wi-Fi now** and opens the step
    described in [12.4](#124-the-nodes-table). Say yes: once the node is on a pole the cable comes out, and a
    node that has never seen your Wi-Fi disappears the moment you unplug it — and to configure Wi-Fi you have
@@ -598,7 +598,7 @@ responding), **Rename the node** and **Remove**. Selecting a node opens three su
 | **Audio** | **The node's default output** with **Test sound**; **Jack**, **Bluetooth** (**Find speakers…**, **Pair**, **Forget**), **USB** and **Microphone** tabs (**Use this microphone**, **Mirto listens to this microphone**, live level); volume and gain apply immediately |
 | **Camera** | **Camera on**, **It is the NoIR model** (only with infrared illuminators), **Resolution** (1280×720 is enough to recognise a person, 1920×1080 to read a face or a number plate) |
 | **Disk** | **Scan for disks…** lists the SSDs and USB sticks connected to the node; **Record here** uses a disk that is already prepared, **Prepare the disk…** formats it (erases everything: confirm by retyping the device name). Sets ring-buffer recording, maximum space, space to keep free and **Also record the node's microphone** |
-| **Prank mode** | Turns on for 10, 30, 60 or 120 minutes the mode that removes the hourly budget of the deterrents (see [13](#13-actions)); **Switch off now** ends it |
+| **Prank mode** | Turns on for 10, 30, 60 or 120 minutes the mode that removes the hourly budget of the deterrents (see [13](#14-actions)); **Switch off now** ends it |
 | **Status & diagnosis** | What is wrong and how to fix it, then version, addresses, temperature, recording, siren and pairings. **Read again**, **Update the node**, **Copy for support** (text without passwords or PIN) |
 | **Wi-Fi** | **Scan for networks…** shows the networks the node sees, with signal strength; type the password or use **Take it from this computer** (from the Keychain or the Windows Wi-Fi profiles, as administrator), then **Connect**. The node stays on the cable until Wi-Fi works |
 
@@ -631,7 +631,163 @@ package over the encrypted pairing channel; the node installs it and restarts (a
 does not respond). Configuration, keys, pairings and recordings are kept.
 
 ---
-## 13. Actions
+## 13. SmartHome: your home's lights, plugs and sensors
+
+If your home has smart devices that talk to an **MQTT broker** — Home Assistant has one, and it is
+what Zigbee2MQTT, ESPHome and Tasmota use — Mirto can see them and switch them. It isn't another app
+to configure: it's the same deal as with nodes, which is that **you declare nothing, you recognise**.
+
+### 13.1 Connecting
+
+*Settings → SmartHome.* Type the broker's address (for example `192.168.1.10`), the port if it isn't
+the usual one, and a user and password if the broker asks for them, then press **Connect and look**.
+The password goes into the system keychain, never into a file.
+
+Mirto **connects out** to the broker, as it does with Telegram: it opens no port on your network.
+
+### 13.2 The devices show up on their own
+
+The list appears below, with name, brand and **the state right now**, which moves as you watch. You
+don't type any "topic": Mirto finds them in three ways, in this order.
+
+1. **Those that announce themselves.** Many devices publish an identity card of their own saying what
+   they are called and where they listen for commands. Mirto reads it. ESPHome works this way.
+2. **Those that speak their brand's language.** Zigbee2MQTT usually doesn't announce itself, but it
+   always publishes the list of its devices: Mirto recognises it and takes them from there.
+3. **Those that do neither.** Press **Listen to everything to find the rest**: Mirto listens to what
+   goes past and shows you who is talking. Switch the device on and off at its own switch to make it
+   speak, then press **Give it a name**. These stay marked "caught by ear", because what Mirto knows
+   about them is a guess, not a declaration.
+
+Next to each device there's **Turn on** or **Turn off**. Sensors say "watch only": a motion sensor
+isn't something you switch on.
+
+### 13.3 What it's for
+
+Once connected, the devices appear in **Actions** both ways round: as *triggers* ("the stairs light
+comes on → play the welcome music from the node's speaker") and as *outputs* ("the camera recognises
+the dog → turn on the stairs light"). It's the thing no other video-surveillance program does,
+because none of the others has both the cameras and the outputs.
+
+A home light goes into a chain exactly like a node's relay: pick the device, then **Turn on** or
+**Turn off**, and how long it should stay on. When the chain is over, Mirto turns it off.
+
+And the other way round: make a home device the **first block** of an action and choose whether to
+listen for it coming **on**, going **off**, or both. The chain then runs just as it does from a
+camera — *the stairs light comes on, and the node's speaker says hello*. Pick no device and it
+listens to all of them.
+
+Two things Mirto does **not** treat as a change, and they're the ones that spare you the surprises:
+
+- **when it connects to the broker**, the devices all tell it how they are. Learning that a light is
+  on isn't "the light came on", so starting Mirto in the evening with a light on sets nothing off;
+- **changes it made itself.** If an action turns a light on, that doesn't restart an action listening
+  to the same light, and neither does the automatic switch-off afterwards. Without this rule two
+  actions would chase each other all night.
+
+An action triggered by a light bulb goes through the same limits as one triggered by a camera: **When
+it's active** (only when the house is armed, or always), the hours, the pause between two shots, the
+daily cap and **Stop everything**. There's no back door.
+
+### 13.4 Two things to know, because a light bulb is not a node
+
+These aren't details: they change what happens in your home, and we'd rather write them down than
+let you find them out.
+
+**Mirto keeps the time, not the bulb.** Mirto tells a node "switch on for thirty seconds" and the
+node keeps the count itself: even if Mirto closes, the siren falls silent on its own. A smart bulb has
+no such contract — you tell it "on", and it stays on. So the switching off is Mirto's job, at the
+right moment and also when you press **Stop everything**. But if the computer is cut off, or Mirto is
+killed while a light is on, **that light stays on**: it's a limit of smart homes, and the remedy is
+its own switch.
+
+**The siren's limits don't apply to a smart plug.** A node declares what is wired to its terminals,
+and the caps come from that — a siren three minutes at a time, three every half hour. A smart plug
+declares nothing, and nobody can know what you've plugged into it. If you plug in a siren, that siren
+**has no budget**: it will sound for as long as the action says. For a real siren use a node's output,
+where the limits exist and are enforced twice.
+
+### 13.5 Making Mirto show up in Home Assistant
+
+So far Mirto has read your home and driven it. This is the other direction: **Mirto telling the world
+what is happening**, so that Home Assistant — or anything else attached to the broker — knows.
+
+You turn it on with the **"Publish what happens on the broker"** tick box at the bottom of the
+SmartHome tab. It is off by default, and not by accident: whatever Mirto publishes is readable by
+**everything** attached to that broker, and who is attached is decided by the broker, not by Mirto.
+
+Once it is on, Mirto publishes under a branch of its own:
+
+| Topic | What it says |
+|---|---|
+| `mirto/status` | `online` while it is running. If Mirto dies badly, the broker — not Mirto — sets it to `offline` |
+| `mirto/armed` | `ON` or `OFF`: armed or disarmed |
+| `mirto/event` | an event: which camera, what it recognised, how confident, when |
+| `mirto/<camera>/event` | the same event, but only for that camera |
+| `mirto/<camera>/state` | `ON` while that camera is seeing something, then back to `OFF` |
+
+Three things worth knowing:
+
+- **with the house disarmed it publishes no events**, just as it sends no alerts. The armed state it
+  always publishes: saying "I am disarmed" is precisely its job.
+- **photos are a separate tick box**, also off. Each camera's latest photo on
+  `mirto/<camera>/snapshot` is a frame of your home on a shared board: anything attached to it can
+  see that, including a plug with badly written firmware. Turn it on only if you know what else uses
+  that broker.
+- **if two cameras have names that are too alike** — "Cam#2" and "Cam 2" — they would end up on the
+  same topic and overwrite each other. Mirto tells you so in the tab rather than inventing a
+  different name: a topic Mirto changes by itself is a topic you will not find later.
+
+You only need the topics in the table if you want to use them by hand, with something that isn't
+Home Assistant. With Home Assistant you don't have to write anything: see the next section.
+
+### 13.6 Home Assistant finds it on its own
+
+With that box ticked, there is **nothing to configure** in Home Assistant. Mirto announces itself,
+and after a few seconds you'll find it under *Settings → Devices & services → MQTT* as a device
+called "Mirto", holding:
+
+| Entity | What it is |
+|---|---|
+| **Armed** | on when the house is armed |
+| **\<camera\> · motion** | a motion sensor for each camera |
+| **\<camera\>** | that camera's picture, **only** if you also turned snapshots on |
+
+From there they behave like any other sensor: you can build Home Assistant automations on them, put
+them on a dashboard, or have something chime when the house is armed and the garage sees someone.
+
+Four things worth knowing:
+
+- **if you add or remove a camera**, Mirto re-announces itself: the new camera shows up in Home
+  Assistant without you touching anything.
+- **renaming a camera changes the label and does not create a duplicate.** Mirto knows its cameras
+  by a code that never changes, not by their name: in Home Assistant you see the new name on the
+  same sensor, with its history behind it.
+- **if Mirto is off, Home Assistant says so.** Its sensors go "unavailable" rather than sitting on
+  their last value: a panel claiming "house armed" for a Mirto that stopped two days ago would be a
+  lie, and a believable one.
+- **unticking the box removes Mirto.** Its sensors disappear from Home Assistant instead of sitting
+  there greyed out forever — because once they're left behind, the only way out is digging through
+  the broker with a command-line tool.
+  If instead you turn the whole smart-home connection off, Mirto has no broker left to say it to:
+  its sensors stay in Home Assistant and go away the day Mirto reconnects to that broker. To have
+  them go now, untick the box first and the connection after.
+
+If you use Mirto in English, the labels are in English. If you switch languages they follow on
+Mirto's next start; the sensors stay the same ones, with their history.
+
+> The prefix Home Assistant listens on is `homeassistant`, which is the default. If you changed it
+> in your Home Assistant, Mirto won't show up for now: file it as a request and we'll make it
+> configurable.
+
+### 13.7 If you don't have a smart home
+
+There's a fake one, with a window of its own, built for trying this out: `python -m mirto
+--smarthome-simulator`. It opens a broker on `127.0.0.1:1883` holding five devices of three different
+brands, including the awkward kind you can only catch by ear. Type that address here and watch them
+appear.
+
+## 14. Actions
 
 An **action** is what Mirto has the nodes do when it recognises something: sound the siren, switch on a light,
 play a call against birds. Actions are managed in **Settings → Actions** and can involve several nodes (for
@@ -706,7 +862,7 @@ also be switched on or off with a click on its row.
 
 ---
 
-## 14. General settings and continuous operation
+## 15. General settings and continuous operation
 
 **Settings → General**:
 
@@ -737,7 +893,7 @@ New settings apply as soon as you press **Save**. Model and thresholds are in **
 
 ---
 
-## 15. Tests and diagnostics
+## 16. Tests and diagnostics
 
 The tests are in **Settings → Tests** and in the **Tests** menu:
 
@@ -758,7 +914,7 @@ Diagnostic tools:
   addresses, recipients or tokens (see [Appendix B](#appendix-b-installing-from-source-and-command-line)).
 
 ---
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### Cameras and recognition
 
@@ -809,7 +965,7 @@ The detailed log opens from **Help → Open logs folder**.
 
 ---
 
-## 17. Security, privacy and terms of use
+## 18. Security, privacy and terms of use
 
 ### Security
 
@@ -825,7 +981,7 @@ The detailed log opens from **Help → Open logs folder**.
 - Image and sound recognition runs on the computer. Images leave it only as alert photos and clips; the audio
   being listened to is neither saved nor sent.
 - Presence reads only the addresses of the devices on the local network; no data leaves the computer.
-- Usage statistics are optional and anonymous (see [14](#14-general-settings-and-continuous-operation) and
+- Usage statistics are optional and anonymous (see [14](#15-general-settings-and-continuous-operation) and
   `PRIVACY.md`).
 - Tell family, guests and domestic staff about the cameras, microphones and phone-based presence.
 
@@ -860,11 +1016,35 @@ They are the same accepted at the first launch and available in **Help → Terms
 | `/schedule [pause\|resume]` | `/programma` | Shows, suspends or resumes the automatic schedule |
 | `/listen [seconds]` | `/ascolta` | Records from the node's microphone and sends the audio to the group |
 | `/video [camera] [seconds]` | `/clip` | Video of the last seconds (30 by default, at most 120) from a camera that records |
+| `/on [name] [seconds]` | `/accendi` | Turns on a home light or a node output. **With no name it lists** what can be turned on, with each one's state right now |
+| `/off [name]` | `/spegni` | Turns it off |
 | `/id` | — | Shows the chat and user IDs |
 | `/help` | `/aiuto` | List of commands |
 
 A **voice message** sent to the bot is played by the node's speaker. The list is also available in **Help →
 Telegram commands**.
+
+### Turning things on and off from your phone
+
+Type `/on` by itself and Mirto lists what you can turn on — your home's lights and plugs, and the
+outputs of the nodes you've paired — with each one's current state beside it. Then `/on porch light`.
+
+Four things to know, because they're choices and not details:
+
+- **the target is never guessed.** If the name matches nothing, or matches two things, Mirto turns
+  nothing on and tells you which they are. Getting a photo wrong means a photo of the wrong room;
+  getting an output wrong means the siren instead of the porch light, at three in the morning;
+- **a home light stays on** until you turn it off, the way a switch does. A node output always has a
+  duration instead — the node counts its own seconds and stops by itself — one minute by default,
+  and you can say it yourself: `/on lights 10`;
+- **the limits apply from your phone too.** A siren turned on by hand uses up the same three minutes
+  every half hour as the actions do, and when they're gone it won't sound; a deterrent stays capped
+  at its thirty seconds a time. Your phone is not a back door;
+- **what you turn on doesn't set off the actions** that listen to that device: you turned it on, and
+  "when it comes on" means "when it comes on by itself".
+
+Who can type these commands is whoever is already in the bot's list of authorised users: nothing
+changes about who commands Mirto, only about what they can ask it.
 
 ---
 

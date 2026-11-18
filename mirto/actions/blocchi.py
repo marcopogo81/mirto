@@ -36,11 +36,20 @@ from dataclasses import dataclass, field
 from ..i18n import _
 from .passi import MAX_PASSI, MAX_PAUSA, MAX_RIPETI, Passo, passi_di
 
-# I mattoni. «camera» e «microfono» ascoltano; gli altri fanno.
+# I mattoni. «camera», «microfono» e «domotica» ascoltano; gli altri fanno.
 CAMERA, MICROFONO = "camera", "microfono"
+# Il terzo che ascolta, 15/11: un dispositivo di casa che cambia stato. *Si accende la luce delle
+# scale → parte la musica di benvenuto.* È il verso che nessun concorrente ha, e non è un cancello
+# nuovo: passa dallo stesso che c'era (`quando`, gli orari, i limiti), perché un'azione che scatta
+# da una lampadina non è più libera di una che scatta da una camera.
+DOMOTICA = "domotica"
 COMANDO, TELEGRAM, EMAIL, CONFERMA = "comando", "telegram", "email", "conferma"
-ASCOLTO = (CAMERA, MICROFONO)
-TIPI = (CAMERA, MICROFONO, COMANDO, TELEGRAM, EMAIL, CONFERMA)
+ASCOLTO = (CAMERA, MICROFONO, DOMOTICA)
+TIPI = (CAMERA, MICROFONO, DOMOTICA, COMANDO, TELEGRAM, EMAIL, CONFERMA)
+# Cosa ascolta un blocco «domotica»: stanno in `soggetti`, come «person» e «cat» per una camera. Un
+# blocco che vuole tutti e due i versi li elenca tutti e due, e scatta a ogni cambio.
+ACCESO, SPENTO = "acceso", "spento"
+VERSI = (ACCESO, SPENTO)
 # Quanto guarda un blocco di ascolto messo **in mezzo** a una catena, se nessuno lo dice. Non può
 # guardare per sempre: guarda per un tempo e poi decide. Venti secondi coprono il caso vero (uno che
 # scavalca e resta lì) senza tenere un'azione appesa a un evento che non arriverà.
@@ -54,8 +63,11 @@ PREFISSO_SUONO = "sound:"
 # Il dispositivo di un blocco, scritto **col prefisso** (scelta di Marco, 23/10 sera). Costa uguale a
 # scriverlo nudo e ci risparmia di riconvertire tutte le configurazioni il giorno che arrivano le cam
 # esterne o una presa comandata: un identificativo nuovo è un prefisso nuovo, non una migrazione.
-NODO, COMPUTER = "nodo", "computer"
-PREFISSI = (NODO, COMPUTER)
+NODO, COMPUTER, SMART = "nodo", "computer", "smart"
+PREFISSI = (NODO, COMPUTER, SMART)
+# Il terzo prefisso, 15/11, ed è esattamente quello che la riga qui sopra aveva previsto il 23/10:
+# «una presa comandata». È arrivato senza migrazione e senza un tipo di blocco nuovo — una luce smart
+# è un dispositivo come un nodo, e un blocco «comando» la comanda come comanda un relè.
 # «Questo computer» è un dispositivo da subito, non un caso a parte: la camera e il microfono del Mac
 # si scelgono in un blocco come tutto il resto, e la scheda Generale deve solo abilitarli. Farne
 # un'eccezione vorrebbe dire rifare lo stesso lavoro quando arriveranno le camere esterne.
@@ -248,6 +260,31 @@ def obiettivi_di(ev) -> set:
     return set(ev.targets()) if hasattr(ev, "targets") else {getattr(ev, "label", "person")}
 
 
+def e_un_cambio_di_stato(ev) -> bool:
+    """Questo evento è un dispositivo di casa che ha cambiato stato, e non qualcosa visto da una camera.
+
+    Si chiede con `isinstance` e non annusando i campi: un evento di camera che per caso avesse un
+    campo di nome `acceso` non deve poter accendere un blocco di casa. L'import sta qui dentro perché
+    `blocchi` è il modulo basso e non deve tirarsi dietro il protocollo MQTT per leggere una
+    configurazione; dopo la prima volta costa una ricerca in un dizionario.
+    """
+    from .smarthome import CambioStato  # noqa: PLC0415
+
+    return isinstance(ev, CambioStato)
+
+
+def _scatta_la_domotica(b: Blocco, ev) -> bool:
+    """Questo blocco di casa riconosce questo cambio di stato?
+
+    `dispositivo` vuoto vuol dire **qualunque dispositivo**, come `fonti` vuoto vuol dire qualunque
+    camera: è la stessa regola, e chi ha una lampadina sola non deve scegliere niente.
+    """
+    verso = ACCESO if ev.acceso else SPENTO
+    if verso not in b.soggetti:
+        return False
+    return not b.dispositivo or b.dispositivo == ev.dispositivo
+
+
 def blocco_scatta(b: Blocco, ev) -> bool:
     """Questo blocco di ascolto riconosce questo evento?
 
@@ -258,6 +295,16 @@ def blocco_scatta(b: Blocco, ev) -> bool:
     ogni blocco, e nessuno deve sapere cos'è un tipo di azione per capirla.
     """
     if not b.ascolta or not b.soggetti:
+        return False
+    # Un blocco di casa e un blocco di camera guardano due cose diverse, e **nessuno dei due deve
+    # accendersi su quella dell'altro**. Il controllo è esplicito in tutti e due i versi, e non
+    # affidato al fatto che «acceso» non sia anche un obiettivo riconoscibile da una camera: una
+    # coincidenza fra due elenchi di nomi non è una regola, e il giorno che qualcuno aggiunge un
+    # obiettivo di nome «acceso» non deve succedere niente.
+    cambio = e_un_cambio_di_stato(ev)
+    if b.tipo == DOMOTICA:
+        return cambio and _scatta_la_domotica(b, ev)
+    if cambio:
         return False
     visti = obiettivi_di(ev)
     if not (visti & set(b.soggetti)):

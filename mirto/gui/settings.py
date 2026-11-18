@@ -44,6 +44,8 @@ from PySide6.QtWidgets import (
 
 from .. import DISCUSSIONI_URL
 from ..actions.aggiorna_nodo import aggiornamento_del_nodo
+from ..actions.pannello_azione import aiuto as aiuto_campo, blocchi_del_trigger, trigger_di_casa
+from ..actions.smarthome import chiave_di as chiave_smart, comandi_di, dispositivi_per_le_azioni
 from ..actions.presets import (
     ACTION_KINDS,
     MANUAL_KINDS,
@@ -55,6 +57,7 @@ from ..credentials import (
     EMAIL_PASSWORD,
     SMS_HTTP_API_KEY,
     SMS_TWILIO_TOKEN,
+    SMARTHOME_PASSWORD,
     TELEGRAM_TOKEN,
 )
 from ..notify.email import PRESETS
@@ -65,7 +68,8 @@ from .testi import nodi_trovati, prova_si_sente
 from .widgets import ElencoDiSpunte, GrigliaDiBox, GrigliaDiSpunte
 from ..i18n import N_, _, questo_computer
 
-KEEP = "••••••••"  # segnaposto: credenziale già salvata, lasciare invariata
+# KEEP sta in credentials.py: è il segnaposto di una credenziale, non della finestra
+from ..credentials import KEEP  # noqa: E402
 
 
 def _split(text: str) -> list[str]:
@@ -137,6 +141,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(aiuto_in_fondo(self._tab_presence()), _("Presenza"))
         tabs.addTab(aiuto_in_fondo(self._tab_notifications()), _("Notifiche"))
         tabs.addTab(aiuto_in_fondo(self._tab_nodes_actions()), _("Nodi"))
+        tabs.addTab(aiuto_in_fondo(self._tab_smarthome()), _("SmartHome"))
         tabs.addTab(aiuto_in_fondo(self._tab_actions()), _("Azioni"))
         if self._tests:
             tabs.addTab(aiuto_in_fondo(self._tab_tests()), _("Prove"))
@@ -274,7 +279,7 @@ class SettingsDialog(QDialog):
             _('<b>Avviso di prova completo</b>: controlla in un colpo Telegram, email ed SMS (parte anche a protezione disattivata).'),
             _('<b>Foto da tutte le camere</b>: per verificare le inquadrature.'),
             _('<b>Test automatici</b>: dopo un aggiornamento, per controllare che tutto funzioni.'),
-        ], _("15. Prove e diagnostica"), self))
+        ], _("16. Prove e diagnostica"), self))
         for item in self._tests:
             if item is None:
                 lay.addSpacing(8)
@@ -372,7 +377,7 @@ class SettingsDialog(QDialog):
             _('Lascia attivo <b>Impedisci la sospensione</b> e tieni il coperchio aperto: un computer sospeso non sorveglia.'),
             _("<b>Statistiche d'uso</b>: aiutano a sapere quante installazioni sono attive; «Cosa viene inviato…» mostra il messaggio esatto. Non partono finché non le spunti."),
             _('Il <b>modello di riconoscimento</b> e le <b>soglie</b> stanno in <b>AI</b>; <b>per quanto tenere foto ed eventi</b> in <b>Registrazione</b>.'),
-        ], _('14. Impostazioni generali e funzionamento continuo'), self))
+        ], _('15. Impostazioni generali e funzionamento continuo'), self))
         return w
 
     def _tab_telegram(self) -> QWidget:
@@ -1654,6 +1659,33 @@ class SettingsDialog(QDialog):
 
     # --- la scheda delle azioni (24/10) ----------------------------------------
 
+    def _tab_smarthome(self) -> QWidget:
+        """La domotica di casa. Il grosso sta in «smarthome_ui»: qui c'è solo l'aiuto e il montaggio."""
+        from .smarthome_ui import SchedaSmartHome  # noqa: PLC0415
+
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setSpacing(8)
+        lay.addWidget(help_box([
+            _('Se in casa hai lampadine, prese o sensori «smart» che passano da un <b>broker MQTT</b> '
+              '(Home Assistant ne ha uno, oppure Mosquitto), Mirto può vederli e comandarli.'),
+            _('Scrivi l\'indirizzo del broker e premi <b>Cerca i dispositivi di casa</b>: compaiono '
+              'da soli a destra, con il loro stato che si muove mentre guardi. Non devi dichiarare '
+              'niente.'),
+            _('Certi dispositivi non dicono chi sono: per quelli c\'è <b>Cerca anche quelli che non '
+              'si presentano</b>. Mirto sta a sentire e ti mostra chi parla, e tu gli dai un nome.'),
+            _('Fatto questo li trovi nelle <b>Azioni</b>: come trigger (<i>se si accende la luce…</i>) '
+              'e come uscite (<i>…allora accendi la luce</i>).'),
+            _('Mirto si <b>collega</b> al broker, non apre nessuna porta: vale lo stesso di Telegram.'),
+        ], _('13. SmartHome: le luci, le prese e i sensori di casa'), self, piccolo=True))
+        self.smarthome_pass = self._secret_field(SMARTHOME_PASSWORD)
+        self.smarthome_pass.setPlaceholderText(_('password (se serve)'))
+        self.smarthome_pass.setFixedWidth(150)
+        self.smarthome = SchedaSmartHome(self.cfg, self.secrets, self.smarthome_pass, self,
+                                         domotica=getattr(self.core, "domotica", None))
+        lay.addWidget(self.smarthome, 1)
+        return w
+
     def _tab_actions(self) -> QWidget:
         """Tutte le azioni, in una scheda loro.
 
@@ -1751,7 +1783,7 @@ class SettingsDialog(QDialog):
         # Niente riquadro «Come fare» qui: da quando in cima ci sono le quattro tipologie con le loro
         # regole, i suoi tre passi ripetevano con altre parole quello che si era appena letto. Resta
         # il collegamento alla guida, per chi vuole il capitolo intero.
-        lay.addWidget(guide_link(_('13. Azioni'), self), 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addWidget(guide_link(_('14. Azioni'), self), 0, Qt.AlignmentFlag.AlignLeft)
         self._refresh_azioni()
         from PySide6.QtWidgets import QScrollArea  # noqa: PLC0415
 
@@ -2257,8 +2289,28 @@ class SettingsDialog(QDialog):
         # una camera si può voler accendere una cassa di un altro nodo, e quella scelta è di ogni
         # pezzo (24/10).
         altri = [n for n in (self.cfg.get("actions.nodes") or []) if str(n.get("id")) != str(nd["id"])]
+        # E **i dispositivi di casa**, accanto ai nodi e nella stessa tendina: per un pezzo della
+        # catena una lampadina smart è quello che è un relè — un posto dove far succedere qualcosa.
+        # Si prendono dal nucleo, che tiene il collegamento vivo, e non si va a cercare il broker da
+        # qui: se la domotica non è configurata l'elenco è vuoto e la tendina ha solo i nodi, come
+        # prima (passo 2 del piano domotica).
+        casa = getattr(self.core, "domotica", None)
+        dispositivi_casa = list(casa.dispositivi()) if casa is not None else []
         dlg.set_dispositivi([{"chiave": "nodo:" + str(n["id"]), "nome": str(n.get("name") or n["id"])}
-                             for n in [nd, *altri]])
+                             for n in [nd, *altri]]
+                            + dispositivi_per_le_azioni(dispositivi_casa))
+        for d in dispositivi_casa:
+            cmds = comandi_di(d)
+            if cmds:
+                dlg.set_comandi_di(chiave_smart(d.identificativo), cmds)
+        # E gli stessi dispositivi anche in cima, fra le cose che **fanno scattare** l'azione: un
+        # dispositivo di casa sta nei due versi, come dice il piano. Lì l'elenco non è filtrato sui
+        # comandabili — una lampadina si accende e si spegne, ma **un sensore di movimento cambia
+        # stato eccome**, ed è anzi il caso più interessante: «il sensore del corridoio si accende →
+        # accendi la luce delle scale». Offrirlo solo fra le uscite sarebbe tenere fuori metà del
+        # valore del passo 3.
+        dlg.set_dispositivi_casa([{"chiave": chiave_smart(d.identificativo),
+                                   "nome": d.nome or d.identificativo} for d in dispositivi_casa])
 
         def altri_comandi(mappa):
             for chiave, cmds in (mappa or {}).items():
@@ -2831,6 +2883,10 @@ class SettingsDialog(QDialog):
         c.set("notifications.telegram", {"enabled": self.tg_enabled.isChecked(),
                                          "chat_id": self.tg_chat.text().strip(), "allowed_user_ids": users})
         self._store_secret(TELEGRAM_TOKEN, self.tg_token)
+        c.set("smarthome", self.smarthome.valori())
+        self._store_secret(SMARTHOME_PASSWORD, self.smarthome_pass)
+        if getattr(self.core, "domotica", None) is not None:
+            self.core.domotica.riapri()   # se no resta collegata com'era prima del Salva
         c.set("notifications.email", {
             "enabled": self.em_enabled.isChecked(), "provider": self.em_provider.currentData(),
             "host": self.em_host.text().strip(), "port": self.em_port.value(), "security": "",
@@ -2969,6 +3025,18 @@ class ActionDialog(QDialog):
         self.mics_vuoti = QLabel("")
         self.mics_vuoti.setWordWrap(True)
         self.mics_vuoti.setStyleSheet(f"color:{T.MUTED}; font-size:{T.SIZE_SMALL}px;")
+        # La **terza** cosa che fa scattare un'azione, dal 15/11: un dispositivo di casa che cambia
+        # stato. Marco l'ha voluta come terza lista accanto alle altre due, e non come una tendina in
+        # cima: *«stessa logica delle altre due, niente da reimparare»*. Chi non ha la domotica non
+        # vede niente di nuovo — la riga si nasconde quando l'elenco è vuoto, come fa quella dei
+        # microfoni.
+        # L'elenco nasce vuoto e lo riempie «set_dispositivi_casa», come fa «set_node_commands» per i
+        # comandi del nodo: i dispositivi li sa il nucleo, non questa finestra, e chiederli apre la
+        # finestra più tardi per niente. Quali erano già scelti invece si sa subito, dai blocchi.
+        self._casa_scelte, self._casa_versi = trigger_di_casa(a)
+        self.smart = self._elenco_dispositivi_casa([])
+        self.smart_versi = self._spunte_dei_versi(self._casa_versi)
+        self.smart.itemChanged.connect(lambda _i: self._fonti_cambiate())
         # Da dove arriva quello che fa scattare l'azione. Non è un campo salvato: lo portano con sé gli
         # obiettivi (un obiettivo che comincia per «sound:» è un suono), e qui serve a filtrare quello
         # che si vede — compreso il far **sparire** le scelte che quella sorgente non usa.
@@ -3014,6 +3082,9 @@ class ActionDialog(QDialog):
         self.notify.setChecked(bool(a.get("notify", True)))
         self.enabled = QCheckBox(_('Azione attiva'))
         self.enabled.setChecked(bool(a.get("enabled", True)))
+        # Questa riga non ha etichetta — la domanda la fa il titolo della pagina — quindi non ha la
+        # (i) accanto: la spiegazione sta addosso al riquadro, o non si vedrebbe da nessuna parte.
+        self.enabled.setToolTip(aiuto_campo("acceso"))
         self.hint = QLabel()
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color:#9AA8BA; font-size:12px;")
@@ -3060,6 +3131,8 @@ class ActionDialog(QDialog):
             ("microfoni_mancanti", "", self.mics_vuoti),
             ("obiettivi_microfono", _('Cosa far riconoscere al modello AI'), self.targets_mic),
             ("ai_microfono", "", self.ai_mic),
+            ("dispositivi_casa", _('Da quali dispositivi di casa'), self.smart),
+            ("versi_casa", _('Quando'), self.smart_versi),
             ("cosa_fa", _('Cosa fa'), self.catena),
             ("quando_attiva", _('Quando è attiva'), self.quando),
             ("quando_parte", _('Quando parte'), self.mode),
@@ -3353,6 +3426,71 @@ class ActionDialog(QDialog):
             lay.addWidget(secondo, 1)
         return w
 
+    def _elenco_dispositivi_casa(self, voci: list[dict]) -> QListWidget:
+        """I dispositivi di casa da cui l'azione può scattare. Somiglia all'elenco delle camere, e
+        **non è lo stesso**: qui sotto la spunta c'è la chiave, lì c'è il nome.
+
+        La differenza non è un dettaglio di gusto. Una camera si filtra per nome, perché il nome è
+        quello che l'evento porta con sé; un dispositivo di casa si riconosce dalla sua chiave
+        (``smart:annuncio/homeassistant/light/...``), che è brutta e **stabile**, mentre il nome lo
+        cambia chi gli ha dato un nome in Zigbee2MQTT. Salvare il nome vorrebbe dire un'azione che
+        smette di scattare il giorno che qualcuno rinomina una lampadina, senza un messaggio.
+        Scrivere questo commento costa meno che scoprirlo.
+        """
+        elenco = ElencoDiSpunte()
+        elenco.setUniformItemSizes(True)
+        elenco.setMaximumWidth(460)
+        elenco.setStyleSheet("QListWidget::item { padding: 2px 10px; }")
+        self._riempi_dispositivi_casa(elenco, voci)
+        return elenco
+
+    def _riempi_dispositivi_casa(self, elenco, voci: list[dict]) -> None:
+        elenco.clear()
+        for v in voci:
+            it = QListWidgetItem(str(v.get("nome") or v.get("chiave")))
+            it.setData(Qt.ItemDataRole.UserRole, str(v.get("chiave") or ""))
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if v.get("chiave") in self._casa_scelte
+                             else Qt.CheckState.Unchecked)
+            elenco.addItem(it)
+        quante = max(1, min(len(voci), 4))
+        elenco.setFixedHeight(quante * 26 + 6)
+
+    def set_dispositivi_casa(self, voci: list[dict]) -> None:
+        """I dispositivi di casa, quando il nucleo li ha. Li manda la scheda, in disparte.
+
+        Se una scelta di prima non è nell'elenco — la lampadina staccata, il broker spento — **resta
+        lì spuntata** e dice perché: sparire in silenzio vorrebbe dire che riaprendo un'azione e
+        salvandola si perde un trigger senza che nessuno l'abbia chiesto.
+        """
+        viste = {str(v.get("chiave") or "") for v in voci}
+        perse = [{"chiave": k, "nome": _('{k} · non la vedo adesso', k=k.split(":", 1)[-1])}
+                 for k in sorted(self._casa_scelte) if k not in viste]
+        self._riempi_dispositivi_casa(self.smart, list(voci) + perse)
+        self._fonti_cambiate()
+
+    def _spunte_dei_versi(self, scelti: set) -> QListWidget:
+        """Quando: *si accende*, *si spegne*, o tutti e due. Sono i «soggetti» del blocco.
+
+        Due voci spuntabili e non una tendina a tre con «tutti e due», perché «tutti e due» è una
+        terza cosa da leggere per dire una cosa che si vede: due caselle spuntate.
+        """
+        from ..actions.blocchi import ACCESO, SPENTO  # noqa: PLC0415
+
+        elenco = ElencoDiSpunte()
+        elenco.setUniformItemSizes(True)
+        elenco.setMaximumWidth(460)
+        elenco.setFixedHeight(2 * 26 + 6)
+        elenco.setStyleSheet("QListWidget::item { padding: 2px 10px; }")
+        for chiave, testo in ((ACCESO, _('quando si accende')), (SPENTO, _('quando si spegne'))):
+            it = QListWidgetItem(testo)
+            it.setData(Qt.ItemDataRole.UserRole, chiave)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if chiave in (scelti or {ACCESO})
+                             else Qt.CheckState.Unchecked)
+            elenco.addItem(it)
+        return elenco
+
     @staticmethod
     def _fonti_spuntate(elenco) -> list[str]:
         """I nomi spuntati in un elenco di fonti. Il nome vero sta nel dato, non nel testo."""
@@ -3508,6 +3646,13 @@ class ActionDialog(QDialog):
         chiede_mic = c_è_microfono and si_vede_la_griglia(self._fonti_spuntate(self.mics),
                                                           self.targets_mic.scelte(), nuova)
         self._set_row(self.mics_vuoti, not manual and bool(self._nota_microfoni()))
+        # I dispositivi di casa: la riga c'è solo se ce ne sono. Chi non ha la domotica non deve
+        # vedersi una riga vuota per sempre — è la stessa regola della riga «SmartHome» nel riquadro
+        # Sistema. E il «quando» si vede solo quando hai scelto un dispositivo: chiedere *quando* di
+        # una lampadina che non hai spuntato è la solita domanda fuori posto.
+        c_è_casa = not manual and self.smart.count() > 0
+        self._set_row(self.smart, c_è_casa)
+        self._set_row(self.smart_versi, c_è_casa and bool(self._fonti_spuntate(self.smart)))
         self.mics_vuoti.setText(self._nota_microfoni())
         # Sotto ogni input, quello che quell'input deve riconoscere — e sotto ancora, quanto sicuro
         # dev'essere il modello e chi è quel modello. Le soglie e la riga dell'AI compaiono quando
@@ -3644,6 +3789,16 @@ class ActionDialog(QDialog):
             cams = self._fonti_spuntate(self.cams) + self._fonti_spuntate(self.mics)
             if cams:
                 a["cameras"] = cams
+            # Il trigger di casa, se c'e'. Scrive **tutti** i blocchi di testa o nessuno: vedi
+            # «blocchi_del_trigger», che spiega perche' scriverne uno solo farebbe perdere il
+            # trigger della camera.
+            blocchi = blocchi_del_trigger(set(self._fonti_spuntate(self.smart)),
+                                          set(self._fonti_spuntate(self.smart_versi)),
+                                          cams, targets)
+            if blocchi:
+                a["blocchi"] = blocchi
+            else:
+                a.pop("blocchi", None)
             # Una soglia per obiettivo. Quelle lasciate su «standard» non si scrivono: seguono la
             # soglia generale anche quando il modello si aggiorna, che e' il motivo per cui Marco le
             # voleva separate (24/10). «min_confidence» non si scrive piu': se c'era, al primo
@@ -3769,9 +3924,12 @@ class ActionWizard(ActionDialog):
         (N_('Informazioni generali'), N_('Il nome lo leggerai su Telegram e nell\'elenco delle azioni.'),
          ["nome", "quando_attiva", "quando_parte", "attesa_conferma",
           "se_nessuno_conferma", "fascia"]),
-        (N_('Cosa la fa scattare'), N_('Da quali dispositivi, e che cosa devono riconoscere.'),
+        (N_('Cosa la fa scattare'),
+         N_('Da quali dispositivi, e che cosa devono riconoscere. Anche una luce o un sensore di '
+            'casa che cambia stato può far partire un\'azione.'),
          ["camere", "obiettivi_camera", "ai_camera",
-          "microfoni", "microfoni_mancanti", "obiettivi_microfono", "ai_microfono"]),
+          "microfoni", "microfoni_mancanti", "obiettivi_microfono", "ai_microfono",
+          "dispositivi_casa", "versi_casa"]),
         (N_('Imposta le azioni'),
          N_('Una serie di operazioni in sequenza, su qualsiasi dispositivo rilevato: il «+» propone '
             'quello che sanno fare i dispositivi collegati — i nodi, e le casse abbinate a loro. '

@@ -65,6 +65,13 @@ class NotificationDispatcher:
         self._tg_factory = telegram_api_factory
         self._email_factory = email_factory
         self._sms_http = sms_http
+        # Chi altro vuole sapere di un evento, oltre ai canali di avviso. Oggi ce n'è uno: il
+        # racconto sul broker (passo 5), che il nucleo attacca qui. Sta **qui** e non dentro il
+        # motore perché un evento che non diventa un avviso non deve diventare nemmeno un messaggio
+        # MQTT: a casa disinserita Telegram tace, e tace anche il broker. Un'integrazione che
+        # vedesse eventi che Mirto stesso ha deciso di ignorare racconterebbe una casa diversa da
+        # quella che Mirto sta guardando.
+        self.anche: list[Callable[[Event], None]] = []
         self.bot: TelegramBot | None = None
         self._bot_token: str | None = None
         self._q: queue.Queue = queue.Queue()
@@ -147,6 +154,11 @@ class NotificationDispatcher:
         if not self.armed() and not force:
             log.info("Sistema disinserito: evento %s salvato senza inviare avvisi", ev.id)
             return
+        for chi in list(self.anche):
+            try:
+                chi(ev)
+            except Exception:  # noqa: BLE001 - un ascoltatore rotto non porta via la foto su Telegram
+                log.exception("un ascoltatore di eventi è esploso")
         self._q.put(("event", _Pending(ev, extra_buttons or [])))
 
     def notify_text(self, text: str, force: bool = False) -> None:

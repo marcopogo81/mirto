@@ -7,6 +7,88 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Your smart home, both ways
+
+Mirto now sees the lights, plugs and sensors already on your **MQTT broker**, drives them, and reacts to
+them. It is the half of the Home Assistant work that faces your house; the half that faces Home Assistant —
+Mirto publishing its own events and announcing itself — is not in here yet.
+
+- **It finds the devices, you don't type topics.** Three ways, tried in that order: the generic announcement
+  that ESPHome and friends publish; the language of the brand, recognised from what exists on the broker
+  (Zigbee2MQTT answers on its own topics whether or not its Home Assistant option is on); and, for a device
+  that does neither, listening to everything for a few seconds and letting you pick. Typing a topic by hand
+  is the last resort, not the first step. *Settings → SmartHome.*
+- **They are outputs in the actions.** A smart light goes into a chain exactly like a node's relay: *the
+  camera sees the dog, the porch light comes on.* A light stays on until something turns it off, so Mirto
+  keeps the time and turns it off — at the end of the step and on **Stop everything**, which otherwise would
+  cancel the timer and leave the house lit.
+- **A device changing state starts an action.** *The stairs light comes on, and the node's speaker plays a
+  welcome.* Two things are deliberately not a change: what the broker replays when Mirto connects (learning
+  that a light is on is not "the light came on"), and anything Mirto itself switched.
+- **`/on` and `/off` on Telegram**, for your smart lights and for node outputs, which could not be commanded
+  from Telegram at all before. `/on` by itself lists what there is, with each one's state: a command that
+  switches something on never guesses its target.
+- **The limits do not have a back door.** A siren switched on by hand uses the same three minutes every half
+  hour as an action does; a deterrent stays capped at thirty seconds. A smart **plug** has no such cap,
+  because a plug does not declare what you plugged into it — the guide says so rather than inventing one.
+- **A fake smart house to develop against** (`python -m mirto --simulatore-smarthome`): a minimal broker, a
+  window, and devices that behave like ESPHome, like Zigbee2MQTT, or like neither. No new dependency —
+  the MQTT client is three hundred lines of our own code, so Mirto still installs without downloading
+  anything.
+
+### And Mirto tells the broker what is happening
+
+The other direction, and the one Home Assistant cares about. **Off by default**, because what Mirto
+publishes is readable by everything attached to that broker, and who is attached is the broker's
+business, not Mirto's. *Settings → SmartHome → "Publish what happens on the broker".*
+
+- **What it publishes**, under a `mirto/` branch of its own: whether it is running, whether it is armed,
+  an event when one happens (which camera, what was recognised, how confident, when), and which camera is
+  seeing something. With the house disarmed it publishes no events, exactly as it sends no alerts — the
+  armed state it publishes always, because saying "I am disarmed" is precisely its job.
+- **Frames are a second switch**, also off, and deliberately not the same one: a JPEG of your home on a
+  shared board is a different kind of thing from the state of your alarm.
+- **A camera does not stay "seeing something" forever.** A retained state does not switch itself off, so
+  Mirto switches it off after half a minute; without that, Home Assistant would show one camera as busy
+  from the first event until the next restart.
+- **Two cameras whose names clean up to the same topic are reported, not silently renumbered** — a topic
+  Mirto changes by itself is a topic nobody finds again.
+- It says `offline` when it closes, and leaves a **will** with the broker so that a Mirto killed badly
+  does not stay `online` for ever: a dead program sends no messages, but the broker can.
+
+### And Home Assistant finds it on its own
+
+The last piece: with publishing on, there is **nothing to configure in Home Assistant**. Mirto announces
+itself over MQTT discovery and shows up under *Settings → Devices & services → MQTT* as a device called
+"Mirto" — armed state, a motion sensor per camera, and each camera's picture if frames are on too.
+
+- **Add or remove a camera and the announcement is redone**, so a new camera appears in Home Assistant
+  without anyone touching it.
+- **Renaming a camera changes the label and does not create a duplicate.** Mirto identifies its cameras
+  by a code that never changes, so Home Assistant shows the new name on the same sensor, history intact.
+  The same holds for switching Mirto's language: the labels are translated, the identities are not.
+- **Its sensors go "unavailable" when Mirto is not running**, rather than sitting on their last value. A
+  panel claiming "house armed" for a Mirto that stopped two days ago would be a lie, and a believable one.
+- **Turning publishing off removes them.** The entities are deleted from Home Assistant instead of being
+  left greyed out for ever — which is the part most programs skip, because what is left behind can only
+  be cleared by digging through the broker with a command-line client. Mirto remembers what it published,
+  **including which cameras**, so turning it off a month and a restart later still cleans up everything
+  instead of orphaning every camera but the first.
+- Nothing is published with publishing off, not even the announcement: a discovery message already says
+  that this house has a Mirto, how many cameras it has and what they are called.
+- Turning the whole smart-home connection off is the one case it cannot clean up on the spot — there is
+  no broker left to say it to — so it keeps the memory and cleans up the day it reconnects. The guide
+  says so, and says to untick publishing first if you want them gone now. Publishing and closing the
+  socket an instant later loses the messages at QoS 0 (six times out of eight, measured), so the
+  tempting version of this would have failed silently and burned the fallback with it.
+
+What no test here can prove is that a **real** Home Assistant, on someone else's network, lists Mirto
+among its devices. That is a manual check and it is still open; the prefix it listens on is assumed to
+be the default `homeassistant`.
+
+Both guides have a new chapter 13, and [`PRIVACY.md`](PRIVACY.md) says what a broker is, what Mirto puts
+on it and what it does not.
+
 ## [0.2.0] – 2026-11-09
 
 **The first public release.** Mirto watches the cameras your computer can already reach, decides on

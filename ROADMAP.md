@@ -1,6 +1,6 @@
 # Roadmap · Mirto
 
-*Updated 19 October 2026*
+*Updated 17 November 2026*
 
 This is where Mirto is going, in the order it is being built. It is derived from the maintainer's working
 plan; the dates are deliberately absent, because a single maintainer should not promise them.
@@ -18,8 +18,12 @@ plan; the dates are deliberately absent, because a single maintainer should not 
 
 - **Supply chain**: dependency lock files with hashes for each platform, GitHub Actions pinned to commit
   SHAs (done), SBOM attached to every release.
-- **Home Assistant and MQTT**: events and armed/disarmed state published locally, so Mirto fits into the
-  setups people already have — without a cloud in the middle.
+- **Home Assistant, the last mile.** Both halves are built and waiting for the next release — Mirto
+  finding, driving and reacting to the devices on your broker, and Mirto publishing its own state and
+  announcing itself so Home Assistant finds it without anyone writing a line of YAML; see the
+  Unreleased section of [`CHANGELOG.md`](CHANGELOG.md). What is **not** done is the part no test can
+  do for us: watching a real Home Assistant, on someone else's network, actually list Mirto among its
+  devices. Until that has happened once, this stays here and not in the released column.
 - **Windows parity**: restart after a crash (today macOS has it, Windows does not), and documentation
   written for Windows paths rather than translated from macOS.
 - **Performance with many cameras**: previews resized before conversion, inference without a single global

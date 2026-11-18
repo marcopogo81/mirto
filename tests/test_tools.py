@@ -165,8 +165,14 @@ class DcoTest(unittest.TestCase):
     # soggetto e non dal numero di genitori, per il motivo spiegato nella prova qui sotto.
     # Il modello è stretto apposta: una commit umana che comincia per «Merge» (per esempio
     # «Merge due elenchi in uno») resta controllata come tutte le altre.
+    #
+    # La quarta forma è quella che GitHub fabbrica per **provare** una pull request: «Merge <sha>
+    # into <sha>», senza nome di ramo. Non compare da nessuna parte nella storia — vive solo nel
+    # checkout della CI — e il 15/11 ha fatto rossa la prima pull request del progetto su sei
+    # sistemi su sei. La spiegazione qui sopra la prevedeva già; il modello no.
     FUSIONE_AUTOMATICA = re.compile(
-        r"^Merge (pull request #\d+ |branch ['\"]|remote-tracking branch ['\"])")
+        r"^Merge (pull request #\d+ |branch ['\"]|remote-tracking branch ['\"]"
+        r"|[0-9a-f]{7,40} into [0-9a-f]{7,40}$)")
 
     def test_the_history_is_already_signed(self):
         """La regola vale anche per chi la scrive: gli ultimi commit sono firmati.
@@ -218,9 +224,13 @@ class DcoTest(unittest.TestCase):
         """
         for soggetto in ("Merge pull request #1 from marcopogo81/dependabot/github_actions/x",
                          "Merge branch 'main' into funzioni-rapide",
-                         'Merge remote-tracking branch "origin/main"'):
+                         'Merge remote-tracking branch "origin/main"',
+                         # quella che GitHub fabbrica per provare una pull request (15/11)
+                         "Merge f5e32641395d7a86bb57e6801ffcdadccf4fbc19 into "
+                         "3812e30f3809673664f340112787e01513201fb8"):
             self.assertTrue(self.FUSIONE_AUTOMATICA.match(soggetto), soggetto)
         for soggetto in ("Merge due elenchi in uno, perché tenerli pari a mano non funziona",
+                         "Merge i due elenchi into uno solo",   # parole, non impronte
                          "Mergiare non è una parola italiana",
                          "Il portachiavi non sapeva che abbiamo cambiato nome"):
             self.assertIsNone(self.FUSIONE_AUTOMATICA.match(soggetto),
@@ -841,10 +851,10 @@ class UnImportDentroUnaFunzioneNonValePerLeAltreTest(unittest.TestCase):
                 if isinstance(cima, ast.ClassDef):
                     for n in cima.body:
                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            controlla(n, set(), globali, prestati, str(f.relative_to(radice)), guai)
+                            controlla(n, set(), globali, prestati, f.relative_to(radice).as_posix(), guai)
             for n in albero.body:
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    controlla(n, set(), globali, prestati, str(f.relative_to(radice)), guai)
+                    controlla(n, set(), globali, prestati, f.relative_to(radice).as_posix(), guai)
         self.assertEqual(guai, [], "nomi presi in prestito da un'altra funzione:\n  " + "\n  ".join(guai))
 
 
@@ -932,7 +942,7 @@ class UnImportInFondoRendeLocaleTuttaLaFunzioneTest(unittest.TestCase):
                 if "__pycache__" in str(f):
                     continue
                 albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
-                guai += self._guai(albero, str(f.relative_to(radice)))
+                guai += self._guai(albero, f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "nomi usati prima del loro import locale:\n  " + "\n  ".join(guai))
 
 
@@ -1274,7 +1284,7 @@ class UnNomeLettoDeveEsistereTest(unittest.TestCase):
             for f in sorted((radice / cartella).rglob("*.py")):
                 if "__pycache__" in str(f) or "/build/" in str(f):
                     continue
-                guai += nomi_mai_definiti(f.read_text(encoding="utf-8"), str(f.relative_to(radice)))
+                guai += nomi_mai_definiti(f.read_text(encoding="utf-8"), f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "nomi letti e mai definiti:\n  " + "\n  ".join(guai))
 
 
@@ -1465,8 +1475,93 @@ class UnaLunghezzaNonSiScriveAManoTest(unittest.TestCase):
         self.assertEqual(guai, [], "lunghezza scritta a mano invece di len(...):\n  " + "\n  ".join(guai))
 
 
+class INumeriDegliErroriDiSistemaHannoUnNomeTest(unittest.TestCase):
+    """«Indirizzo già in uso» è 48 su macOS, 98 su Linux, 10048 su Windows.
+
+    Il 15/11 avevo scritto `errno in (48, 98)`: i due sistemi su cui proviamo passavano, Windows no,
+    e il messaggio che spiegava come uscirne non compariva proprio dove serviva di più. È il terzo
+    inciampo della stessa giornata sulla stessa cosa — un numero o un carattere che cambia col
+    sistema e che noi due, su Mac, non possiamo vedere.
+
+    I nomi di `errno` li sanno tutti e tre i sistemi. Un numero scritto a mano sa solo quello su cui
+    è stato scritto.
+    """
+
+    def test_no_system_error_number_is_written_by_hand(self):
+        import ast
+
+        guai = []
+        for cartella in ("mirto", "node", "tools", "tests"):
+            for f in sorted((ROOT / cartella).rglob("*.py")):
+                if "__pycache__" in str(f):
+                    continue
+                try:
+                    albero = ast.parse(f.read_text(encoding="utf-8"))
+                except SyntaxError:
+                    continue
+                for n in ast.walk(albero):
+                    if not isinstance(n, ast.Compare):
+                        continue
+                    if "errno" not in ast.unparse(n.left):
+                        continue
+                    for c in n.comparators:
+                        dentro = c.elts if isinstance(c, (ast.Tuple, ast.List, ast.Set)) else [c]
+                        if any(isinstance(x, ast.Constant) and isinstance(x.value, int)
+                               for x in dentro):
+                            guai.append(f"{f.relative_to(ROOT).as_posix()}:{n.lineno}: "
+                                        f"{ast.unparse(n)[:70]}")
+        self.assertEqual(guai, [], "numeri di errore scritti a mano invece dei nomi di errno: "
+                                   "cambiano da un sistema all'altro.\n  " + "\n  ".join(guai))
+
+
+class UnPercorsoCheDiventaUnValoreUsaAsPosixTest(unittest.TestCase):
+    """Un percorso relativo passato a `str()` su Windows ha la barra rovesciata.
+
+    La lezione era già scritta qui sotto, l'8/11, per gli archivi — e il 13/11 l'ho rifatta uguale
+    in una prova: un percorso relativo passato a `str()` finiva in un insieme confrontato con
+    `{"mirto/gui/pairing_ui.py"}`. Su macOS e Linux combaciava, su Windows no, e per due giorni la
+    CI pubblica è rimasta rossa sui due lavori Windows senza che nessuno di noi due — che Windows
+    non lo usa — se ne accorgesse.
+
+    **Perché proprio questa forma e non tutte.** Un percorso dentro un messaggio d'errore con le
+    barre rovesciate è brutto e basta; un percorso dentro un `str()` esplicito quasi sempre diventa
+    un **valore**, cioè qualcosa che verrà confrontato — ed è lì che il sistema operativo cambia il
+    risultato invece che l'aspetto. Quindi si guarda quella: la forma che rompe, non quella che
+    stona.
+    """
+
+    def test_no_stringified_relative_path_anywhere(self):
+        import ast
+
+        forma = re.compile(r"str\(\s*[\w.]+\.relative_to\(")
+        guai = []
+        for cartella in ("mirto", "node", "tools", "tests"):
+            for f in sorted((ROOT / cartella).rglob("*.py")):
+                if "__pycache__" in str(f):
+                    continue
+                for i, riga in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+                    # gli esempi del guardiano qui sotto sono marcati: deve vederli, non contarli
+                    if forma.search(riga) and "forma-di-esempio" not in riga:
+                        guai.append(f"{f.relative_to(ROOT).as_posix()}:{i}")
+        self.assertEqual(guai, [], "percorsi trasformati in testo con str() invece che con "
+                                   "as_posix(): su Windows hanno la barra rovesciata.\n  "
+                                   + "\n  ".join(guai))
+
+    def test_the_guardian_can_see_the_shape_it_looks_for(self):
+        """Che il modello riconosca la forma si prova qui, perché nel codice non deve più esserci."""
+        forma = re.compile(r"str\(\s*[\w.]+\.relative_to\(")
+        for riga in ("        trovati.add(str(percorso.relative_to(cls.RADICE)))",  # forma-di-esempio
+                     "x = str( f.relative_to(radice) )",                           # forma-di-esempio
+                     "cattivi.append(str(percorso.relative_to(folder)))"):         # forma-di-esempio
+            self.assertTrue(forma.search(riga), riga)
+        for riga in ('guai.append(f"{f.relative_to(ROOT)}:{n.lineno}")',
+                     "nomi.add(percorso.relative_to(radice).as_posix())",
+                     "if percorso.is_relative_to(radice):"):
+            self.assertIsNone(forma.search(riga), f"questa non è la forma che rompe: {riga}")
+
+
 class DentroUnArchivioIlSeparatoreELaBarraTest(unittest.TestCase):
-    """`str(f.relative_to(dove))` dentro un tar: su Windows mette la barra rovesciata (8/11).
+    """`f.relative_to(dove).as_posix()` dentro un tar: su Windows mette la barra rovesciata (8/11).
 
     Il pacchetto che Mirto manda a un nodo si costruiva con `str(Path)` come nome dei membri. Su
     macOS e Linux `str()` e `as_posix()` danno la stessa cosa, quindi non si vedeva; su Windows
@@ -1683,7 +1778,7 @@ class UnParametroNonSiRiusaPerAltroTest(unittest.TestCase):
             for f in sorted((radice / cartella).rglob("*.py")):
                 if "__pycache__" in str(f):
                     continue
-                guai += parametri_riusati(f.read_text(encoding="utf-8"), str(f.relative_to(radice)))
+                guai += parametri_riusati(f.read_text(encoding="utf-8"), f.relative_to(radice).as_posix())
         self.assertEqual(guai, [], "parametri riusati per un'altra cosa:\n  " + "\n  ".join(guai))
 
 
@@ -1980,7 +2075,12 @@ def nomi_offerti(path) -> set[str] | None:
         if isinstance(nodo, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)):
             fuori.add(nodo.name)
         elif isinstance(nodo, _ast.Assign):
-            fuori |= {t.id for t in nodo.targets if isinstance(t, _ast.Name)}
+            # Anche `ACCESO, SPENTO = b"ON", b"OFF"`: una coppia assegna **due** nomi, e guardando
+            # solo i bersagli che sono un `Name` non se ne vedeva nessuno. Il 17/11 il guardiano ha
+            # accusato `R.ACCESO` e `R.SPENTO` di non esistere mentre esistevano, riga 51 di
+            # `racconto.py` — e un guardiano che accusa il giusto si impara a zittire (cap. 37).
+            for bersaglio in nodo.targets:
+                fuori |= {n.id for n in _ast.walk(bersaglio) if isinstance(n, _ast.Name)}
         elif isinstance(nodo, _ast.AnnAssign) and isinstance(nodo.target, _ast.Name):
             fuori.add(nodo.target.id)
         elif isinstance(nodo, _ast.Import):
@@ -2179,3 +2279,400 @@ class UnFotogrammaNonSiConverteIntero(unittest.TestCase):
                           if k.arg == "interpolation" and isinstance(k.value, ast.Attribute)]
         self.assertEqual(interpolazioni, ["INTER_LINEAR"],
                          "AREA costa 7,6 ms contro 0,16: con quella Q-07 peggiora invece di migliorare")
+
+
+class LeRigheDelPannelloSiChiamanoComeSonoFatteTest(unittest.TestCase):
+    """``StatusRow.set`` ha sette parametri, e il terzo è un **tooltip**, non un elenco di righe.
+
+    Il 14/11 ho passato una lista al terzo posto: Qt l'ha rifiutata con un ``TypeError``, e Mirto
+    non si è aperto affatto — la riga del pannello si disegna nell'avvio della finestra principale.
+    Un errore in una riga di stato che impedisce al programma di partire è il tipo di cosa che una
+    prova deve prendere, e nessuna delle nostre lo prendeva: quella parte di interfaccia non si può
+    costruire senza Qt, che nel contenitore non c'è.
+
+    Questo guardiano non costruisce niente: **legge la firma dal codice e le chiamate dal codice**,
+    e pretende che combacino. Gira ovunque, anche senza Qt.
+    """
+
+    @staticmethod
+    def _firma() -> tuple[list[str], int]:
+        """``(nomi dei parametri, quanti sono obbligatori)`` di ``StatusRow.set``, letti da widgets.py."""
+        import ast  # noqa: PLC0415
+
+        albero = ast.parse((ROOT / "mirto" / "gui" / "widgets.py").read_text(encoding="utf-8"))
+        for classe in ast.walk(albero):
+            if not (isinstance(classe, ast.ClassDef) and classe.name == "StatusRow"):
+                continue
+            for metodo in classe.body:
+                if isinstance(metodo, ast.FunctionDef) and metodo.name == "set":
+                    nomi = [a.arg for a in metodo.args.args if a.arg != "self"]
+                    return nomi, len(nomi) - len(metodo.args.defaults)
+        raise AssertionError("StatusRow.set non si trova: il guardiano è cieco")
+
+    @staticmethod
+    def _chiamate() -> list:
+        import ast  # noqa: PLC0415
+
+        albero = ast.parse((ROOT / "mirto" / "gui" / "app.py").read_text(encoding="utf-8"))
+        fuori = []
+        for nodo in ast.walk(albero):
+            if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute)
+                    and nodo.func.attr == "set" and isinstance(nodo.func.value, ast.Attribute)
+                    and nodo.func.value.attr.startswith("row_")):
+                fuori.append(nodo)
+        return fuori
+
+    def test_il_guardiano_vede_le_righe(self):
+        self.assertGreater(len(self._chiamate()), 5, "nessuna chiamata trovata: qualcosa è cambiato")
+
+    def test_nessuna_chiamata_passa_piu_argomenti_di_quanti_ce_ne_siano(self):
+        nomi, obbligatori = self._firma()
+        for chiamata in self._chiamate():
+            self.assertLessEqual(len(chiamata.args), len(nomi),
+                                 f"riga {chiamata.lineno}: {len(chiamata.args)} argomenti per {len(nomi)} posti")
+            if not any(c.arg is None for c in chiamata.keywords):
+                self.assertGreaterEqual(len(chiamata.args) + len(chiamata.keywords), obbligatori,
+                                        f"riga {chiamata.lineno}: ne mancano")
+            for chiave in chiamata.keywords:
+                if chiave.arg is None:
+                    continue        # «**quanto»: cosa ci sia dentro non si vede da qui
+                self.assertIn(chiave.arg, nomi, f"riga {chiamata.lineno}: «{chiave.arg}» non esiste")
+
+    def test_nessuna_chiamata_passa_un_elenco_dove_ci_va_un_testo(self):
+        """Il difetto preciso del 14/11: una lista dove Qt vuole una stringa.
+
+        Si guardano le liste dichiarate sul posto, anche sommate fra loro — ``[a] + [b]`` —, perché
+        è così che era scritta la mia. Quello che arriva da una variabile non si può vedere da qui,
+        e per quello c'è la prova sopra, che almeno conta i posti.
+        """
+        import ast  # noqa: PLC0415
+
+        def e_un_elenco(nodo) -> bool:
+            if isinstance(nodo, ast.List):
+                return True
+            if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Add):
+                return e_un_elenco(nodo.left) or e_un_elenco(nodo.right)
+            if isinstance(nodo, ast.IfExp):
+                return e_un_elenco(nodo.body) or e_un_elenco(nodo.orelse)
+            return False
+
+        nomi, _ = self._firma()
+        for chiamata in self._chiamate():
+            for posto, arg in enumerate(chiamata.args):
+                self.assertFalse(e_un_elenco(arg),
+                                 f"riga {chiamata.lineno}: «{nomi[posto]}» vuole un testo, "
+                                 f"non un elenco (le righe si uniscono con «<br>».join)")
+            for chiave in chiamata.keywords:
+                if chiave.arg is not None:
+                    self.assertFalse(e_un_elenco(chiave.value),
+                                     f"riga {chiamata.lineno}: «{chiave.arg}» vuole un testo")
+
+
+class OgniScrittaDellInterfacciaPassaDalTraduttoreTest(unittest.TestCase):
+    """Una scritta che non passa da ``_()`` resta in italiano per sempre.
+
+    `CONTRIBUTING` promette due cose a chi arriva: *«the files in the repository stay in English»* e
+    *«the application itself speaks both English and Italian»*. Il 14/11 avevo deciso che i due
+    simulatori erano arnesi da sviluppo e potevano restare in italiano; Marco il 15/11: *«se voglio
+    avere collaboratori i simulatori devono essere pubblici ed in lingua»*. Aveva ragione lui: un
+    simulatore che si apre solo in italiano smentisce il patto, e il patto era già scritto.
+
+    ``tools/i18n_check.py`` controlla un'altra cosa: che ogni testo **già dentro** ``_()`` abbia la
+    sua traduzione. Non si accorge di una scritta che non c'è mai entrata. Questo guardiano guarda
+    il buco che resta: ogni letterale passato a un metodo che **mostra** qualcosa deve essere
+    avvolto. Non costruisce finestre, quindi gira anche dove Qt non c'è.
+
+    Le righe di registro (``log.warning`` e compagnia) non si traducono: le legge chi sviluppa, nel
+    file di registro, e il registro del progetto è in italiano.
+    """
+
+    # I metodi che portano un testo sotto gli occhi di qualcuno, e **quali** dei loro argomenti si
+    # vedono. Il posto conta: «addItem(_('Sempre'), "sempre")» mostra il primo e si tiene il secondo
+    # come chiave, e un guardiano che guardasse tutti gli argomenti darebbe la caccia alle chiavi.
+    # Era il primo difetto di questo guardiano stesso: venticinque lamentele, tutte sbagliate.
+    MOSTRANO = {
+        "setText": (0,), "setWindowTitle": (0,), "setPlaceholderText": (0,),
+        # «append» non c'è, e non per dimenticanza: su un riquadro di testo mostra una riga, su una
+        # lista aggiunge una chiave, e dal codice le due cose sono identiche. Un guardiano che non
+        # sa distinguere due casi opposti dà lamentele sbagliate, e una lamentela sbagliata insegna
+        # a non leggere le lamentele.
+        "setToolTip": (0,), "setTitle": (0,), "addItem": (0,),
+        # QMessageBox.information(genitore, titolo, testo): il genitore non è un testo.
+        "information": (1, 2), "warning": (1, 2), "critical": (1, 2), "question": (1, 2),
+        "print": (0, 1, 2, 3),
+        # I costruttori: è lì che un'etichetta prende il suo testo quasi sempre, e un guardiano
+        # che guardasse solo «setText» non vedrebbe la maggior parte delle scritte del programma.
+        "QLabel": (0,), "QPushButton": (0,), "QCheckBox": (0,), "QRadioButton": (0,),
+        "QGroupBox": (0,), "QAction": (0,), "QToolButton": (0,),
+    }
+    # Dove si guarda: tutta l'interfaccia, più i simulatori, che sono pubblici.
+    GUARDATI = ("mirto/gui", "mirto/actions/smarthome_finta.py", "mirto/actions/simulator.py")
+
+    @classmethod
+    def _files(cls):
+        for voce in cls.GUARDATI:
+            p = ROOT / voce
+            for f in (sorted(p.rglob("*.py")) if p.is_dir() else [p]):
+                if "__pycache__" not in str(f):
+                    yield f
+
+    @classmethod
+    def scritte_nude(cls, sorgente: str, dove: str = "<prova>") -> list[str]:
+        """I letterali mostrati senza passare da ``_()``. Separata per poterla falsificare."""
+        import ast  # noqa: PLC0415
+
+        guai = []
+        try:
+            albero = ast.parse(sorgente)
+        except SyntaxError:
+            return guai
+
+        # Le frasi già tradotte, riconosciute **dove stanno** e non dal nodo in cima. La prima
+        # versione di questo guardiano pretendeva che l'argomento fosse lui stesso un letterale, e
+        # su «setText(_('A') if acceso else 'B')» non vedeva niente: l'argomento è un «if», non una
+        # stringa. Falsificandolo su quella riga vera è venuto fuori che era finto.
+        tradotte = set()
+        for n in ast.walk(albero):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    and n.func.id in ("_", "gettext", "ngettext")):
+                for dentro in ast.walk(n):
+                    if isinstance(dentro, ast.Constant) and isinstance(dentro.value, str):
+                        tradotte.add(id(dentro))
+
+        for n in ast.walk(albero):
+            if not isinstance(n, ast.Call):
+                continue
+            if isinstance(n.func, ast.Attribute):
+                nome = n.func.attr
+                # «log.warning(...)» è registro, non interfaccia: lo si riconosce dall'oggetto.
+                oggetto = ast.unparse(n.func.value)
+                if oggetto in ("log", "logger", "logging") or oggetto.endswith(".log"):
+                    continue
+            else:
+                nome = getattr(n.func, "id", "")
+            if nome not in cls.MOSTRANO:
+                continue
+            for posto in cls.MOSTRANO[nome]:
+                if posto >= len(n.args):
+                    continue
+                for dentro in ast.walk(n.args[posto]):
+                    if not (isinstance(dentro, ast.Constant) and isinstance(dentro.value, str)):
+                        continue
+                    if id(dentro) in tradotte or not cls.e_una_frase(dentro.value):
+                        continue
+                    guai.append(f"{dove}:{n.lineno}: {nome}(…{dentro.value[:50]!r}…) "
+                                f"non passa da _()")
+        return guai
+
+    @staticmethod
+    def e_una_frase(testo: str) -> bool:
+        """Se questo testo sia una frase da tradurre o un pezzo di impalcatura da lasciare stare.
+
+        Non si traducono: i simboli (``✕``, ``--:--:--``), i nomi propri (``Mirto``), gli esempi
+        tecnici (``rtsp://…``, ``+39333…``), le sigle (``OK``, ``MAC``) e i pezzi di marcatura con
+        cui si costruisce una riga (``<span style='color:``) — lì la frase vera sta dentro, in un
+        ``_()`` suo, e si guarda da sé.
+
+        **Quello che questo guardiano non vede**, e va saputo: una parola sola. ``_("Luce")`` è
+        tradotta e va tradotta, ma una parola sola potrebbe anche essere un nome proprio o una
+        chiave, e non c'è modo di distinguerle guardando il codice. Il guardiano chiede due parole
+        o niente: prende le frasi, che sono quasi tutte, e sulle parole singole si fida di chi
+        scrive. Chiedere anche quelle vorrebbe dire dare la caccia a ``"Twilio"`` e ``"POST"``.
+        """
+        import re  # noqa: PLC0415
+
+        t = testo.strip()
+        if re.match(r"^[a-z]+://|^[+@]|^\{", t):
+            return False                            # un indirizzo, un numero, un segnaposto
+        # Via l'impalcatura: tag (anche aperti a metà, perché la riga si compone a pezzi),
+        # entità e segnaposto. Quello che resta è il testo che uno legge.
+        t = re.sub(r"<[^>]*>|<[^>]*$|&\w+;|\{[^}]*\}", " ", t)
+        # Via i nomi di cose: «smoke_alarm», «command_topic», «Content-Type», «font-size:»,
+        # «tuoindirizzo@gmail.com». Una parola incollata a un'altra da `_`, `-`, `.`, `:` o `@` non
+        # è una parola da leggere, è un nome che il programma si dice da solo.
+        t = re.sub(r"[A-Za-zÀ-ÿ]+[-_.:@][A-Za-zÀ-ÿ_.:@-]*", " ", t)
+        parole = re.findall(r"[A-Za-zÀ-ÿ]{3,}", t)
+        return len(parole) >= 2
+
+    def test_il_guardiano_vede_una_scritta_nuda(self):
+        """Falsificazione: se non riconosce questa, non riconosce niente."""
+        guai = self.scritte_nude("etichetta.setText('Luce del portico')")
+        self.assertEqual(len(guai), 1, f"guardiano cieco: {guai}")
+
+    def test_il_guardiano_lascia_passare_quella_tradotta(self):
+        self.assertEqual(self.scritte_nude("etichetta.setText(_('Luce del portico'))"), [])
+
+    def test_il_guardiano_guarda_dentro_le_scelte(self):
+        """Il buco vero, trovato falsificando: la scritta stava in un ramo di un «if».
+
+        ``setText(_('A') if acceso else 'B')`` ha come argomento un ``IfExp``, non una stringa, e
+        il guardiano di prima chiedeva che l'argomento **fosse** una stringa. Passava.
+        """
+        guai = self.scritte_nude(
+            "b.setText(_('Non passa più nessuno') if acceso else 'Fai passare qualcuno')")
+        self.assertEqual(len(guai), 1, f"il ramo non tradotto non si vede: {guai}")
+        self.assertEqual(self.scritte_nude(
+            "b.setText(_('Non passa più nessuno') if acceso else _('Fai passare qualcuno'))"), [])
+
+    def test_il_guardiano_guarda_anche_i_costruttori(self):
+        """Quasi tutte le etichette prendono il testo alla nascita, non con «setText»."""
+        self.assertEqual(len(self.scritte_nude("QPushButton('Cerca i dispositivi')")), 1)
+        self.assertEqual(self.scritte_nude("QPushButton(_('Cerca i dispositivi'))"), [])
+
+    def test_il_guardiano_non_si_lamenta_del_registro(self):
+        self.assertEqual(self.scritte_nude("log.warning('non ho potuto pubblicare')"), [])
+
+    def test_il_guardiano_guarda_davvero_i_file(self):
+        files = list(self._files())
+        self.assertGreater(len(files), 10, "nessun file guardato: il guardiano è cieco")
+        self.assertIn("smarthome_finta_ui.py", [f.name for f in files])
+
+    def test_nessuna_scritta_dell_interfaccia_resta_fuori(self):
+        guai = []
+        for f in self._files():
+            guai += self.scritte_nude(f.read_text(encoding="utf-8"),
+                                      f.relative_to(ROOT).as_posix())
+        self.assertEqual(guai, [], "scritte che resterebbero in italiano per chiunque:\n  "
+                                   + "\n  ".join(guai))
+
+
+class UnaMemoriaNonStaInUnBloccoCheQualcunoRiscriveInteroTest(unittest.TestCase):
+    """`config.set("smarthome.published", …)` dentro un blocco che la finestra salva tutto intero.
+
+    Il 17/11, finito il passo 6, Mirto si segnava in `smarthome.published_discovery` quali voci aveva
+    pubblicato a Home Assistant: serve a sapere cosa andare a cancellare il giorno che si spegne il
+    racconto. Solo che la finestra delle impostazioni salva facendo `config.set("smarthome", …)` con
+    **tutto** quello che si vede sullo schermo, e quella memoria non si vede sullo schermo: al primo
+    salvataggio Mirto si dimenticava cosa aveva pubblicato, e spegnendo il racconto lasciava in Home
+    Assistant i sensori di tutte le camere, grigi e non cancellabili dalla sua interfaccia.
+
+    Non l'ha trovato la lettura del codice: l'ha trovato una prova sul broker vero, e per caso. Da
+    qui in avanti lo trova questo.
+
+    Il controllo: se da qualche parte si scrive un blocco intero (`set("x", …)`), nessun altro posto
+    può scrivere una chiave dentro quel blocco (`set("x.y", …)`) **e aspettarsi di ritrovarla**. Le
+    due scritture sono in file diversi e nessuna delle due è sbagliata da sola, che è il motivo per
+    cui una cosa così non si vede rileggendo.
+    """
+
+    def test_nessuna_chiave_scritta_dentro_un_blocco_che_viene_riscritto_intero(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        file = [f for f in sorted((radice / "mirto").rglob("*.py")) if "__pycache__" not in str(f)]
+        interi: dict[str, list[str]] = {}       # blocco -> dove si riscrive tutto
+        pezzi: dict[str, list[str]] = {}        # blocco -> dove si scrive una chiave dentro
+
+        for f in file:
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            for n in ast.walk(albero):
+                if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                        and n.func.attr == "set" and n.args
+                        and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
+                    continue
+                chiave = n.args[0].value
+                dove = f"{f.relative_to(radice)}:{n.lineno}"
+                if "." in chiave:
+                    pezzi.setdefault(chiave.split(".")[0], []).append(f"{dove} set(\"{chiave}\")")
+                elif len(n.args) > 1:
+                    # Un blocco intero si riconosce da cosa gli si dà: un dizionario, o il valore
+                    # tornato da una funzione che raccoglie una schermata (`valori()`).
+                    valore = n.args[1]
+                    intero = isinstance(valore, ast.Dict) or (
+                        isinstance(valore, ast.Call) and isinstance(valore.func, ast.Attribute)
+                        and valore.func.attr in ("valori", "values", "dati"))
+                    # Ma `{**(cfg.get("audio") or {}), "mac_mic": …}` **fonde**: riparte da quello che
+                    # c'è scritto e ci cambia dentro, quindi non perde niente di quello che non si
+                    # vede sullo schermo. È la differenza fra riscrivere e aggiornare, e il
+                    # guardiano senza questa distinzione accusava una riga sana — la prima che ha
+                    # guardato. Un guardiano che grida al lupo si impara a zittire, ed è peggio di
+                    # non averlo.
+                    if intero and isinstance(valore, ast.Dict) and any(
+                            k is None and chiave in ast.dump(v) for k, v in
+                            zip(valore.keys, valore.values)):
+                        intero = False
+                    if intero:
+                        interi.setdefault(chiave, []).append(f"{dove} set(\"{chiave}\", …tutto…)")
+
+        guai = []
+        for blocco, dentro in sorted(pezzi.items()):
+            if blocco in interi:
+                guai.append(f"«{blocco}» si riscrive intero in {', '.join(sorted(set(interi[blocco])))}"
+                            f" ma qualcuno ci scrive dentro: {', '.join(sorted(set(dentro)))}")
+        self.assertEqual(guai, [], "memoria che un salvataggio cancella:\n  " + "\n  ".join(guai))
+
+
+class UnAiutoImportatoNonSiChiamaTestQualcosaTest(unittest.TestCase):
+    """`from ..racconto import testamento` in cima a un file di prove.
+
+    `pytest` raccoglie come prova **qualunque** cosa al livello del modulo il cui nome inizia per
+    `test`, importata compresa. Dal 15/11 `testamento()` girava come prova a ogni corsa: non provava
+    niente, e `pytest` lo diceva — con un avviso, in mezzo agli altri, che ho letto per due giorni
+    senza vederlo.
+
+    È il difetto meno grave di tutta la suite e vale la pena averlo scritto per un motivo diverso:
+    **un avviso che si ignora per un giorno è un avviso che non serve a niente**. L'unico modo di
+    fare qualcosa di un avviso è renderlo una prova rossa. Costa cinque righe.
+    """
+
+    def test_nessun_aiuto_importato_si_chiama_come_una_prova(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        guai = []
+        for f in sorted((radice / "tests").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            for n in albero.body:                       # solo il livello del modulo: lì raccoglie
+                if not isinstance(n, (ast.Import, ast.ImportFrom)):
+                    continue
+                for a in n.names:
+                    nome = a.asname or a.name.split(".")[-1]
+                    if nome.startswith("test"):
+                        guai.append(f"{f.relative_to(radice)}:{n.lineno} «{nome}» importato qui "
+                                    f"pytest lo raccoglie come prova (dagli un altro nome con «as»)")
+        self.assertEqual(guai, [], "aiuti che pytest conta come prove:\n  " + "\n  ".join(guai))
+
+
+class UnaProvaScrittaDeveAncheGirareTest(unittest.TestCase):
+    """Tre prove finite **dentro** `if __name__ == "__main__":`, dopo `unittest.main()`.
+
+    Il 17/11, spostando tre prove dentro la classe che aveva il banco, il mio script le ha appese in
+    fondo al file — cioè dentro il blocco finale, dove sono indentate bene, compilano, si leggono
+    come prove e **non girano mai**. `grep -c "def test_"` ne contava trenta, `unittest` ventisette.
+
+    La cosa peggiore non è l'errore: è che il segnale l'avevo davanti. `pytest` ha stampato 27
+    subito dopo lo spostamento e me lo sono spiegato come «numero vecchio» invece di guardarlo. Una
+    prova che non gira è peggio di una prova che non c'è: la seconda si vede mancare, la prima dice
+    di sì a una domanda che nessuno ha fatto.
+
+    Il controllo: ogni `def test_…` in `tests/` deve essere membro diretto di una classe che
+    `unittest` raccoglie. Non dentro un `if`, non dentro un'altra funzione, non al livello del
+    modulo — dove `unittest` non la vedrebbe comunque, mentre `pytest` sì, e la differenza fra i due
+    è un altro modo di avere una prova che gira in un posto solo.
+    """
+
+    def test_ogni_prova_sta_dentro_una_classe_che_unittest_raccoglie(self):
+        import ast
+        from pathlib import Path
+
+        radice = Path(__file__).resolve().parents[1]
+        guai = []
+        for f in sorted((radice / "tests").rglob("*.py")):
+            if "__pycache__" in str(f):
+                continue
+            albero = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            dentro_le_classi = set()
+            for c in ast.walk(albero):
+                if isinstance(c, ast.ClassDef):
+                    dentro_le_classi |= {id(m) for m in c.body
+                                         if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            for n in ast.walk(albero):
+                if (isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and n.name.startswith("test") and id(n) not in dentro_le_classi):
+                    guai.append(f"{f.relative_to(radice)}:{n.lineno} «{n.name}» non è dentro "
+                                f"nessuna classe: scritta, letta, e mai eseguita")
+        self.assertEqual(guai, [], "prove che non girano:\n  " + "\n  ".join(guai))

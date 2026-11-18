@@ -293,6 +293,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--simulatore-nodo", "--node-simulator", action="store_true", help=_('avvia un nodo simulato per i test'))
     parser.add_argument("--porta", "--port", type=int, default=8443, help=_('porta del nodo simulato'))
     parser.add_argument("--nome-nodo", "--node-name", default="simulato", help=_('nome del nodo simulato'))
+    parser.add_argument("--simulatore-smarthome", "--smarthome-simulator", action="store_true",
+                        help=_('avvia una casa smart finta, con la sua finestra, per provare la domotica'))
+    parser.add_argument("--porta-broker", "--broker-port", type=int, default=1883,
+                        help=_('porta del broker della casa finta (0 = la prima libera)'))
     parser.add_argument("--verifica-modelli", "--check-models", action="store_true",
                         help=_('scarica e prova i modelli delle specie e dei suoni'))
     parser.add_argument("--prova-registrazione", "--test-recording", type=int, nargs="?", const=60, metavar="S",
@@ -332,6 +336,10 @@ def main(argv: list[str] | None = None) -> int:
         from .actions.simulator import run_simulator  # noqa: PLC0415
 
         return run_simulator(name=args.nome_nodo, port=args.porta)
+    if args.simulatore_smarthome:
+        from .gui.smarthome_finta_ui import apri_casa_finta  # noqa: PLC0415
+
+        return apri_casa_finta(porta=args.porta_broker)
     if args.senza_interfaccia:
         from .core import run_headless  # noqa: PLC0415
 

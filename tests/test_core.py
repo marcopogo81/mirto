@@ -4893,3 +4893,186 @@ class IlColoreDellAnteprimaNonSiScambiaTest(unittest.TestCase):
         vista = self._fotogramma(0, 0, 255)[:, :, ::-1]
         colore = frame_to_qimage(vista, (320, 180)).pixelColor(10, 10)
         self.assertEqual((colore.red(), colore.green(), colore.blue()), (0, 0, 255))
+
+
+class IlWizardColDispositivoDiCasaTest(unittest.TestCase):
+    """La terza lista: *questa azione parte quando un dispositivo di casa cambia stato*.
+
+    Marco, 15/11, scegliendo fra tre forme: *«una terza lista accanto alle altre due, stessa logica
+    delle altre due, niente da reimparare»*. Quindi sotto i microfoni, e non una tendina in cima che
+    cambierebbe la schermata anche a chi non ha la domotica.
+
+    Queste prove vogliono Qt e nel contenitore non girano: le lancia Marco sul Mac, e la CI.
+    """
+
+    CAMERE = [{"name": "Ingresso", "enabled": True}]
+    CASA = [{"chiave": "smart:luce_scale", "nome": "Luce delle scale"},
+            {"chiave": "smart:mov_corridoio", "nome": "Sensore del corridoio"}]
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from PySide6.QtWidgets import QApplication
+        except Exception as exc:  # noqa: BLE001
+            raise unittest.SkipTest(f"senza PySide6 non c'è finestra ({exc})") from exc
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _wizard(self, azione=None, con_casa: bool = True):
+        from mirto.gui.settings import ActionWizard
+
+        w = ActionWizard(azione, "n1", self.CAMERE)
+        self.addCleanup(w.deleteLater)
+        if con_casa:
+            w.set_dispositivi_casa(self.CASA)
+        self._vai_dove_si_sceglie_il_trigger(w)
+        return w
+
+    @staticmethod
+    def _vai_dove_si_sceglie_il_trigger(w) -> None:
+        """Il wizard mostra **una pagina per volta**, e questi campi stanno nella seconda.
+
+        Senza questa riga `isVisibleTo` risponde sempre «no» — non perche' la riga sia nascosta, ma
+        perche' e' nascosta tutta la pagina che la contiene. Le prime stesure di queste prove
+        chiedevano la visibilita' senza cambiare pagina: quella che si aspettava «no» passava per il
+        motivo sbagliato, e quella che si aspettava «si'» cadeva pur essendo il codice a posto. Se
+        n'e' accorto Marco lanciandole sul Mac.
+
+        La pagina si cerca **per il campo che contiene**, non per numero: un numero scritto qui
+        diventa sbagliato il giorno che si aggiunge una schermata, e nessuno lo lega a questo file.
+        """
+        dove = next(i for i, (_t, _s, chiavi) in enumerate(type(w).PAGINE)
+                    if "dispositivi_casa" in chiavi)
+        w.vai(dove)
+
+    def _pronta_da_salvare(self, w) -> None:
+        """Nome e un pezzo in «Cosa fa»: senza, «_accept» si ferma su un avviso modale.
+
+        E un avviso modale dentro una prova vuol dire una prova che aspetta un clic che non
+        arriverà mai — la suite si è piantata così una volta, e sta scritto accanto a «_accept».
+        """
+        from mirto.actions.pannello_catena import Passo
+
+        w.name.setText("Benvenuto")
+        w.catena.set_passi([Passo(comando="luci", durata=10)])
+
+    def test_senza_domotica_la_riga_non_c_e(self):
+        """Chi non ha un impianto smart non deve vedersi una riga vuota per sempre."""
+        w = self._wizard(con_casa=False)
+        self.assertEqual(w.smart.count(), 0)
+        self.assertFalse(w.smart.isVisibleTo(w))
+        self.assertFalse(w.smart_versi.isVisibleTo(w))
+
+    def test_con_la_domotica_l_elenco_c_e(self):
+        w = self._wizard()
+        self.assertEqual(w.smart.count(), 2)
+        self.assertTrue(w.smart.isVisibleTo(w))
+
+    def test_c_e_anche_un_sensore_e_non_e_un_errore(self):
+        """Un sensore non si accende, ma **cambia stato**, ed è il caso più interessante del passo 3.
+
+        «Il sensore del corridoio si accende → accendi la luce delle scale» è il verso che nessun
+        concorrente ha. Offrire qui solo i comandabili — come si fa giustamente fra le uscite —
+        vorrebbe dire tenere fuori metà del valore.
+        """
+        w = self._wizard()
+        nomi = [w.smart.item(i).text() for i in range(w.smart.count())]
+        self.assertIn("Sensore del corridoio", nomi)
+
+    def test_il_quando_si_vede_solo_quando_hai_scelto_un_dispositivo(self):
+        from PySide6.QtCore import Qt
+
+        w = self._wizard()
+        self.assertFalse(w.smart_versi.isVisibleTo(w), "chiede «quando» di niente")
+        w.smart.item(0).setCheckState(Qt.CheckState.Checked)
+        self.assertTrue(w.smart_versi.isVisibleTo(w))
+
+    def test_sotto_la_spunta_c_e_la_chiave_non_il_nome(self):
+        """Un nome lo cambia chi rinomina una lampadina; la chiave no.
+
+        Salvare il nome darebbe un'azione che smette di scattare il giorno che qualcuno rinomina il
+        dispositivo in Zigbee2MQTT, senza un messaggio e senza un modo di accorgersene.
+        """
+        from PySide6.QtCore import Qt
+
+        w = self._wizard()
+        self.assertEqual(w.smart.item(0).data(Qt.ItemDataRole.UserRole), "smart:luce_scale")
+
+    def test_salvando_scrive_i_blocchi_e_non_perde_la_camera(self):
+        from unittest import mock
+
+        from PySide6.QtCore import Qt
+
+        w = self._wizard()
+        self._pronta_da_salvare(w)
+        w.cams.item(0).setCheckState(Qt.CheckState.Checked)
+        w.smart.item(0).setCheckState(Qt.CheckState.Checked)
+        with mock.patch("mirto.gui.settings.QMessageBox") as box:
+            w._accept()                              # noqa: SLF001
+        self.assertFalse(box.warning.called, f"la finestra ha rifiutato: {box.warning.call_args}")
+        a = getattr(w, "result_action", None)
+        self.assertIsNotNone(a, f"non ha salvato: {w._cosa_manca(1)}")   # noqa: SLF001
+        tipi = [b["tipo"] for b in a.get("blocchi") or []]
+        self.assertIn("domotica", tipi, "il trigger di casa non è stato scritto")
+        self.assertIn("camera", tipi, "ha perso il trigger della camera")
+
+    def test_senza_dispositivi_scelti_non_scrive_i_blocchi(self):
+        """Una configurazione che non usa la domotica non cambia di una riga."""
+        from unittest import mock
+
+        from PySide6.QtCore import Qt
+
+        w = self._wizard()
+        self._pronta_da_salvare(w)
+        w.cams.item(0).setCheckState(Qt.CheckState.Checked)
+        with mock.patch("mirto.gui.settings.QMessageBox") as box:
+            w._accept()                              # noqa: SLF001
+        self.assertFalse(box.warning.called, f"la finestra ha rifiutato: {box.warning.call_args}")
+        self.assertIsNotNone(getattr(w, "result_action", None))
+        self.assertNotIn("blocchi", w.result_action)
+
+    def test_riaprendo_l_azione_la_scelta_c_e_ancora(self):
+        from PySide6.QtCore import Qt
+
+        azione = {"name": "Benvenuto", "action": "accendi", "targets": ["person"],
+                  "cameras": ["Ingresso"], "duration": 10,
+                  "blocchi": [{"tipo": "domotica", "soggetti": ["spento"],
+                               "dispositivo": "smart:luce_scale"}]}
+        w = self._wizard(azione)
+        spuntati = [w.smart.item(i).data(Qt.ItemDataRole.UserRole)
+                    for i in range(w.smart.count())
+                    if w.smart.item(i).checkState() == Qt.CheckState.Checked]
+        self.assertEqual(spuntati, ["smart:luce_scale"])
+        versi = [w.smart_versi.item(i).data(Qt.ItemDataRole.UserRole)
+                 for i in range(w.smart_versi.count())
+                 if w.smart_versi.item(i).checkState() == Qt.CheckState.Checked]
+        self.assertEqual(versi, ["spento"], "il verso scelto non è tornato")
+
+    def test_un_dispositivo_che_adesso_non_si_vede_resta_scelto_e_lo_dice(self):
+        """Il broker spento non deve far perdere un trigger a chi riapre e salva.
+
+        Se la lampadina scelta ieri oggi non c'è — broker giù, dispositivo staccato — sparire in
+        silenzio vorrebbe dire che basta riaprire l'azione e premere Salva per perdere il trigger,
+        senza che nessuno l'abbia chiesto e senza accorgersene.
+        """
+        from unittest import mock
+
+        from PySide6.QtCore import Qt
+
+        azione = {"name": "Benvenuto", "action": "accendi", "targets": ["person"],
+                  "cameras": ["Ingresso"], "duration": 10,
+                  "blocchi": [{"tipo": "domotica", "soggetti": ["acceso"],
+                               "dispositivo": "smart:lampada_sparita"}]}
+        w = self._wizard(azione)
+        voci = {w.smart.item(i).data(Qt.ItemDataRole.UserRole): w.smart.item(i)
+                for i in range(w.smart.count())}
+        self.assertIn("smart:lampada_sparita", voci, "la scelta di prima è sparita dall'elenco")
+        persa = voci["smart:lampada_sparita"]
+        self.assertEqual(persa.checkState(), Qt.CheckState.Checked, "ed è anche stata dimenticata")
+        self.assertIn("non la vedo", persa.text(), "non dice perché è diversa dalle altre")
+        self._pronta_da_salvare(w)
+        with mock.patch("mirto.gui.settings.QMessageBox") as box:
+            w._accept()                              # noqa: SLF001
+        self.assertFalse(box.warning.called, f"la finestra ha rifiutato: {box.warning.call_args}")
+        tipi = [b.get("dispositivo") for b in (w.result_action.get("blocchi") or [])]
+        self.assertIn("smart:lampada_sparita", tipi, "salvando ha perso il trigger")

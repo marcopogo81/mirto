@@ -41,11 +41,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ..config import data_dir
-from .blocchi import NODO, blocchi_di, dispositivo_di, obiettivi_di, scatta
+from .blocchi import (NODO, SMART, blocchi_di, dispositivo_di, e_un_cambio_di_stato, obiettivi_di,
+                      scatta)
 from .presets import MANUAL_KINDS
 from .passi import (passi_di, problemi as problemi_catena, quanto_dura,
                     quanto_dura_il_gruppo, quanto_suona, scegli_a_turno, srotola)
 from .nodes import NodeClient
+from .smarthome import SPEGNI as SPEGNI_SMART, chiave_di as chiave_smart
 from ..i18n import _, questo_computer
 
 log = logging.getLogger(__name__)
@@ -55,6 +57,17 @@ SIREN_WINDOW_SECONDS = 1800  # nei 30 minuti la sirena suona al massimo 180 s in
 GENERIC_MAX_SECONDS = 1800
 CONFIRM_TTL_SECONDS = 600  # validità massima di un pulsante di conferma
 META_EVERY_SECONDS = 600  # ogni quanto rileggere la "carta d'identità" dei nodi (GET /info)
+# Per quanto tempo, dopo un nostro comando a un dispositivo di casa, un cambio di stato di quel
+# dispositivo si considera l'**eco** del comando e non una notizia. Un annuncio MQTT torna in meno di
+# un decimo di secondo su una rete di casa; cinque secondi sono larghi per un broker lento o un
+# dispositivo che risponde piano, e abbastanza stretti perché qualcuno che tocca l'interruttore
+# subito dopo venga comunque sentito.
+ECO_NOSTRO = 5.0
+# Quanto resta accesa un'uscita di un nodo accesa **a mano** da Telegram, se non si dice per quanto.
+# Un relè di un nodo non può restare acceso per sempre — il nodo conta i suoi secondi e si spegne —
+# quindi una durata ci vuole sempre, e un minuto è il tempo in cui uno va a vedere cos'ha acceso.
+# I tetti del tipo (tre minuti la sirena, trenta secondi il dissuasore) restano sopra questo.
+DURATA_A_MANO = 60.0
 KINDS = {"siren", "light", "audio", "generic", "deterrent"}
 # Tipi delle versioni precedenti: diventano uscite generiche, sempre su conferma da Telegram (Mirto è solo
 # software: che cosa è collegato a un'uscita lo decide chi installa, e ne risponde).
@@ -380,6 +393,17 @@ class ActionEngine:
         self.specs: list[ActionSpec] = []
         self._confirm: dict[str, _Confirmation] = {}
         self._timers: list[threading.Timer] = []
+        # I dispositivi di casa che **Mirto** ha accesi e non ha ancora spento. Serve a «Ferma
+        # tutto», e non è un dettaglio: un nodo conta i secondi da sé (gli si dice «accendi per
+        # trenta» e si spegne anche se Mirto muore), una lampadina smart no — il timer è qui. Senza
+        # questo elenco, «Ferma tutto» cancellerebbe il timer e lascerebbe la luce accesa a vita,
+        # cioè farebbe il contrario di quello che dice.
+        self._smart_accesi: set[str] = set()
+        # Lo stato che sapevamo di ogni dispositivo di casa, e quando lo abbiamo comandato noi. Il
+        # primo serve a distinguere un **cambio** da una **lettura**, il secondo a non rispondere
+        # all'eco dei nostri comandi: senza nessuno dei due, il trigger del passo 3 parte da sé.
+        self._stato_smart: dict[str, bool] = {}
+        self._smart_nostri: dict[str, float] = {}
         self._strong: dict[str, float] = {}  # camera → ora dell'ultima conferma forte
         self._active_until: dict[str, float] = {}  # azione → fine dell'attivazione in corso
         self._siren_log: list[tuple[float, float]] = []  # (inizio, durata) delle sirene recenti
@@ -437,6 +461,13 @@ class ActionEngine:
             self._cancel_pending()
             self._pool.submit(self._stop_nodes)  # spegne anche ciò che è già acceso
         self._audit("inserito" if armed else "disinserito")
+        # Lo si racconta sul broker, se il racconto è acceso (passo 5). **Anche quando si
+        # disinserisce**, ed è il caso che conta: un'integrazione che sapesse solo quando la casa è
+        # protetta mostrerebbe «protetta» per sempre dal momento in cui la si spegne, che è la bugia
+        # più pericolosa che possa dire un pannello di antifurto.
+        racconto = getattr(self._domotica(), "racconto", None)
+        if racconto is not None:
+            racconto.protezione(bool(armed))
         return (_('🔒 Protezione ATTIVA: avvisi e azioni attivi.') if armed
                 else _("🔓 Protezione DISATTIVATA: nessun avviso e nessuna azione (gli eventi restano nell'archivio del {computer}).",
                        computer=questo_computer()))
@@ -449,6 +480,14 @@ class ActionEngine:
         self._hb_thread = threading.Thread(target=self._heartbeat_loop, name="nodi-heartbeat", daemon=True)
         self._hb_thread.start()
         self.pairing.start()
+        # Come allo stop: mettersi in ascolto della casa non deve poter impedire a Mirto di partire.
+        # Chi non ha un impianto smart, o ce l'ha rotto, deve avere le camere che funzionano.
+        try:
+            casa = self._domotica()
+            if casa is not None:
+                casa.ascolta(self._cambio_di_casa)
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: non mi sono messo in ascolto, il resto parte comunque")
 
     def pair_new_node(self, found: dict, name: str, pin: str = "") -> dict:
         """Abbina un nodo proposto da ``pairing`` (l'utente ha visto l'impronta e scritto il PIN).
@@ -470,6 +509,17 @@ class ActionEngine:
         self._stop.set()
         self._wake.set()
         self.pairing.stop()
+        # Staccarsi dalla domotica **non deve poter impedire** il resto dello spegnimento. Quello che
+        # viene dopo cancella i timer e chiude le code: se una riga qui sopra solleva, Mirto resta con
+        # dei timer vivi che faranno partire pezzi di catena a programma già chiuso. Si scrive nel
+        # registro, perché un collaboratore che non ha i metodi che ci aspettiamo è un difetto di
+        # cablaggio e va visto, e si va avanti.
+        try:
+            casa = self._domotica()
+            if casa is not None:
+                casa.non_ascoltare(self._cambio_di_casa)
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: non sono riuscito a staccarmi, continuo a fermare il resto")
         with self._lock:
             for t in self._timers:
                 t.cancel()
@@ -799,9 +849,19 @@ class ActionEngine:
                      ", ".join(s.name for s in protette))
             protette = []
         if protette:
+            # **Cosa è successo lo dice l'evento, non il messaggio.** Fino al 15/11 qui c'era una
+            # frase sola, «Intrusione confermata», e andava bene perché gli eventi venivano tutti da
+            # una camera o da un microfono. Dal passo 3 ne arrivano anche dalla domotica: con la
+            # frase di prima, accendere la luce delle scale mandava sul telefono «🚨 Intrusione
+            # confermata (Luce delle scale)» — un allarme per una lampadina, che è il modo più
+            # veloce di insegnare a qualcuno a non fidarsi degli avvisi di Mirto.
+            nomi = ', '.join(s.name for s in protette)
+            dove = getattr(ev, "camera_name", "")
             self.core.notifier.notify_text(
+                _('💡 {dove}: avvio {join}', dove=dove, join=nomi)
+                if e_un_cambio_di_stato(ev) else
                 _('🚨 Intrusione confermata ({camera_name}): avvio {join}',
-                  camera_name=getattr(ev, "camera_name", ""), join=', '.join(s.name for s in protette))
+                  camera_name=dove, join=nomi)
             )
         for spec in protette:
             partite.append(spec)
@@ -919,17 +979,190 @@ class ActionEngine:
             if not sirena and spec.kind == "siren" and spec.action not in tipi:
                 sirena = duration
             if sirena:
-                self._siren_log = [(t, d) for t, d in self._siren_log if now - t < SIREN_WINDOW_SECONDS]
-                used = sum(d for _t, d in self._siren_log)
-                concesso = min(sirena, SIREN_MAX_SECONDS - used)
+                concesso = self._concedi_sirena(sirena, now)
                 if concesso < 1:
                     return 0.0
-                self._siren_log.append((now, concesso))
                 # Se il budget taglia la sirena, taglia l'azione: tenerla «in corso» più a lungo di
                 # quanto le è concesso suonare vorrebbe dire bloccare il prossimo scatto per niente.
                 duration = min(duration, duration - sirena + concesso)
             self._active_until[spec.name] = now + duration
             return duration
+
+    # --- le uscite, comandate a mano (passo 4) --------------------------------
+    def uscite(self) -> list[dict]:
+        """Tutto quello che si può accendere e spegnere a mano: i relè dei nodi e le luci di casa.
+
+        Una cosa sola per chi guarda, due mondi dietro. Ogni voce:
+        ``{chiave, nome, dove, tipo, acceso, restano}`` — ``acceso`` a ``None`` vuol dire «non lo
+        so», che è diverso da «spento» e non si mostra come spento (un relè di un nodo, finché il
+        nodo non dice che è attivo, non lo sappiamo).
+        """
+        fuori: list[dict] = []
+        for nd in self.config.get("actions.nodes") or []:
+            nid = str(nd.get("id") or "")
+            if not nid:
+                continue
+            dove = str(nd.get("name") or nid)
+            info = dict(self.node_info.get(nid) or {})
+            attive = {str(k): float(v) for k, v in (info.get("attive") or {}).items()}
+            eta = self.clock() - float(info.get("_at", self.clock()))
+            for nome, tipo in (self.node_commands.get(nid) or {}).items():
+                restano = max(0.0, attive.get(nome, 0.0) - eta)
+                fuori.append({"chiave": f"nodo:{nid}|{nome}", "nome": str(nome), "dove": dove,
+                              "tipo": str(tipo or "generic"),
+                              "acceso": bool(restano) if attive else None,
+                              "restano": restano})
+        casa = self._domotica()
+        for d in (casa.dispositivi() if casa is not None else []):
+            if not getattr(d, "comandabile", False):
+                continue
+            fuori.append({"chiave": chiave_smart(d.identificativo),
+                          "nome": d.nome or d.identificativo, "dove": _('casa'),
+                          "tipo": "light" if d.tipo == "luce" else "generic",
+                          "acceso": d.acceso, "restano": 0.0})
+        return fuori
+
+    def uscite_testo(self) -> str:
+        """L'elenco delle uscite in parole, per Telegram. Dice anche com'è adesso ciascuna."""
+        voci = self.uscite()
+        if not voci:
+            return _('Non c\'è niente da accendere: nessun nodo abbinato e nessun dispositivo di casa.')
+        righe = [_('Cosa posso accendere o spegnere:')]
+        for v in voci:
+            # «non lo so» non si scrive «spento»: chi legge «spento» ci crede, e magari è accesa.
+            stato = ("🟢 " + _('accesa') if v["acceso"] else
+                     ("⚪️ " + _('spenta') if v["acceso"] is False else "❔ " + _('non lo so')))
+            resta = _(' ({n:.0f} s)', n=v["restano"]) if v["restano"] >= 1 else ""
+            righe.append(f"• {v['nome']} – {v['dove']} – {stato}{resta}")
+        righe.append(_('Scrivi per esempio: /accendi {nome}', nome=voci[0]["nome"]))
+        return "\n".join(righe)
+
+    def cerca_uscita(self, testo: str) -> tuple[dict | None, str]:
+        """L'uscita che quel testo nomina, oppure ``(None, perché no)``.
+
+        **Qui non si indovina.** Cercare una camera per fare una foto può ripiegare sulla prima che
+        c'è: se sbaglia, viene una foto della stanza sbagliata. Un'uscita no — se sbaglia, accende la
+        sirena invece della luce del portico, alle tre di notte. Quindi: niente corrispondenza o più
+        di una, e non si fa niente, dicendo quali sono.
+        """
+        voci = self.uscite()
+        q = " ".join(str(testo or "").strip().lower().split())
+        if not q:
+            return None, self.uscite_testo()
+        esatte = [v for v in voci if q == v["nome"].strip().lower()]
+        quali = esatte or [v for v in voci if q in v["nome"].strip().lower()]
+        if len(quali) == 1:
+            return quali[0], ""
+        if not quali:
+            return None, _('Non trovo «{q}».', q=testo.strip()) + "\n" + self.uscite_testo()
+        return None, _('«{q}» può essere più di una cosa: {join}. Scrivi il nome intero.',
+                       q=testo.strip(), join=', '.join(v["nome"] for v in quali))
+
+    def comanda_uscita(self, testo: str, acceso: bool, secondi: float = 0) -> str:
+        """Accende o spegne un'uscita, da Telegram. Torna la frase da mandare in risposta.
+
+        **La serratura è quella di Telegram**, cioè la nostra: chi arriva fin qui è un ID in un
+        elenco esplicito. Non si apre niente di nuovo — le uscite si comandavano già, solo dentro
+        un'azione — e per questo i limiti che valgono per un'azione valgono anche qui: una sirena
+        accesa a mano **consuma gli stessi tre minuti ogni mezz'ora**, e se il budget è finito non
+        suona. Senza questa riga, il telefono sarebbe la porta di servizio dei limiti di legge.
+        """
+        quale, perche = self.cerca_uscita(testo)
+        if quale is None:
+            return perche
+        if not acceso:
+            return self._spegni_uscita(quale)
+        return self._accendi_uscita(quale, secondi)
+
+    def _accendi_uscita(self, quale: dict, secondi: float) -> str:
+        tipo, dove, nome = quale["tipo"], quale["dove"], quale["nome"]
+        tetto = LIMITI_PER_TIPO.get(tipo, GENERIC_MAX_SECONDS)
+        if dispositivo_di(quale["chiave"])[0] == SMART:
+            # Una luce di casa può restare accesa: è quello che fa un interruttore, ed è quello che
+            # si aspetta chi scrive «accendi la luce del portico» dal telefono. Un relè di un nodo
+            # no — il nodo conta i suoi secondi e si spegne — quindi lì una durata ci vuole sempre.
+            durata = min(float(secondi or 0), tetto) if secondi else 0.0
+            if not self._comanda_smart(quale["chiave"], True):
+                return _('Non ho potuto accendere {nome}: la domotica non risponde.', nome=nome)
+            if durata:
+                self._schedule(durata, self._spegni_smart, dispositivo_di(quale["chiave"])[1])
+                return _('💡 {nome} accesa per {n:.0f} s.', nome=nome, n=durata)
+            return _('💡 {nome} accesa. Scrivi /spegni {nome} quando vuoi.', nome=nome)
+        durata = min(float(secondi) if secondi else DURATA_A_MANO, tetto)
+        if tipo in LIMITI_PER_TIPO:
+            with self._lock:
+                concesso = self._concedi_sirena(durata, self.clock()) if tipo == "siren" else durata
+            if concesso < 1:
+                return _('🔇 {nome} non parte: i tre minuti ogni mezz\'ora sono esauriti.', nome=nome)
+            durata = concesso
+        client = self._client_di(quale["chiave"].split("|")[0])
+        if client is None:
+            return _('Non ho potuto accendere {nome}: {dove} non risponde.', nome=nome, dove=dove)
+        comando = quale["chiave"].split("|", 1)[1]
+        try:
+            client.activate(comando, durata, "", "")
+        except Exception as exc:  # noqa: BLE001
+            self._audit("errore", comando=comando, errore=str(exc), da="telegram")
+            return _('Non ho potuto accendere {nome}: {exc}', nome=nome, exc=exc)
+        self._audit("acceso-a-mano", uscita=quale["chiave"], secondi=durata, da="telegram")
+        return _('🔛 {nome} ({dove}) per {n:.0f} s.', nome=nome, dove=dove, n=durata)
+
+    def _spegni_uscita(self, quale: dict) -> str:
+        nome = quale["nome"]
+        if dispositivo_di(quale["chiave"])[0] == SMART:
+            if not self._comanda_smart(quale["chiave"], False):
+                return _('Non ho potuto spegnere {nome}: la domotica non risponde.', nome=nome)
+            return _('⚪️ {nome} spenta.', nome=nome)
+        client = self._client_di(quale["chiave"].split("|")[0])
+        if client is None:
+            return _('Non ho potuto spegnere {nome}: {dove} non risponde.',
+                     nome=nome, dove=quale["dove"])
+        try:
+            client.stop_all()
+        except Exception as exc:  # noqa: BLE001
+            return _('Non ho potuto spegnere {nome}: {exc}', nome=nome, exc=exc)
+        self._audit("spento-a-mano", uscita=quale["chiave"], da="telegram")
+        return _('⛔ {nome} ({dove}) spenta.', nome=nome, dove=quale["dove"])
+
+    def _comanda_smart(self, chiave: str, acceso: bool) -> bool:
+        """Comanda un dispositivo di casa e **timbra che l'abbiamo fatto noi**.
+
+        Il timbro non è un dettaglio di questa funzione: senza, un'azione che ascolta «quando si
+        accende quella luce» partirebbe perché l'ha accesa Mirto da Telegram (passo 3). Per questo
+        il comando a mano passa da qui e non direttamente dalla domotica.
+        """
+        casa = self._domotica()
+        _tipo, quale = dispositivo_di(chiave)
+        if casa is None or not quale:
+            return False
+        with self._lock:
+            self._smart_nostri[chiave] = self.clock()
+            if acceso:
+                self._smart_accesi.add(quale)
+            else:
+                self._smart_accesi.discard(quale)
+        try:
+            return bool(casa.comanda(quale, acceso))
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: comando a mano su %s non riuscito", quale)
+            return False
+
+    def _concedi_sirena(self, sirena: float, now: float) -> float:
+        """Quanti di questi secondi di sirena il budget concede, e se ne prende nota. **Vuole il lucchetto.**
+
+        Tre minuti ogni mezz'ora, ed è una promessa che sta in ``GOVERNANCE.md`` fra le cose che non
+        cambiano. Stava dentro il calcolo della durata di un'azione, dove è nata; da qui in poi la
+        chiede anche chi accende una sirena **a mano da Telegram** (passo 4 del piano domotica), e due
+        conti separati sullo stesso budget vorrebbero dire che una delle due strade non lo consuma.
+        Il giorno che quella strada esiste e nessuno se n'è accorto, i tre minuti non sono più tre.
+        """
+        self._siren_log = [(t, d) for t, d in self._siren_log if now - t < SIREN_WINDOW_SECONDS]
+        used = sum(d for _t, d in self._siren_log)
+        concesso = min(sirena, SIREN_MAX_SECONDS - used)
+        if concesso < 1:
+            return 0.0
+        self._siren_log.append((now, concesso))
+        return concesso
 
     def _esegui_passo(self, spec: ActionSpec, ev, catena: list[dict], i: int,
                       suono_predefinito: str = "") -> bool:
@@ -951,6 +1184,11 @@ class ActionEngine:
         # obbedire al pezzo. Vuoto vuol dire «quello dell'azione», che è il caso di tutte le azioni
         # scritte finora.
         dove = str(chiamata.get("dispositivo") or "") or (("nodo:" + spec.node) if spec.node else "")
+        # Un dispositivo di casa non si comanda con una richiesta HTTP a un nodo: si pubblica sul
+        # broker. Il resto della catena non cambia di una riga — l'attesa dopo, il gruppo, «Ferma
+        # tutto» e l'errore che ferma la fila sono gli stessi (15/11, passo 2 del piano domotica).
+        if dispositivo_di(dove)[0] == SMART:
+            return self._esegui_smart(spec, ev, catena, i, suono_predefinito)
         client = self._client_di(dove)
         if client is None:
             log.error("Azione %s, passo %d: dispositivo %s non disponibile", spec.name, i + 1,
@@ -1010,6 +1248,128 @@ class ActionEngine:
         """
         with self._lock:
             self._giri[spec.name] = self._giri.get(spec.name, 0) + 1
+
+    # --- i dispositivi di casa ------------------------------------------------
+    def _domotica(self):
+        """Il collegamento alla domotica, o ``None``. Sta nel core, non qui: deve vivere quanto Mirto."""
+        return getattr(self.core, "domotica", None)
+
+    def _cambio_di_casa(self, d) -> None:
+        """Un dispositivo di casa ha detto qualcosa. Se è **cambiato**, fa scattare le azioni.
+
+        Le due cose che questa funzione esiste per non far succedere, e che nessun'altra può sapere:
+
+        1. **La prima lettura non è un cambio.** Quando Mirto si collega, il broker gli riconsegna lo
+           stato ritenuto di tutti i dispositivi in un colpo. Senza memoria del prima, accendere
+           Mirto la sera con la luce delle scale accesa farebbe partire la musica di benvenuto — e
+           chi lo vede non pensa «è il messaggio ritenuto», pensa che Mirto sia impazzito.
+        2. **Un cambio che ha fatto Mirto non richiama Mirto.** Se un'azione accende una luce, quella
+           luce annuncia il suo stato nuovo, e un trigger «quando si accende» ripartirebbe: nel caso
+           migliore una sorpresa, nel peggiore un giro che si morde la coda. Si guarda l'orologio: un
+           cambio arrivato subito dopo un nostro comando su quel dispositivo è l'eco del comando.
+
+        Non solleva mai: chi ascolta non deve poter spegnere l'ascolto.
+        """
+        try:
+            from .smarthome import CambioStato  # noqa: PLC0415
+
+            if d is None or d.acceso is None:
+                return          # «non lo so» non è uno stato: non è né acceso né spento
+            chiave, adesso = chiave_smart(d.identificativo), self.clock()
+            with self._lock:
+                prima = self._stato_smart.get(chiave)
+                self._stato_smart[chiave] = bool(d.acceso)
+                nostro = self._smart_nostri.get(chiave, -1e12)
+            if prima is None:
+                return          # trappola 1: adesso lo sappiamo, ma non è successo niente
+            if bool(prima) == bool(d.acceso):
+                return          # ha ripetuto lo stesso stato: non è un cambio
+            if adesso - nostro < ECO_NOSTRO:
+                log.debug("domotica: %s cambiato da noi, non lo conto come trigger", chiave)
+                return          # trappola 2: è l'eco di un nostro comando
+            ev = CambioStato(chiave, d.nome or d.identificativo, bool(d.acceso),
+                             id=f"casa-{chiave}-{int(adesso)}")
+            partite = self._scatta(ev, forte=True)
+            if partite:
+                log.info("domotica: %s %s, partite %s", chiave,
+                         "accesa" if d.acceso else "spenta", ", ".join(partite))
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: il cambio di stato non è stato gestito")
+
+    def _esegui_smart(self, spec: ActionSpec, ev, catena: list[dict], i: int,
+                      suono_predefinito: str = "") -> bool:
+        """Accende o spegne un dispositivo di casa, e programma il passo dopo. True se è partito.
+
+        **Perché la durata la conta Mirto, e un nodo no.** A un nodo si dice «accendi per trenta
+        secondi» e si spegne da sé: se Mirto muore nel frattempo, la sirena tace comunque, ed è una
+        promessa che sta nel firmware. Una lampadina smart non ha quel contratto — le si dice
+        «accendi», e resta accesa. Quindi il tempo lo tiene Mirto, e di conseguenza si prende carico
+        di spegnerla: al timer (qui), e a «Ferma tutto» (``_spegni_smart_tutti``). Un processo
+        ammazzato lascia la luce accesa, e questo **va scritto in guida**: è un limite della casa
+        smart, non un difetto che si possa togliere da dentro.
+        """
+        chiamata = catena[i]
+        dove = str(chiamata.get("dispositivo") or "")
+        _tipo, quale = dispositivo_di(dove)
+        casa = self._domotica()
+        comando = str(chiamata.get("comando") or "")
+        acceso = comando != SPEGNI_SMART
+        fatto = False
+        if casa is not None and quale:
+            try:
+                fatto = bool(casa.comanda(quale, acceso))
+            except Exception as exc:  # noqa: BLE001 - un broker che cade non porta via la catena
+                log.error("Azione %s, passo %d: dispositivo di casa %s non comandato: %s",
+                          spec.name, i + 1, quale, exc)
+                self._audit("errore", azione=spec.name, errore=str(exc), passo=i + 1)
+                fatto = False
+        if not fatto:
+            # Lo stesso trattamento del nodo che non risponde: si ferma la fila, perché una catena
+            # andata a metà lascia la casa in uno stato che nessuno ha chiesto.
+            log.error("Azione %s, passo %d: dispositivo di casa %s non disponibile",
+                      spec.name, i + 1, quale or "?")
+            self._audit("errore", azione=spec.name, passo=i + 1,
+                        errore=_('dispositivo di casa non disponibile'))
+            self._perche_no[spec.name] = _('dispositivo di casa non disponibile')
+            if chiamata.get("nel_gruppo"):
+                self._programma_dopo(spec, ev, catena, i, suono_predefinito)
+            return False
+        durata = float(chiamata.get("durata") or 0)
+        with self._lock:
+            if acceso:
+                self._smart_accesi.add(quale)
+            else:
+                self._smart_accesi.discard(quale)
+            # Timbra «questo l'ho fatto io»: fra un istante il dispositivo annuncerà lo stato nuovo,
+            # e senza questo timbro il trigger del passo 3 risponderebbe al proprio comando.
+            self._smart_nostri[chiave_smart(quale)] = self.clock()
+        if acceso and durata > 0:
+            self._schedule(durata, self._spegni_smart, quale)
+        self._programma_dopo(spec, ev, catena, i, suono_predefinito)
+        return True
+
+    def _spegni_smart(self, quale: str) -> None:
+        """Spegne un dispositivo di casa e smette di considerarlo acceso. Non solleva mai."""
+        casa = self._domotica()
+        with self._lock:
+            self._smart_accesi.discard(quale)
+            # Anche lo spegnimento è nostro, e anche lui torna come annuncio: va timbrato, o un
+            # trigger «quando si spegne» partirebbe alla fine di ogni azione che accende una luce.
+            self._smart_nostri[chiave_smart(quale)] = self.clock()
+        if casa is None:
+            return
+        try:
+            casa.comanda(quale, False)
+        except Exception:  # noqa: BLE001
+            log.exception("domotica: non ho potuto spegnere %s", quale)
+
+    def _spegni_smart_tutti(self) -> list[str]:
+        """Spegne tutto quello che Mirto ha acceso in casa. Torna i nomi, per la riga di controllo."""
+        with self._lock:
+            quali = sorted(self._smart_accesi)
+        for quale in quali:
+            self._spegni_smart(quale)
+        return quali
 
     def _programma_dopo(self, spec: ActionSpec, ev, catena: list[dict], i: int,
                         suono_predefinito: str = "") -> None:
@@ -1079,7 +1439,17 @@ class ActionEngine:
                 log.exception("Salvataggio configurazione fallito")
         self._cancel_pending()
         self.deterrents_paused_until = self.clock() + 3600  # anche i dissuasori si fermano per un'ora
+        # **Prima** i dispositivi di casa, poi i nodi. `_cancel_pending` ha appena cancellato i timer,
+        # e fra quelli c'era lo spegnimento di ogni luce smart accesa: se non si spegnessero qui,
+        # «Ferma tutto» le lascerebbe accese per sempre. Un nodo invece conta i suoi secondi da sé.
+        casa = self._spegni_smart_tutti()
         msg = self._stop_nodes()
+        if casa:
+            self._audit("ferma-tutto-casa", dispositivi=casa)
+            # Chi ha solo lampadine smart e nessun nodo non deve leggere «nessun nodo configurato»
+            # dopo che Mirto gli ha appena spento le luci: leggerebbe che non è stato fatto niente.
+            if not self.clients:
+                msg = _('⛔ Tutto fermo.')
         return msg + (_(' Protezione disattivata: /inserisci per riattivarla.') if was_armed else "")
 
     def _stop_nodes(self) -> str:

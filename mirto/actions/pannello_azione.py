@@ -194,8 +194,18 @@ def _AIUTI() -> dict:  # noqa: N802
                     '**oppure**: scatta quella che vede per prima, e cercano tutte la stessa cosa.'),
         "microfoni": _('Da quali microfoni. Nessuno spuntato = tutti, e come per le camere vale '
                        '**oppure**: basta che uno senta.'),
-        "attiva": _('Spenta, l\'azione resta scritta ma non scatta. Utile per provare senza '
+        # La chiave e' quella del campo — «acceso» — e non «attiva» come stava fino al 15/11:
+        # con due nomi diversi questo testo non lo leggeva nessuno, perche' nessuno li metteva
+        # insieme. Era tradotto e mai mostrato.
+        "acceso": _('Spenta, l\'azione resta scritta ma non scatta. Utile per provare senza '
                     'cancellare niente.'),
+        "dispositivi_casa": _('Le luci, le prese e i sensori di casa che Mirto ha trovato. '
+                              'Spuntandone uno, l\'azione parte quando **quel dispositivo cambia '
+                              'stato**: anche un sensore va bene, anzi è il caso più utile — il '
+                              'sensore del corridoio si accende, e si accende la luce delle scale.'),
+        "versi_casa": _('In quale verso. Spuntali tutti e due e l\'azione parte a ogni cambio. '
+                        'Quello che accendi tu, da Mirto o da Telegram, **non la fa partire**: '
+                        '«quando si accende» vuol dire quando si accende da sé.'),
     }
 
 
@@ -243,3 +253,57 @@ def si_vede_la_griglia(spuntati, scelti, nuova: bool = False) -> bool:
     «Persona» è lì che ti aspetta.
     """
     return bool(spuntati) or (bool(scelti) and not nuova)
+
+
+def trigger_di_casa(azione) -> tuple[set, set]:
+    """Cosa aveva scelto questa azione fra i dispositivi di casa: ``(chiavi, versi)``.
+
+    Si legge dai **blocchi**, perché è lì che un trigger di casa si salva: ``cameras`` e ``targets``
+    sono i campi di prima e non saprebbero dove metterlo. Un'azione che non ha blocchi, o che ne ha
+    solo di camera e microfono, torna due insiemi vuoti — e la riga nella finestra non si vede.
+
+    I versi (*si accende*, *si spegne*) si mettono insieme fra tutti i blocchi di casa invece di
+    tenerli per dispositivo: la finestra ne chiede un paio soli, e fingere una libertà che la
+    finestra non dà vorrebbe dire scrivere una configurazione che poi non si riesce più a modificare.
+    """
+    from .blocchi import ACCESO, DOMOTICA, SPENTO  # noqa: PLC0415
+
+    chiavi: set = set()
+    versi: set = set()
+    for b in (azione or {}).get("blocchi") or []:
+        if str((b or {}).get("tipo") or "") != DOMOTICA:
+            continue
+        dove = str(b.get("dispositivo") or "")
+        if dove:
+            chiavi.add(dove)
+        versi |= {v for v in (b.get("soggetti") or []) if v in (ACCESO, SPENTO)}
+    return chiavi, versi
+
+
+def blocchi_del_trigger(chiavi, versi, camere_spuntate, obiettivi) -> list[dict]:
+    """I blocchi che fanno scattare l'azione, da scrivere in configurazione. Vuoto = non si scrive.
+
+    **Si scrivono solo se c'è un trigger di casa**, e allora si scrivono *tutti* — anche quello della
+    camera. Il motivo sta in ``blocchi_di``: se i blocchi ci sono, li usa quelli e non guarda più
+    ``cameras`` e ``targets``. Scrivere solo il blocco di casa vorrebbe dire un'azione che perde il
+    suo trigger di camera nel momento in cui le si aggiunge una lampadina — un difetto silenzioso,
+    del genere che si scopre la settimana dopo chiedendosi perché non suona più niente.
+
+    Al contrario, un'azione senza dispositivi di casa **non prende il campo**: resta scritta come è
+    sempre stata, e una configurazione che non usa la domotica non cambia di una riga. È la stessa
+    regola delle catene di un passo solo.
+    """
+    from .blocchi import ACCESO, CAMERA, DOMOTICA, MICROFONO  # noqa: PLC0415
+
+    if not chiavi:
+        return []
+    visti = [o for o in (obiettivi or []) if not str(o).startswith("sound:")]
+    sentiti = [o for o in (obiettivi or []) if str(o).startswith("sound:")]
+    fuori: list[dict] = []
+    if visti:
+        fuori.append({"tipo": CAMERA, "soggetti": sorted(visti), "fonti": sorted(camere_spuntate or [])})
+    if sentiti:
+        fuori.append({"tipo": MICROFONO, "soggetti": sorted(sentiti), "fonti": sorted(camere_spuntate or [])})
+    for chiave in sorted(chiavi):
+        fuori.append({"tipo": DOMOTICA, "soggetti": sorted(versi or {ACCESO}), "dispositivo": chiave})
+    return fuori

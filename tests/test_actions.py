@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from mirto.actions.diagnosi import API_ATTESA  # noqa: E402
+from mirto.actions.pannello_azione import blocchi_del_trigger, trigger_di_casa
 from mirto.actions.engine import ActionEngine, SIREN_MAX_SECONDS
 from mirto.actions.nodes import NodeClient, NodeConfig, NodeError, fetch_certificate, pair_node
 from mirto.actions.signing import Verifier, generate_key, sign
@@ -1364,17 +1365,77 @@ class PannelloAzioneTest(unittest.TestCase):
         self.assertEqual(nomi.count("Sparita"), 1)
         self.assertIn("Sparita", [c["nome"] for c in viste], "le sconosciute restano dove stavano prima")
 
+    # I campi della finestra delle azioni, letti **dalla finestra** e non riscritti qui. Fino al
+    # 15/11 questo elenco era scritto a mano in questa prova, e aggiungendo due campi la prova
+    # cadeva per dire «aggiornami» — cioè era il terzo posto da ricordare, dopo la finestra e la
+    # tabella degli aiuti. Adesso si legge il sorgente: così l'elenco non può più divergere, e la
+    # prova fallisce solo quando c'è davvero un campo senza spiegazione.
+    @staticmethod
+    def campi_della_finestra() -> tuple[set, set]:
+        """``(tutti i campi, quelli con un'etichetta)`` letti da ``settings.py`` con ``ast``.
+
+        Con ``ast`` e non con una ricerca di stringhe: una ricerca prenderebbe anche le chiavi
+        scritte dentro i commenti e nei docstring — e questo file ne è pieno — dando un elenco più
+        lungo del vero, cioè un guardiano che si lamenta di campi che non esistono.
+        """
+        import ast  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        sorgente = Path("mirto/gui/settings.py").read_text(encoding="utf-8")
+        tutti: set = set()
+        con_etichetta: set = set()
+        for n in ast.walk(ast.parse(sorgente)):
+            # «self._righe = [ (chiave, etichetta, arnese), ... ]»
+            if not (isinstance(n, ast.Assign) and len(n.targets) == 1
+                    and ast.unparse(n.targets[0]) == "self._righe"):
+                continue
+            for voce in getattr(n.value, "elts", []):
+                pezzi = getattr(voce, "elts", [])
+                if len(pezzi) < 2 or not isinstance(pezzi[0], ast.Constant):
+                    continue
+                chiave = str(pezzi[0].value)
+                tutti.add(chiave)
+                # L'etichetta c'è quando è una chiamata a «_(...)»: una stringa vuota vuol dire
+                # «questa riga non ha etichetta», e allora non le serve nemmeno la (i).
+                if isinstance(pezzi[1], ast.Call):
+                    con_etichetta.add(chiave)
+        return tutti, con_etichetta
+
+    def test_the_guardian_can_still_read_the_window(self):
+        """Falsificazione: se non trova i campi, le prove qui sotto passerebbero su un insieme vuoto."""
+        tutti, con_etichetta = self.campi_della_finestra()
+        self.assertGreater(len(tutti), 15, f"non legge più i campi della finestra: {tutti}")
+        self.assertIn("nome", con_etichetta)
+        # Una riga senza etichetta davvero: il riquadro che accende l'AI non ha un nome a sinistra.
+        # (La prima stesura metteva qui «cosa_fa», ed era sbagliata: l'etichetta ce l'ha, è il
+        # **wizard** a toglierla con SENZA_ETICHETTA perché ripeterebbe il titolo della pagina.
+        # L'ha detto questa prova stessa, che è il motivo per cui esiste.)
+        self.assertIn("ai_camera", tutti - con_etichetta, "una riga senza etichetta non si vede più")
+        self.assertIn("cosa_fa", con_etichetta, "«cosa_fa» l'etichetta ce l'ha, nella finestra vecchia")
+
     def test_every_field_of_the_window_has_a_help_text(self):
         from mirto.actions.pannello_azione import aiuto, chiavi_aiuto
 
-        attesi = {"nome", "tipo", "comando", "quando_parte", "ritardo", "attesa_conferma",
-                  "se_nessuno_conferma", "obiettivi_camera", "obiettivi_microfono",
-                  "suoni_emessi", "pausa", "massimi", "cosa_fa", "quando_attiva",
-                  "fascia", "avvisa", "camere", "microfoni", "attiva"}
-        self.assertEqual(set(chiavi_aiuto()), attesi)
-        for chiave in attesi:
-            self.assertGreater(len(aiuto(chiave)), 40, f"l'aiuto di «{chiave}» non spiega niente")
+        _tutti, con_etichetta = self.campi_della_finestra()
+        for chiave in sorted(con_etichetta):
+            with self.subTest(campo=chiave):
+                self.assertGreater(len(aiuto(chiave)), 40,
+                                   f"l'aiuto di «{chiave}» non spiega niente")
         self.assertEqual(aiuto("inventata"), "", "un campo senza aiuto non fa esplodere la finestra")
+
+    def test_no_help_text_is_left_over(self):
+        """Un aiuto per un campo che non esiste più è un testo che nessuno legge e che si traduce.
+
+        Si tiene insieme all'altra metà: quella sopra prende il campo senza spiegazione, questa la
+        spiegazione senza campo. Da sole, ciascuna lascia passare l'altro verso.
+        """
+        from mirto.actions.pannello_azione import chiavi_aiuto
+
+        tutti, _con = self.campi_della_finestra()
+        # «tipo», «comando» e «massimi» restano in tabella: sono campi della finestra vecchia, ancora
+        # raggiungibile, e il loro aiuto è quello. Si scrivono qui perché si veda che è una scelta.
+        avanzati = set(chiavi_aiuto()) - tutti - {"tipo", "comando", "massimi"}
+        self.assertEqual(avanzati, set(), f"aiuti per campi che non esistono: {avanzati}")
 
 
 class CatenaDiPassiTest(unittest.TestCase):
@@ -3376,3 +3437,111 @@ class IlPacchettoDelNodoTest(unittest.TestCase):
         self.assertEqual(corpo["versione"], "0.12.0")
         self.assertEqual(base64.b64decode(corpo["pacchetto"]), b"ciao",
                          "il pacchetto arriva intero, non descritto")
+
+
+class IlTriggerDiCasaSiSalvaEsiRileggeTest(unittest.TestCase):
+    """Come il wizard scrive «questa azione parte quando una lampadina cambia stato».
+
+    Passo 3 del piano domotica, lato finestra. Le prove della finestra stessa vogliono Qt e stanno
+    altrove; qui c'è la parte che decide **cosa finisce nel file di configurazione**, che è quella
+    che può perdere roba senza dirlo.
+
+    Il difetto che queste prove tengono è silenzioso, e vale la pena capirlo prima di toccarle.
+    `blocchi_di` ha una regola: **se i blocchi ci sono, li usa quelli** e non guarda più `cameras` e
+    `targets`. Quindi scrivere solo il blocco della lampadina vorrebbe dire un'azione che, nel
+    momento in cui le aggiungi un trigger di casa, **perde quello della camera** — niente errori,
+    niente avvisi, e la scoperta la settimana dopo chiedendosi perché non suona più niente.
+    """
+
+    def test_un_azione_senza_domotica_non_prende_il_campo(self):
+        """Una configurazione che non usa la domotica non cambia di una riga.
+
+        È la stessa regola delle catene di un passo solo: non si scrive un campo per dire «niente».
+        """
+        self.assertEqual(blocchi_del_trigger(set(), {"acceso"}, ["Ingresso"], ["person"]), [])
+
+    def test_quando_scrive_scrive_anche_la_camera(self):
+        blocchi = blocchi_del_trigger({"smart:luce"}, {"acceso"}, ["Ingresso"], ["person"])
+        tipi = [b["tipo"] for b in blocchi]
+        self.assertIn("camera", tipi, "ha perso il trigger della camera")
+        self.assertIn("domotica", tipi)
+
+    def test_e_la_camera_che_scrive_e_quella_vera(self):
+        blocchi = blocchi_del_trigger({"smart:luce"}, {"acceso"}, ["Ingresso", "Garage"], ["person", "cat"])
+        cam = next(b for b in blocchi if b["tipo"] == "camera")
+        self.assertEqual(cam["fonti"], ["Garage", "Ingresso"])
+        self.assertEqual(cam["soggetti"], ["cat", "person"])
+
+    def test_i_suoni_vanno_nel_blocco_del_microfono(self):
+        blocchi = blocchi_del_trigger({"smart:luce"}, {"acceso"}, ["Mic"], ["sound:glass"])
+        tipi = [b["tipo"] for b in blocchi]
+        self.assertIn("microfono", tipi)
+        self.assertNotIn("camera", tipi, "un suono non è una cosa vista")
+
+    def test_un_dispositivo_per_blocco(self):
+        blocchi = blocchi_del_trigger({"smart:a", "smart:b"}, {"acceso"}, [], [])
+        casa = [b for b in blocchi if b["tipo"] == "domotica"]
+        self.assertEqual([b["dispositivo"] for b in casa], ["smart:a", "smart:b"])
+
+    def test_senza_verso_scelto_vale_acceso(self):
+        """Nessuna spunta non vuol dire «nessun verso»: vuol dire il caso normale.
+
+        Un blocco senza soggetti non scatta mai (`blocco_scatta` lo rifiuta), quindi scriverlo vuoto
+        darebbe un'azione che non parte e non dice perché.
+        """
+        blocchi = blocchi_del_trigger({"smart:a"}, set(), [], [])
+        self.assertEqual(blocchi[0]["soggetti"], ["acceso"])
+
+    def test_si_rilegge_quello_che_si_e_scritto(self):
+        scritto = blocchi_del_trigger({"smart:a", "smart:b"}, {"acceso", "spento"}, ["Ingresso"], ["person"])
+        chiavi, versi = trigger_di_casa({"blocchi": scritto})
+        self.assertEqual(chiavi, {"smart:a", "smart:b"})
+        self.assertEqual(versi, {"acceso", "spento"})
+
+    def test_un_azione_di_prima_non_ha_niente_da_rileggere(self):
+        self.assertEqual(trigger_di_casa({}), (set(), set()))
+        self.assertEqual(trigger_di_casa({"cameras": ["Ingresso"], "targets": ["person"]}),
+                         (set(), set()))
+
+    def test_i_blocchi_di_camera_non_si_confondono_con_quelli_di_casa(self):
+        """Un blocco di camera **ha anche lui un «dispositivo»**: è lì che guarda.
+
+        La prima stesura di questa prova passava un blocco di camera con solo «soggetti» e «fonti», e
+        non distingueva niente: togliendo il controllo sul tipo restava verde, perché quel blocco non
+        aveva nulla da farsi leggere per sbaglio. Un blocco di camera vero invece dice su quale
+        dispositivo ascolta — ``computer:questo``, o un nodo — e senza il controllo sul tipo quella
+        stringa finirebbe fra i dispositivi di casa, dando un'azione con un trigger su una lampadina
+        che non esiste.
+        """
+        chiavi, versi = trigger_di_casa({"blocchi": [
+            {"tipo": "camera", "soggetti": ["person"], "fonti": ["Ingresso"],
+             "dispositivo": "computer:questo"},
+            {"tipo": "microfono", "soggetti": ["sound:glass"], "dispositivo": "nodo:n1"},
+        ]})
+        self.assertEqual((chiavi, versi), (set(), set()))
+
+    def test_un_verso_che_non_conosciamo_si_butta(self):
+        """Una configurazione scritta a mano, o di una versione futura, non deve far esplodere nulla."""
+        _k, versi = trigger_di_casa({"blocchi": [
+            {"tipo": "domotica", "soggetti": ["acceso", "lampeggia"], "dispositivo": "smart:a"},
+        ]})
+        self.assertEqual(versi, {"acceso"})
+
+    def test_quello_che_si_scrive_fa_davvero_scattare_l_azione(self):
+        """L'unica prova che conta: la configurazione scritta dal wizard **funziona**.
+
+        Le altre dicono che il dizionario ha la forma giusta. Questa prende quel dizionario, lo dà
+        a `blocchi_di` come fa il motore, e pretende che un cambio di stato lo accenda. Senza di lei,
+        tutte le altre potrebbero essere d'accordo fra loro e sbagliate insieme.
+        """
+        from mirto.actions.blocchi import blocchi_di, scatta
+        from mirto.actions.smarthome import CambioStato
+
+        azione = {"name": "X", "targets": ["person"], "cameras": ["Ingresso"]}
+        azione["blocchi"] = blocchi_del_trigger({"smart:luce"}, {"spento"},
+                                                azione["cameras"], azione["targets"])
+        blocchi = blocchi_di(azione)
+        self.assertTrue(scatta(blocchi, CambioStato("smart:luce", "Luce", False)),
+                        "la configurazione scritta dal wizard non fa scattare niente")
+        self.assertFalse(scatta(blocchi, CambioStato("smart:luce", "Luce", True)),
+                         "scatta anche nel verso che non è stato scelto")

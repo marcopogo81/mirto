@@ -15,6 +15,37 @@ regole molto più severe del video: in Italia il Garante considera la registrazi
 eccedente nella gran parte dei casi. Il resto di questa pagina non cambia: quell'audio resta sul tuo computer e
 sul nodo, e va solo ai canali di avviso che hai configurato.
 
+Un'altra cosa è cambiata il 17 novembre 2026, e nemmeno questa riguarda internet: Mirto può collegarsi a un
+**broker MQTT** sulla tua rete, per vedere le luci, le prese e i sensori di casa e per accenderli. Tre cose
+vale la pena saperle, e la terza è quella che si dà per scontata al contrario:
+
+- **è un collegamento che Mirto apre verso l'esterno**, a un broker il cui indirizzo glielo dai tu, di solito
+  una macchina in casa tua. Nessuna porta aperta sulla tua rete, esattamente come con Telegram;
+- **la password del broker sta nel portachiavi di sistema**, mai in un file di configurazione — la stessa
+  regola del token di Telegram e dei nodi;
+- **un broker è una bacheca condivisa.** Mirto legge lo stato che i tuoi dispositivi pubblicano lì e ci
+  scrive i comandi; tutto quello che Mirto legge era già su quella bacheca, a disposizione di qualunque
+  altra cosa ci sia attaccata.
+
+**E adesso Mirto può pubblicarci anche cose sue** — è la parte che quella pagina aveva promesso di dirti
+prima che uscisse. È **spenta** (*Impostazioni → SmartHome → «Racconta sul broker cosa succede»*), e
+quando la accendi, sotto un ramo `mirto/` suo, pubblica:
+
+- se è **in funzione**, e se è **inserito o disinserito**;
+- un **evento** quando succede: quale camera, cosa ha riconosciuto, quanto era sicuro, quando. Vale la
+  stessa regola degli altri canali — a casa disinserita non parte un avviso, e non parte niente nemmeno
+  sul broker;
+- quale camera **sta vedendo qualcosa**, per circa mezzo minuto dopo un evento.
+
+**Nessun fotogramma, se non lo chiedi a parte.** L'ultima foto di ogni camera è un **secondo**
+interruttore, anche lui spento, e di proposito non è lo stesso: un JPEG di casa tua su una bacheca
+condivisa è una cosa di natura diversa dallo stato del tuo allarme, e lo legge qualunque cosa sia
+attaccata a quel broker. Accendilo solo se sai cos'altro c'è attaccato.
+
+Quello che Mirto pubblica lo legge tutto ciò che è attaccato al broker, e chi sia a essere attaccato lo
+decide il broker, non Mirto. Se il tuo è condiviso oltre casa tua, è la cosa a cui pensare prima di
+accendere questa.
+
 - **Statistiche d'uso (solo con il tuo sì)**: al primo avvio Mirto chiede; la risposta predefinita è **no**
   (chiudere la finestra senza scegliere = te lo richiede la volta dopo). Con il sì, una volta al giorno: un numero
   creato a caso, versione, sistema, lingua, camere e nodi per fasce, modalità di registrazione e funzioni accese.

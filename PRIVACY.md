@@ -14,6 +14,34 @@ much stricter rules than video: in Italy the regulator considers audio recording
 in most cases. Nothing else about this page changes: that audio stays on your computer and on the node, and goes
 only to the alert channels you configured.
 
+Something else changed on 17 November 2026, and it is also not about the internet: Mirto can connect to an
+**MQTT broker** on your network, to see your home's lights, plugs and sensors and to switch them. Three
+things are worth knowing, and the third is the one people assume wrongly:
+
+- **it is a connection Mirto opens outwards**, to a broker whose address you give it, normally a machine in
+  your own home. No port is opened on your network, exactly as with Telegram;
+- **the broker's password lives in the system keychain**, never in a configuration file — the same rule as
+  for the Telegram token and the nodes;
+- **a broker is a shared board.** Mirto reads the state your devices publish there and writes commands;
+  everything Mirto reads was already on that board, available to anything else attached to it.
+
+**And Mirto can now publish things of its own there** — this is the part that page promised to tell you
+before it shipped. It is **off** (*Settings → SmartHome → "Publish what happens on the broker"*), and when
+you turn it on, under a `mirto/` topic of its own, it publishes:
+
+- whether it is **running**, and whether it is **armed or disarmed**;
+- an **event** when one happens: which camera, what was recognised, how confident, when. The same rule as
+  the other channels — with the house disarmed no alert goes out, and nothing goes on the broker either;
+- which camera is **seeing something**, for about half a minute after an event.
+
+**No frames, unless you ask for them separately.** The latest photo of each camera is a *second* switch,
+also off, and it is deliberately not the same one: a JPEG of your home on a shared board is a different
+kind of thing from the state of your alarm, and anything attached to that broker can read it. Turn it on
+only if you know what else is on there.
+
+What Mirto publishes is readable by everything attached to the broker, and the broker — not Mirto — decides
+who that is. If yours is shared beyond your home, that is the thing to think about before turning this on.
+
 ## Usage statistics (only if you say yes)
 
 At first start Mirto asks whether to send usage statistics. The default answer is **no**; closing the window

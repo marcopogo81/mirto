@@ -68,6 +68,12 @@ class MirtoCore:
 
         self.presence = PresenceMonitor(self.config, self.set_armed,
                                         lambda: bool(self.config.get("actions.armed", False)))
+        from .actions.smarthome import Domotica  # noqa: PLC0415
+
+        # La domotica sta qui e non dentro la finestra delle impostazioni: deve restare viva mentre
+        # Mirto lavora, perché il riquadro «Sistema» la mostra e le Azioni dovranno comandarla
+        # quando non c'è nessuna finestra aperta. Nata dentro la scheda, spariva chiudendola (14/11).
+        self.domotica = Domotica(self.config, self.secrets)
         self.notifier = NotificationDispatcher(self.config, self.secrets, self.store, self.handlers,
                                                **(dispatcher_kwargs or {}))
         from .recording.manager import RecordingManager  # noqa: PLC0415
@@ -174,6 +180,7 @@ class MirtoCore:
     # --- sorgenti → analisi -----------------------------------------------
     def _source_added(self, source: CameraSource) -> None:
         self.recording.poke()
+        self._rifa_la_scoperta()
         with self._lock:
             if self.detector is None:
                 self._waiting[source.info.id] = source
@@ -201,6 +208,7 @@ class MirtoCore:
 
     def _source_removed(self, cam_id: str) -> None:
         self.recording.poke()
+        self._rifa_la_scoperta()
         with self._lock:
             self._waiting.pop(cam_id, None)
             pipe = self.pipelines.pop(cam_id, None)
@@ -713,6 +721,11 @@ class MirtoCore:
         self._maint_thread.start()
         self.scheduler.start()
         self.presence.start()
+        self.domotica.start()
+        # Gli eventi passano anche sul broker, se il racconto è acceso (passo 5). Si attacca qui,
+        # al nucleo, perché è l'unico posto che conosce tutti e due: il dispatcher non sa cos'è un
+        # broker e la domotica non sa cos'è un evento, e va bene che resti così.
+        self.notifier.anche.append(self._racconta_evento)
         self.cameras.start(threaded_discovery=threaded_discovery)
         self.recording.start()
         self.telemetry.start()
@@ -722,6 +735,39 @@ class MirtoCore:
             prevent_sleep(True)
         log.info("Mirto avviato")
 
+    def _rifa_la_scoperta(self) -> None:
+        """Dice alla domotica quali camere ci sono, così Home Assistant le trova (passo 6).
+
+        Si chiama quando una camera appare o sparisce, che è l'unico momento in cui l'elenco cambia:
+        agganciarsi qui invece di ripassare ogni tanto vuol dire che una camera attaccata adesso
+        compare in Home Assistant adesso, e non al prossimo riavvio di Mirto.
+
+        Chi sa quali camere ci sono è **questo** oggetto; la domotica sa come dirlo. Per questo
+        l'elenco si passa invece di farglielo cercare: il giorno che le camere si contano in un altro
+        modo, la domotica non ha niente da cambiare.
+        """
+        try:
+            camere = [(cam_id, src.info.name) for cam_id, src in self.cameras.sources.items()]
+            self.domotica.scopri(sorted(camere))
+        except Exception:  # noqa: BLE001 - una camera che appare non deve poter portare via il resto
+            log.exception("domotica: non ho potuto rifare la scoperta")
+
+    def _racconta_evento(self, ev) -> None:
+        """Un evento sul broker, se il racconto è acceso. Non solleva: lo tiene il dispatcher.
+
+        Tre messaggi, in quest'ordine, e l'ordine conta: prima la camera «sta vedendo qualcosa»,
+        poi l'evento, poi — solo se le istantanee sono accese — il fotogramma. Chi scrive
+        un'automazione sullo stato della camera lo vede cambiare **prima** di ricevere l'evento,
+        che è l'ordine in cui le cose sono successe davvero.
+        """
+        racconto = getattr(self.domotica, "racconto", None)
+        if racconto is None:
+            return
+        camera = str(getattr(ev, "camera_name", "") or "")
+        racconto.camera(camera, True)
+        racconto.evento(ev)
+        racconto.istantanea(ev)
+
     def stop(self) -> None:
         if not self._started:
             self.store.close()  # mai avviato: resta solo l'archivio da chiudere
@@ -730,6 +776,7 @@ class MirtoCore:
         self.telemetry.stop()
         self.scheduler.stop()
         self.presence.stop()
+        self.domotica.stop()
         with self._lock:
             pipes = list(self.pipelines.values())
             self.pipelines.clear()
@@ -888,6 +935,12 @@ class CoreHandlers(BotHandlers):
 
     def confirm_action(self, token: str, user: str) -> str:
         return self._act("confirm", token, user)
+
+    def uscite(self) -> str:
+        return self._act("uscite_testo")
+
+    def comanda_uscita(self, nome: str, acceso: bool, secondi: float = 0) -> str:
+        return self._act("comanda_uscita", nome, acceso, secondi)
 
     def listen(self, seconds: int):
         return self.core.actions.listen(seconds) if self.core.actions else None

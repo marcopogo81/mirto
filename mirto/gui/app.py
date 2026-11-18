@@ -293,13 +293,14 @@ class MainWindow(QMainWindow):
         self.row_ai = StatusRow(mono=True)
         self.row_notify = StatusRow(mono=True)   # Notifiche: Telegram, Email, SMS sotto un'unica voce
         self.row_nodes = StatusRow(mono=True)
+        self.row_smart = StatusRow(mono=True)   # la domotica di casa, se c'è
         self.row_sched = StatusRow(mono=True)
         self.row_presence = StatusRow(mono=True)
         self.row_audio = StatusRow(mono=True)
         self.row_rec = StatusRow(mono=True)
         rows.addWidget(self._build_pair_card())
         for r in (self.row_boot, self.row_cams, self.row_ai, self.row_rec, self.row_audio, self.row_notify, self.row_nodes,
-                  self.row_sched, self.row_presence):
+                  self.row_smart, self.row_sched, self.row_presence):
             r.apri_chiudi.connect(self._sistema_apri_chiudi)
             rows.addWidget(r)
         rows.addStretch(1)
@@ -345,6 +346,49 @@ class MainWindow(QMainWindow):
         self.pair_card = card
         self._pair_found: dict | None = None
         return card
+
+    def _aggiorna_domotica(self, core) -> None:
+        """La riga «SmartHome» del riquadro Sistema: c'è solo se la domotica è configurata.
+
+        Una riga che dice «SmartHome: non configurata» a chi non ha un impianto smart sarebbe
+        rumore permanente in un pannello che si guarda per capire se qualcosa non va. Chi ce l'ha
+        invece deve vederla da qui, senza aprire le impostazioni: è il posto dove si guarda se la
+        casa sta funzionando.
+        """
+        domotica = getattr(core, "domotica", None)
+        if domotica is None:
+            self.row_smart.setVisible(False)
+            return
+        stato = domotica.stato()
+        self.row_smart.setVisible(bool(stato["attiva"]))
+        if not stato["attiva"]:
+            return
+        aperto = self._aperta("smarthome")
+        if not stato["collegata"]:
+            self.row_smart.set(T.ALARM, _('SmartHome: broker non raggiungibile ({host})',
+                                          host=stato["host"]),
+                               _('Impostazioni → SmartHome per riprovare.'),
+                               html.escape(stato["errore"]) if aperto and stato["errore"] else "",
+                               "smarthome", aperto, bool(stato["errore"]))
+            return
+        if not stato["quanti"]:
+            self.row_smart.set(T.PAUSED, _('SmartHome: collegata, nessun dispositivo'),
+                               _('Nessuno si è ancora fatto vedere. In Impostazioni → SmartHome '
+                                 'c\'è «Ascolta tutto» per chi non si annuncia.'))
+            return
+        righe = []
+        for d in domotica.dispositivi()[:12]:
+            quale = _('acceso') if d.acceso else (_('spento') if d.acceso is not None else _('non lo so'))
+            righe.append(f"&nbsp;&nbsp;{html.escape(d.nome)} – "
+                         + (quale if d.vivo else _('non risponde')))
+        # Verde: collegata e con dispositivi, cioe' sta funzionando. Chiesto da Marco il 14/11
+        # guardando il riquadro — e ha ragione: in questa colonna il verde vuol dire «a posto», e
+        # l'azzurro e' il colore di un'informazione, non di uno stato sano.
+        self.row_smart.set(T.ARMED, _('SmartHome: {quanti} dispositivi, {accesi} accesi',
+                                     quanti=stato["quanti"], accesi=stato["accesi"]),
+                           _('I dispositivi di casa (Impostazioni → SmartHome)'),
+                           "<br>".join(righe) if aperto else "",
+                           "smarthome", aperto, True)
 
     def _update_pair_card(self) -> None:
         found = self.core.actions.pairing.current() if self.core.actions else []
@@ -572,6 +616,13 @@ class MainWindow(QMainWindow):
             b.clicked.connect(lambda _c=False, m=mode: self._set_events_mode(m))
             self.events_mode_group.addButton(b)
             head.addWidget(b)
+        head.addSpacing(12)
+        # Il suggerimento del doppio clic. Sopra la griglia c'era, qui no, e senza di esso un
+        # evento sembra non fare niente: Marco, 14/11, *«pensavo non funzionasse, invece era un
+        # problema di doppio click»*. Un gesto che non si vede non esiste, e chi non lo trova non
+        # conclude «si fa in un altro modo», conclude «è rotto».
+        self.events_hint = label(obj="faint")
+        head.addWidget(self.events_hint)
         head.addStretch(1)
         lay.addLayout(head)
 
@@ -591,6 +642,7 @@ class MainWindow(QMainWindow):
         self.events.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.events.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.events.itemDoubleClicked.connect(self._open_event)
+        self._aggiorna_suggerimento_eventi()
         self.events.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
         act_del = QAction(_('Elimina selezionati'), self.events)
         act_del.setShortcuts([QKeySequence(QKeySequence.StandardKey.Delete), QKeySequence(Qt.Key.Key_Backspace)])
@@ -1201,6 +1253,8 @@ class MainWindow(QMainWindow):
 
         self._update_pair_card()
 
+        self._aggiorna_domotica(core)
+
         pres = core.presence
         self.row_presence.setVisible(pres.enabled)
         if pres.enabled:
@@ -1304,9 +1358,16 @@ class MainWindow(QMainWindow):
         item.setHidden(getattr(self, "events_mode", "photos") == "videos" and not has_clip)
         self._update_events_empty()
 
+    def _aggiorna_suggerimento_eventi(self) -> None:
+        """Il suggerimento dice **cosa** si apre, che cambia con la vista scelta."""
+        self.events_hint.setText(_('Doppio clic su un evento per guardare il video')
+                                 if self.events_mode == "videos"
+                                 else _('Doppio clic su un evento per aprire la foto'))
+
     def _set_events_mode(self, mode: str) -> None:
         """Striscia degli eventi: «photos» = tutti, «videos» = solo quelli con il video."""
         self.events_mode = mode
+        self._aggiorna_suggerimento_eventi()
         for i in range(self.events.count()):
             it = self.events.item(i)
             it.setHidden(mode == "videos" and not it.data(Qt.ItemDataRole.UserRole + 2))

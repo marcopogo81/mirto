@@ -230,3 +230,53 @@ class RecordingStore:
         except OSError as exc:
             log.warning("Impossibile cancellare %s: %s", seg.path, exc)
             return False
+
+    def misura_camera(self, cam_id: str) -> tuple[int, int]:
+        """Quante **registrazioni** e quanti byte ha quella camera. ``(0, 0)`` se non ha niente.
+
+        ``camera.json`` non si conta: è il cartellino con sopra il nome, non una registrazione, e
+        chi legge «5 file» prima di cancellare si aspetta cinque video. Lo spazio sì, perché lì la
+        domanda è quanto si libera.
+        """
+        cartella = self.cam_dir(cam_id)
+        if not cartella.is_dir():
+            return 0, 0
+        quanti = byte = 0
+        for f in cartella.rglob("*"):
+            try:
+                if not f.is_file():
+                    continue
+                byte += f.stat().st_size
+                if f.name != "camera.json":
+                    quanti += 1
+            except OSError:
+                continue
+        return quanti, byte
+
+    def rimuovi_camera(self, cam_id: str) -> str:
+        """Cancella **tutto** quello che c'è di quella camera. ``""`` se è andata, altrimenti il perché.
+
+        Sparisce anche ``camera.json``, ed è il punto: è quel file a far comparire la camera
+        nell'elenco di *Rivedi*. Senza toglierlo resterebbe una voce che apre il vuoto — che è
+        peggio di non avere la voce, perché sembra un difetto.
+
+        Non si cancella niente fuori dalla cartella delle registrazioni: il percorso si ricompone
+        da ``cam_dir`` e si controlla che stia davvero sotto la radice, perché un ID storto non
+        deve poter portare altrove.
+        """
+        import shutil  # noqa: PLC0415
+
+        cartella = self.cam_dir(cam_id)
+        try:
+            dentro = cartella.resolve().is_relative_to(self.root.resolve())
+        except OSError as exc:
+            return str(exc)
+        if not dentro:
+            return f"{cartella} non sta nella cartella delle registrazioni"
+        if not cartella.is_dir():
+            return ""
+        guai: list[str] = []
+        shutil.rmtree(cartella, onerror=lambda _f, p, e: guai.append(f"{p}: {e[1]}"))
+        if cartella.is_dir():
+            return guai[0] if guai else f"{cartella} non si è lasciata cancellare"
+        return ""
