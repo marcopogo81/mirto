@@ -142,6 +142,42 @@ class DcoTest(unittest.TestCase):
         self.assertIn('"-15", "--no-merges"', mio,
                       "la copia locale perdona le fusioni, dco.yml no")
 
+    def test_the_tests_see_that_a_merge_is_a_merge(self):
+        """`tests.yml` deve clonare almeno due commit, o `--no-merges` non serve a niente.
+
+        Terzo costume dello stesso difetto. L'8/11 era la fusione di dependabot, il 15/11 quella che
+        GitHub fabbrica per provare una pull request, il 18/11 il commit di fusione del ramo della
+        domotica — rossa su cinque sistemi su sei, mentre in locale la prova era verde. Ogni volta la
+        differenza fra i due posti non era il sistema operativo: era **la profondità del clone**.
+
+        In un clone profondo 1 una fusione ha **zero genitori**: git non sa che è una fusione, quindi
+        `git log --no-merges` non la salta e questa prova le chiede una firma che nessuno può dare —
+        una commit di fusione non la scrive nessuno. A profondità 2 i genitori ci sono.
+
+        Il modello sul soggetto resta, ma come seconda cintura e non come unica: copre il caso in cui
+        la fusione è l'unica commit visibile. Non può bastare da solo perché **il soggetto lo scrive
+        chi fonde**: il 18/11 ho dato al commit di fusione un titolo mio invece di quello che scrive
+        GitHub, e il modello — giustamente stretto, per non perdonare una commit umana che comincia
+        per «Merge» — non l'ha riconosciuto. Una difesa che dipende da come qualcuno ha intitolato
+        una cosa non è una difesa.
+        """
+        import yaml
+
+        # Si guarda **il lavoro che esegue questa prova**, non il file. La prima versione cercava
+        # `fetch-depth` in tutto `tests.yml`: togliendo la riga dal lavoro delle prove restava quella
+        # del lavoro dei segreti (`fetch-depth: 0`), il guardiano si accontentava e il difetto
+        # tornava. Un guardiano che guarda il posto sbagliato è verde esattamente quando serve.
+        giro = yaml.safe_load((ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))
+        lavoro = giro["jobs"]["tests"]
+        checkout = [p for p in lavoro["steps"]
+                    if isinstance(p, dict) and "actions/checkout" in str(p.get("uses", ""))]
+        self.assertEqual(len(checkout), 1, "il lavoro «tests» non fa un checkout solo: controllalo a mano")
+        quanto = (checkout[0].get("with") or {}).get("fetch-depth")
+        self.assertIsNotNone(quanto, "il lavoro «tests» non chiede nessuna profondità, quindi clona 1 "
+                                     "commit: là una fusione sembra una commit normale senza firma")
+        self.assertTrue(int(quanto) == 0 or int(quanto) >= 2,
+                        f"fetch-depth: {quanto} non basta a far vedere che una fusione è una fusione")
+
     def test_the_check_has_no_third_party_action(self):
         """Un controllo di dieci righe non vale una dipendenza in più nella catena di fornitura."""
         usati = re.findall(r"uses:\s*([\w.-]+/[\w.-]+)", self.DCO.read_text(encoding="utf-8"))
@@ -198,6 +234,15 @@ class DcoTest(unittest.TestCase):
 
         Il controllo vero (`dco.yml`) non ci è mai cascato: clona intero e legge `base..testa`,
         cioè le commit del ramo, non la fusione finta.
+
+        **Aggiornamento del 18/11: il soggetto non basta da solo, ed è colpa di chi fonde.** Il
+        commit di fusione del ramo della domotica l'ho intitolato io — «Domotica: la casa smart in
+        Mirto (#2)» invece di «Merge pull request #2 from…» — e il modello, giustamente stretto per
+        non perdonare una commit umana che comincia per «Merge», non l'ha riconosciuto: rossa su
+        cinque sistemi su sei. Da allora `tests.yml` clona **due** commit invece di uno, così git sa
+        che una fusione è una fusione e `--no-merges` funziona anche là; il soggetto resta come
+        seconda cintura, per quando la fusione è l'unica commit visibile. Una difesa che dipende da
+        come qualcuno ha intitolato una cosa non è una difesa.
         """
         import subprocess
 

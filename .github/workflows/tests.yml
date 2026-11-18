@@ -30,6 +30,14 @@ jobs:
       MIRTO_STATS_URL: "off"   # nessuna chiamata al server delle statistiche durante le prove
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          # **Due, non uno e non zero.** Di serie il clone è profondo 1, e in un clone profondo 1 una
+          # commit di fusione si presenta con **zero genitori**: git non sa che è una fusione, quindi
+          # `git log --no-merges` non la esclude e `DcoTest` le chiede una firma che nessuno può
+          # dare. Misurato il 18/11 clonando questo repository a profondità 1, 2 e 3: a 1 il capo ha
+          # 0 genitori, a 2 ne ha 2. Zero (storia intera) costerebbe tutta la storia a ognuno dei sei
+          # lavori per sapere una cosa che si vede al secondo commit.
+          fetch-depth: 2
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7
         with:
           python-version: ${{ matrix.python }}
